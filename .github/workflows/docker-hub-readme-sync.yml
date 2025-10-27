@@ -1,0 +1,35 @@
+name: Docker Hub Readme Sync
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/README.md'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  sync-readme:
+    name: Update Docker Hub Description
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: zaaicom/powernight
+          short-description: "Tesla Powerwall backup reserve automation for Docker"
+          readme-filepath: ./docs/README.md
+
+      - name: Generate sync summary
+        run: |
+          echo "## README Sync Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✓ README.md has been synced to Docker Hub" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[View on Docker Hub](https://hub.docker.com/r/zaaicom/powernight)" >> $GITHUB_STEP_SUMMARY

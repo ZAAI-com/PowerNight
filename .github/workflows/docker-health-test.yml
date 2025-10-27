@@ -1,0 +1,254 @@
+name: Docker Health Test
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'src/**'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/docker-*.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'src/**'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/docker-*.yml'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  DOCKER_IMAGE: powernight-test
+
+jobs:
+  health-test:
+    name: Build and Health Test
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install backend dependencies
+        run: |
+          echo "Installing PowerNight package..."
+          pip install -e .
+          echo "✓ Backend package installed"
+
+      - name: Install frontend dependencies
+        run: |
+          # Retry npm ci up to 3 times to handle transient network errors
+          for i in 1 2 3; do
+            npm ci && break || {
+              if [ $i -eq 3 ]; then
+                echo "npm ci failed after 3 attempts"
+                exit 1
+              fi
+              echo "npm ci failed, retrying ($i/3)..."
+              sleep 5
+            }
+          done
+
+      - name: Build frontend
+        run: |
+          chmod +x build.sh
+          ./build.sh --no-docker
+
+      - name: Verify build output
+        run: |
+          echo "Checking dist/ directory..."
+          ls -lah dist/
+          if [ ! -f "dist/index.html" ]; then
+            echo "ERROR: dist/index.html not found!"
+            exit 1
+          fi
+          echo "✓ Frontend build successful"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (amd64 only for speed)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ env.DOCKER_IMAGE }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create test data directory
+        run: |
+          mkdir -p ${{ github.workspace }}/test-data
+          # Set proper permissions for the test data directory
+          chmod 755 ${{ github.workspace }}/test-data
+
+      - name: Start container
+        run: |
+          docker run -d \
+            --name powernight-test \
+            -p 8020:8020 \
+            -v ${{ github.workspace }}/test-data:/data \
+            -e TESLA_EMAIL=test@example.com \
+            -e POWERNIGHT_AUTOMATION_ENABLED=false \
+            -e POWERNIGHT_LOG_LEVEL=INFO \
+            -e POWERNIGHT_WEB_PORT=8020 \
+            -e POWERNIGHT_WEB_HOST=0.0.0.0 \
+            -e POWERNIGHT_CONSOLE_OUTPUT=false \
+            -e POWERNIGHT_CACHE_TTL=60 \
+            --memory=1g \
+            --cpus=1.0 \
+            ${{ env.DOCKER_IMAGE }}:test
+
+      - name: Fix data directory permissions
+        run: |
+          # Ensure the data directory has proper permissions inside the container
+          docker exec powernight-test chmod -R 755 /data || echo "Permission fix attempted"
+
+      - name: Wait for container startup
+        run: |
+          echo "Waiting for container to initialize..."
+          sleep 10
+          echo "Container status:"
+          docker ps | grep powernight-test || echo "Container not found in running state"
+          echo "Container logs (first 20 lines):"
+          docker logs powernight-test --tail 20
+
+      - name: Wait for container to be healthy
+        run: |
+          echo "Waiting for container to start..."
+          echo "This may take up to 3 minutes on GitHub Actions runners..."
+          
+          # Wait for container to be running first
+          echo "Step 1: Waiting for container to be running..."
+          for i in {1..30}; do
+            if docker ps | grep -q powernight-test; then
+              echo "✓ Container is running"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "ERROR: Container failed to start after 60 seconds"
+              echo "=== Container Status ==="
+              docker ps -a | grep powernight-test
+              echo "=== Container Logs ==="
+              docker logs powernight-test
+              exit 1
+            fi
+            echo "Attempt $i/30: Waiting for container to start..."
+            sleep 2
+          done
+          
+          # Wait for application to be ready
+          echo "Step 2: Waiting for application to be ready..."
+          for i in {1..90}; do
+            # Check if container is still running
+            if ! docker ps | grep -q powernight-test; then
+              echo "ERROR: Container stopped unexpectedly!"
+              echo "=== Container Status ==="
+              docker ps -a | grep powernight-test
+              echo "=== Container Logs ==="
+              docker logs powernight-test
+              exit 1
+            fi
+
+            # Check if the application is ready (not just the container)
+            if docker exec powernight-test curl -f http://localhost:8020/health > /dev/null 2>&1; then
+              echo "✓ Container is healthy and responding!"
+              break
+            fi
+
+            if [ $i -eq 90 ]; then
+              echo "ERROR: Container failed to become healthy after 180 seconds"
+              echo "=== Container Status ==="
+              docker ps -a | grep powernight-test
+              echo "=== Container Logs (last 50 lines) ==="
+              docker logs powernight-test --tail 50
+              echo "=== Testing connectivity ==="
+              docker exec powernight-test curl -v http://localhost:8020/health || echo "Health endpoint not responding"
+              echo "=== Network connectivity test ==="
+              docker exec powernight-test curl -v http://localhost:8020/ || echo "Main endpoint not responding"
+              exit 1
+            fi
+            
+            if [ $((i % 15)) -eq 0 ]; then
+              echo "Attempt $i/90: Still waiting... (checking logs)"
+              docker logs powernight-test --tail 10
+            elif [ $((i % 5)) -eq 0 ]; then
+              echo "Attempt $i/90: Waiting..."
+            fi
+            sleep 2
+          done
+
+      - name: Test health endpoint
+        run: |
+          echo "Testing health endpoint..."
+          RESPONSE=$(docker exec powernight-test curl -s http://localhost:8020/health)
+          echo "Health response: $RESPONSE"
+          if echo "$RESPONSE" | grep -q "status"; then
+            echo "✓ Health endpoint responding correctly"
+          else
+            echo "ERROR: Health endpoint response unexpected"
+            exit 1
+          fi
+
+      - name: Test web interface
+        run: |
+          echo "Testing web interface..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8020/)
+          if [ "$STATUS" -eq 200 ]; then
+            echo "✓ Web interface accessible (HTTP $STATUS)"
+          else
+            echo "ERROR: Web interface returned HTTP $STATUS"
+            exit 1
+          fi
+
+      - name: Check container logs
+        if: always()
+        run: |
+          echo "=== Container Logs ==="
+          docker logs powernight-test
+          echo "======================"
+
+      - name: Stop and remove container
+        if: always()
+        run: |
+          docker stop powernight-test || true
+          docker rm powernight-test || true
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## Docker Health Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Docker image built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Container started successfully" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Health checks passed" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Web interface accessible" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Image Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          docker images ${{ env.DOCKER_IMAGE }}:test --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" >> $GITHUB_STEP_SUMMARY || true

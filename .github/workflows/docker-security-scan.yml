@@ -1,0 +1,101 @@
+name: Docker Security Scan
+
+on:
+  # Auto-run disabled - use manual trigger or enable as needed
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'Dockerfile'
+  #     - 'requirements.txt'
+  #     - 'pyproject.toml'
+  #     - 'package.json'
+  #     - 'package-lock.json'
+  # schedule:
+  #   # Run every Monday at 9:00 AM UTC to catch newly discovered vulnerabilities
+  #   - cron: '0 9 * * 1'
+  workflow_dispatch:  # Manual trigger only
+    inputs:
+      image_tag:
+        description: 'Docker image tag to scan (default: latest)'
+        required: false
+        default: 'latest'
+        type: string
+
+env:
+  DOCKER_IMAGE: zaaicom/powernight
+
+jobs:
+  trivy-scan:
+    name: Trivy Security Scan
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read           # Required by upload-sarif action
+      contents: read
+      security-events: write  # For uploading SARIF results
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.image_tag }}"
+          else
+            TAG="latest"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Scanning image: ${{ env.DOCKER_IMAGE }}:$TAG"
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_IMAGE }}:${{ steps.tag.outputs.tag }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+        continue-on-error: true  # Don't fail workflow, but report issues
+
+      - name: Upload Trivy scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy for detailed output
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_IMAGE }}:${{ steps.tag.outputs.tag }}
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+        continue-on-error: true
+
+      - name: Generate scan summary
+        if: always()
+        run: |
+          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Scanned:** \`${{ env.DOCKER_IMAGE }}:${{ steps.tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scan Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f "trivy-results.sarif" ]; then
+            echo "✓ Trivy scan completed successfully" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Results have been uploaded to the [Security tab](https://github.com/${{ github.repository }}/security/code-scanning)." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Trivy scan did not complete" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "This may be due to the image not being available on Docker Hub." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Manual Scan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To scan locally:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.DOCKER_IMAGE }}:${{ steps.tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "trivy image ${{ env.DOCKER_IMAGE }}:${{ steps.tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
