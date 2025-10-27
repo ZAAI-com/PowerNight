@@ -1,0 +1,33 @@
+powerwall:
+  tesla_email: "user@example.com"
+  powerwall_id: ""
+  timeout: 10.0
+  retry_attempts: 3
+  cloud_mode_enabled: true
+  verify_ssl: true
+
+automation:
+  enabled: false
+  schedule: []
+  timezone: Europe/Berlin
+  check_interval: 60.0
+
+web_interface:
+  enabled: true
+  host: 0.0.0.0
+  port: 8020
+  debug: false
+  auth_required: false
+
+logging:
+  level: INFO
+  file_path: /data/logs/powernight.log
+  file_enabled: true
+  max_file_size: 10MB
+  backup_count: 5
+  console_output: true
+
+monitoring:
+  enabled: false
+  health_check_interval: 300.0
+  circuit_breaker_enabled: false

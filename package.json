@@ -1,0 +1,50 @@
+{
+  "name": "powernight-ui",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config src/powernight/web/vite.config.ts",
+    "build": "tsc --project src/powernight/web/tsconfig.json && vite build --config src/powernight/web/vite.config.ts",
+    "preview": "vite preview --config src/powernight/web/vite.config.ts",
+    "test": "vitest --config src/powernight/web/vite.config.ts",
+    "test:ui": "vitest --ui --config src/powernight/web/vite.config.ts",
+    "test:e2e": "playwright test --config src/powernight/web/playwright.config.ts",
+    "test:e2e:ui": "playwright test --ui --config src/powernight/web/playwright.config.ts",
+    "lint": "eslint src/powernight/web --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "type-check": "tsc --project src/powernight/web/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "clsx": "^2.0.0",
+    "date-fns": "^2.30.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.48.2",
+    "react-query": "^3.39.3",
+    "react-router-dom": "^6.20.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.1",
+    "@tailwindcss/postcss": "^4.1.14",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/user-event": "^14.5.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.6.2",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "jsdom": "^23.0.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.14",
+    "typescript": "^5.2.2",
+    "vite": "^5.4.0",
+    "vitest": "^3.2.4"
+  }
+}

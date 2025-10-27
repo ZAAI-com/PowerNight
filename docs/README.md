@@ -1,6 +1,6 @@
 # PowerNight
 
-**Automated off-peak charging for your Tesla Powerwall.**
+**Automated off-peak grid charging for your Tesla Powerwall.**
 
 PowerNight is a lightweight Docker-based application with a web interface that automates Tesla Powerwall backup reserve management. Schedule reserve percentage changes to optimize energy costs by charging from the grid during cheaper off-peak hours and discharging during expensive peak hours.
 
@@ -64,7 +64,7 @@ Access the web interface at http://ip-address:8020 or [http://localhost:8020](ht
 
 #### History
 
-*Execution logs with timestamps and task results*
+**Execution logs with timestamps and task results**
 
 <!-- ![History](screenshots/PowerNight-History.png) -->
 

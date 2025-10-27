@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PowerNight{% endblock %}</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <h1>PowerNight</h1>
+        </div>
+        
+        <!-- Powerwall Selector -->
+        <div class="powerwall-selector">
+            {% include 'partials/_selector.html' %}
+        </div>
+        
+        <!-- Navigation Menu -->
+        <div class="navbar-nav">
+            <a href="{{ url_for('main.settings') }}" class="nav-link {% if request.endpoint == 'main.settings' %}active{% endif %}">
+                Settings
+            </a>
+            <a href="{{ url_for('main.scheduling') }}" class="nav-link {% if request.endpoint == 'main.scheduling' %}active{% endif %}">
+                Scheduling
+            </a>
+            <a href="{{ url_for('main.logs') }}" class="nav-link {% if request.endpoint == 'main.logs' %}active{% endif %}">
+                Logs
+            </a>
+        </div>
+
+        <!-- Auth Status Display -->
+        <div id="auth-status" class="auth-status-display" style="display: none;">
+            <div class="auth-info">
+                <span class="auth-email"></span>
+                <span class="auth-site"></span>
+            </div>
+            <button id="logout-btn" class="btn btn-sm btn-outline">Logout</button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Status Bar (non-modal) -->
+    <div id="status-bar" class="status-bar" style="display: none;">
+        <span id="status-message"></span>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/auth-status.js') }}"></script>
+    
+    <script>
+        // Auth status display management
+        document.addEventListener('DOMContentLoaded', function() {
+            const authStatusDisplay = document.getElementById('auth-status');
+            const authEmail = document.querySelector('.auth-email');
+            const authSite = document.querySelector('.auth-site');
+            const logoutBtn = document.getElementById('logout-btn');
+
+            // Update auth status display
+            function updateAuthDisplay(authData) {
+                if (authData && authData.authenticated) {
+                    authEmail.textContent = authData.email || 'Unknown';
+                    authSite.textContent = authData.site_name || 'Unknown';
+                    authStatusDisplay.style.display = 'flex';
+                } else {
+                    authStatusDisplay.style.display = 'none';
+                }
+            }
+
+            // Listen for auth state changes
+            window.AuthStatus.addListener('authStateChanged', updateAuthDisplay);
+
+            // Initial display update
+            updateAuthDisplay(window.AuthStatus.getAuthData());
+
+            // Logout button handler
+            logoutBtn.addEventListener('click', function() {
+                window.AuthStatus.logout();
+            });
+        });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

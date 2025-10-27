@@ -193,7 +193,7 @@ Response:
 {
   "status": "healthy",
   "timestamp": "2025-10-22T10:30:00Z",
-  "version": "0.3.0"
+  "version": "1.0.0"
 }
 ```
 

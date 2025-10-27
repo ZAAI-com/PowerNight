@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
       body: JSON.stringify({
         status: 'healthy',
         timestamp: '2023-01-01T00:00:00Z',
-        version: '0.3.0',
+        version: '1.0.0',
         uptime_seconds: 3600,
         configuration: {
           loaded: true,
