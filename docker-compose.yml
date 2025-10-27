@@ -1,0 +1,77 @@
+# PowerNight Docker Compose Configuration
+# Simplified configuration with essential settings only
+
+services:
+  PowerNight:
+    # Production: Pull from Docker Hub
+    image: zaaicom/powernight:latest
+
+    # Development: Build locally (uncomment the lines below and comment out the image line above)
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    #   target: production
+
+    container_name: PowerNight
+    restart: unless-stopped
+
+    # Port mapping - Web interface accessible on port 8020
+    ports:
+      - "8020:8020"
+
+    # Environment variables - configure via .env file
+    environment:
+      # Security settings
+      - POWERNIGHT_AUTH_ENABLED=true
+      - POWERNIGHT_API_KEY=${POWERNIGHT_API_KEY:-your-secure-api-key-here}
+
+      # Tesla OAuth configuration
+      - TESLA_CLIENT_ID=${TESLA_CLIENT_ID:-ownerapi}
+      - TESLA_CLIENT_SECRET=${TESLA_CLIENT_SECRET:-}
+      - TESLA_EMAIL=${TESLA_EMAIL:-your-email@example.com}
+
+      # Automation settings
+      - POWERNIGHT_AUTOMATION_ENABLED=${AUTOMATION_ENABLED:-true}
+      - POWERNIGHT_CHECK_INTERVAL=${CHECK_INTERVAL:-60}
+
+      # Logging configuration
+      - POWERNIGHT_LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+    # Volume mounts for persistent data
+    volumes:
+      - ./PowerNight-Data:/data
+
+    # Logging configuration - prevent unbounded log growth
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"      # Maximum size of each log file
+        max-file: "3"        # Keep 3 rotated log files
+        compress: "true"     # Compress rotated logs
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Security configuration
+    security_opt:
+      - no-new-privileges:true
+
+    # Labels for container management
+    labels:
+      - "com.zaai.powernight.description=Schedule Tesla Powerwall Grid-Charging during the night"
+      - "com.zaai.powernight.version=1.0.0"
+
+
+# Named volumes for data persistence
+volumes:
+  PowerNight-Data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/PowerNight-Data
