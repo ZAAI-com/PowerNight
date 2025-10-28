@@ -45,37 +45,37 @@ Access the web interface at http://ip-address:8020 or [http://localhost:8020](ht
 
 **Powerwall status with battery level, power flow, and system information**
 
-<!-- ![Dashboard](screenshots/PowerNight-Dashboard.png) -->
+![Dashboard](screenshots/PowerNight-Dashboard.png)
 
 - **System Information**: Site name, ID, operating mode, battery level
 - **Power Data**: Real-time grid, home, battery, solar power readings
 - **Grid Settings**: Backup reserve percentage, grid charging status, export mode
 - **Last Updated**: Timestamp of latest data fetch
 
-#### Planner
+### Planner
 
 **Task management UI for scheduling backup reserve changes**
 
-<!-- ![Planner](screenshots/PowerNight-Planner.png) -->
+![Planner](screenshots/PowerNight-Planner.png)
 
 - **Task Management**: Create, edit, delete scheduled tasks
 - **Manual Execution**: Test tasks immediately
 - **Execution Tracking**: View last execution time and status
 
-#### History
+### History
 
 **Execution logs with timestamps and task results**
 
-<!-- ![History](screenshots/PowerNight-History.png) -->
+![History](screenshots/PowerNight-History.png)
 
 - **Structured Logging**: JSON-formatted logs with filtering
 - **Real-time Updates**: Auto-refresh for live monitoring
 
-#### Settings
+### Settings
 
 **Tesla Account configuration, site selection, and timezone settings**
 
-<!-- ![Settings](screenshots/PowerNight-Settings.png) -->
+![Settings](screenshots/PowerNight-Settings.png)
 
 - **Tesla Cloud Configuration**: Authorize and manage Tesla Access
 - **Site Selection**: Switch between multiple Powerwall installations
