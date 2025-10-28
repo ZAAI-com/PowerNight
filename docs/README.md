@@ -6,7 +6,7 @@ PowerNight is a lightweight Docker-based application with a web interface that a
 
 **My Personal Use Case**: Charge from grid overnight at low rates (in my case 0,16 EUR/kWh) and use the battery during peak hours (0,26 EUR/kWh).
 
----
+
 
 ## Table of Contents
 
@@ -20,7 +20,7 @@ PowerNight is a lightweight Docker-based application with a web interface that a
 - [Build Process](#build-process)
 - [FAQ & Links](#faq--links)
 
----
+
 
 ## Features
 
@@ -35,7 +35,7 @@ PowerNight is a lightweight Docker-based application with a web interface that a
 - 📱 **Modern Web UI** - React SPA with responsive design
 - 📜 **Structured Logging** - JSON logs with component filtering and real-time updates
 
----
+
 
 ## Usage
 
@@ -52,6 +52,8 @@ Access the web interface at http://ip-address:8020 or [http://localhost:8020](ht
 - **Grid Settings**: Backup reserve percentage, grid charging status, export mode
 - **Last Updated**: Timestamp of latest data fetch
 
+---
+
 ### Planner
 
 **Task management UI for scheduling backup reserve changes**
@@ -62,6 +64,8 @@ Access the web interface at http://ip-address:8020 or [http://localhost:8020](ht
 - **Manual Execution**: Test tasks immediately
 - **Execution Tracking**: View last execution time and status
 
+---
+
 ### History
 
 **Execution logs with timestamps and task results**
@@ -70,6 +74,8 @@ Access the web interface at http://ip-address:8020 or [http://localhost:8020](ht
 
 - **Structured Logging**: JSON-formatted logs with filtering
 - **Real-time Updates**: Auto-refresh for live monitoring
+
+---
 
 ### Settings
 
@@ -82,6 +88,9 @@ Access the web interface at http://ip-address:8020 or [http://localhost:8020](ht
 - **Timezone Configuration**: Set scheduling timezone
 - **System Information**: Version, build date, runtime environment
 
+
+---
+
 ### CLI Commands
 
 PowerNight CLI commands
@@ -91,7 +100,7 @@ PowerNight CLI commands
 powernight status
 ```
 
----
+
 
 ## Quick Start
 
@@ -125,7 +134,7 @@ powernight status
 8. **Verify successful execution on the History page**
    Check execution logs for success/error status
 
----
+
 
 ## Installation
 
@@ -219,7 +228,7 @@ python -m powernight.main
 
 Access at [http://localhost:8020](http://localhost:8020)
 
----
+
 
 ## Security
 
@@ -255,7 +264,7 @@ tar -czf powernight-backup-$(date +%Y%m%d).tar.gz PowerNight-Data/
 tar -xzf powernight-backup-20251022.tar.gz
 ```
 
----
+
 
 ## Build Process
 
@@ -279,7 +288,7 @@ npm run build
 - Builds frontend with Vite
 - Optionally builds Docker image with OCI labels
 
----
+
 
 ## FAQ & Links
 
@@ -287,9 +296,8 @@ For troubleshooting common issues, debugging, and log analysis, see [FAQ.md](FAQ
 
 ### License
 
-MIT License - Copyright (c) 2025 Manuel Gruber
-
-See [LICENSE.md](../LICENSE.md) for full license text.
+- MIT License - Copyright (c) 2025 Manuel Gruber
+- See [LICENSE.md](../LICENSE.md) for full license text.
 
 ### Acknowledgments
 
