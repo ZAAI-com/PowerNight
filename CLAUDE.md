@@ -124,7 +124,69 @@ powernight status                         # Get Powerwall status
 powernight set-reserve 80                 # Set backup reserve to 80%
 powernight test-connection                # Test Powerwall connectivity
 powernight-cli --config config.yaml --verbose
+
+# Prompt Safety Framework commands
+powernight-cli prompt-safety analyze --file prompt.txt
+powernight-cli prompt-safety improve --file prompt.txt
+powernight-cli prompt-safety version
 ```
+
+### Prompt Safety Framework
+
+PowerNight includes a comprehensive AI Prompt Engineering Safety Review Framework for analyzing and improving AI prompts.
+
+```bash
+# Analyze a prompt for safety, bias, security, and effectiveness
+powernight-cli prompt-safety analyze --file prompt.txt
+
+# Analyze with different output formats
+powernight-cli prompt-safety analyze --file prompt.txt --format json
+powernight-cli prompt-safety analyze --file prompt.txt --format markdown
+powernight-cli prompt-safety analyze --file prompt.txt --format text --verbose
+
+# Improve a prompt based on analysis
+powernight-cli prompt-safety improve --file prompt.txt
+powernight-cli prompt-safety improve --file prompt.txt --output improved.txt
+
+# Interactive mode
+powernight-cli prompt-safety analyze --interactive
+powernight-cli prompt-safety improve --interactive
+
+# From stdin
+echo "Write code to sort numbers" | powernight-cli prompt-safety analyze
+```
+
+**Python API:**
+
+```python
+from powernight.utils.prompt_safety import PromptAnalyzer, PromptImprover
+
+# Analyze a prompt
+analyzer = PromptAnalyzer()
+result = analyzer.analyze("Write a Python function to sort numbers")
+print(f"Score: {result.overall_score}/100")
+print(f"Risk Level: {result.risk_level}")
+
+# Improve a prompt
+improver = PromptImprover()
+result = improver.improve("Write code to sort numbers")
+print(f"Improvement: +{result.score_improvement} points")
+print(result.improved_prompt)
+```
+
+**Documentation:**
+- Framework Specification: [docs/prompt-engineering/FRAMEWORK.md](docs/prompt-engineering/FRAMEWORK.md)
+- Usage Guide: [docs/prompt-engineering/USAGE.md](docs/prompt-engineering/USAGE.md)
+- Examples: [docs/prompt-engineering/EXAMPLES.md](docs/prompt-engineering/EXAMPLES.md)
+- Quick Start: [docs/prompt-engineering/README.md](docs/prompt-engineering/README.md)
+
+**Analysis Dimensions:**
+1. **Safety** - Harmful content, violence, hate speech, misinformation
+2. **Bias** - Gender, racial, cultural, socioeconomic, ability
+3. **Security** - Data exposure, injection, information leakage
+4. **Effectiveness** - Clarity, context, constraints, format
+5. **Robustness** - Input validation, error handling, scalability
+6. **Performance** - Token efficiency, response quality, consistency
 
 ## High-Level Architecture
 
@@ -240,12 +302,14 @@ PowerNight has multiple documentation files serving different purposes:
 | **CLAUDE.md** | Developers & AI Agents | Architecture, commands, development workflows (this file) |
 | **AGENTS.md** | AI Agents | AI-specific instructions (web UI, Docker deployment warnings) |
 | **docs/README.md** | End Users | Features, quick start, installation, usage, troubleshooting |
+| **docs/prompt-engineering/** | Developers & AI Practitioners | AI prompt safety framework documentation |
 | **.github/workflows/README.md** | DevOps/Maintainers | CI/CD pipelines, release process, workflow documentation |
 
 **When to use which:**
 - Building/developing? → **CLAUDE.md** (common commands, architecture)
 - Deploying with Docker? → **AGENTS.md** (critical volume mount warnings)
 - Installing for end users? → **docs/README.md** (quick start, usage guide)
+- Working with AI prompts? → **docs/prompt-engineering/** (prompt safety analysis and improvement)
 - Creating releases? → **.github/workflows/README.md** (release workflow)
 
 ## GitHub Actions & CI/CD

@@ -5,7 +5,10 @@ Provides CLI commands for manual operations and configuration.
 """
 
 import click
+import json
 import logging
+import sys
+from pathlib import Path
 from typing import Optional
 
 from powernight.core.config import ConfigManager, create_dummy_config
@@ -193,6 +196,233 @@ def create_dummy_config(output: str, force: bool) -> None:
 
     except Exception as e:
         click.echo(f"✗ Failed to create dummy configuration: {e}", err=True)
+
+
+@cli.group()
+def prompt_safety() -> None:
+    """Prompt Safety Framework - Analyze and improve AI prompts."""
+    pass
+
+
+@prompt_safety.command()
+@click.option(
+    "--file", "-f", type=click.Path(exists=True), help="File containing the prompt"
+)
+@click.option("--interactive", "-i", is_flag=True, help="Enter prompt interactively")
+@click.option(
+    "--format",
+    type=click.Choice(["json", "markdown", "text"], case_sensitive=False),
+    default="text",
+    help="Output format",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed analysis")
+@click.option(
+    "--output", "-o", type=click.Path(), help="Output file (default: stdout)"
+)
+def analyze(
+    file: Optional[str],
+    interactive: bool,
+    format: str,
+    verbose: bool,
+    output: Optional[str],
+) -> None:
+    """Analyze a prompt for safety, bias, security, and effectiveness."""
+    from powernight.utils.prompt_safety import PromptAnalyzer, AnalysisConfig
+
+    # Get prompt text
+    if interactive:
+        click.echo("Enter your prompt (press Ctrl+D when done):")
+        prompt = sys.stdin.read()
+    elif file:
+        with open(file, "r") as f:
+            prompt = f.read()
+    else:
+        # Read from stdin
+        prompt = sys.stdin.read()
+
+    if not prompt.strip():
+        click.echo("Error: No prompt provided", err=True)
+        sys.exit(1)
+
+    # Create analyzer
+    config = AnalysisConfig(verbose=verbose, output_format=format)
+    analyzer = PromptAnalyzer(config=config)
+
+    # Analyze prompt
+    result = analyzer.analyze(prompt)
+
+    # Format output
+    if format == "json":
+        output_text = json.dumps(result.to_dict(), indent=2)
+    elif format == "markdown":
+        output_text = _format_markdown(result, verbose)
+    else:  # text
+        output_text = _format_text(result, verbose)
+
+    # Write output
+    if output:
+        with open(output, "w") as f:
+            f.write(output_text)
+        click.echo(f"Analysis written to {output}")
+    else:
+        click.echo(output_text)
+
+
+@prompt_safety.command()
+@click.option(
+    "--file", "-f", type=click.Path(exists=True), help="File containing the prompt"
+)
+@click.option("--interactive", "-i", is_flag=True, help="Enter prompt interactively")
+@click.option(
+    "--output", "-o", type=click.Path(), help="Output file for improved prompt"
+)
+def improve(file: Optional[str], interactive: bool, output: Optional[str]) -> None:
+    """Improve a prompt based on safety analysis."""
+    from powernight.utils.prompt_safety import PromptImprover
+
+    # Get prompt text
+    if interactive:
+        click.echo("Enter your prompt (press Ctrl+D when done):")
+        prompt = sys.stdin.read()
+    elif file:
+        with open(file, "r") as f:
+            prompt = f.read()
+    else:
+        # Read from stdin
+        prompt = sys.stdin.read()
+
+    if not prompt.strip():
+        click.echo("Error: No prompt provided", err=True)
+        sys.exit(1)
+
+    # Create improver
+    improver = PromptImprover()
+
+    # Improve prompt
+    click.echo("Analyzing and improving prompt...")
+    result = improver.improve(prompt)
+
+    # Display results
+    click.echo("\n" + "=" * 80)
+    click.echo("PROMPT IMPROVEMENT REPORT")
+    click.echo("=" * 80)
+
+    click.echo(f"\nOriginal Score: {result.original_score:.1f}/100")
+    click.echo(f"Improved Score: {result.improved_score:.1f}/100")
+    click.echo(
+        f"Improvement: {result.score_improvement:+.1f} points"
+    )
+
+    click.echo("\nImprovements Made:")
+    for i, improvement in enumerate(result.improvements, 1):
+        click.echo(f"  {i}. [{improvement.category}] {improvement.description}")
+
+    click.echo("\n" + "-" * 80)
+    click.echo("IMPROVED PROMPT:")
+    click.echo("-" * 80)
+    click.echo(result.improved_prompt)
+    click.echo("-" * 80)
+
+    # Write to file if requested
+    if output:
+        with open(output, "w") as f:
+            f.write(result.improved_prompt)
+        click.echo(f"\nImproved prompt written to {output}")
+
+
+@prompt_safety.command()
+def version() -> None:
+    """Show prompt safety framework version."""
+    from powernight.utils.prompt_safety import __version__
+
+    click.echo(f"Prompt Safety Framework v{__version__}")
+
+
+def _format_text(result, verbose: bool) -> str:
+    """Format analysis result as plain text."""
+    lines = []
+    lines.append("=" * 80)
+    lines.append("PROMPT SAFETY ANALYSIS REPORT")
+    lines.append("=" * 80)
+
+    # Overall score
+    lines.append(f"\nOverall Score: {result.overall_score:.1f}/100")
+    lines.append(f"Risk Level: {result.risk_level}")
+
+    # Component scores
+    lines.append("\nComponent Scores:")
+    lines.append(f"  Safety:        {result.safety_score.value:.1f}/100")
+    lines.append(f"  Bias:          {result.bias_score.value:.1f}/100")
+    lines.append(f"  Security:      {result.security_score.value:.1f}/100")
+    lines.append(f"  Effectiveness: {result.effectiveness_score.value:.1f}/100")
+    lines.append(f"  Robustness:    {result.robustness_score.value:.1f}/100")
+    lines.append(f"  Performance:   {result.performance_score.value:.1f}/100")
+
+    # Issues
+    if result.issues:
+        lines.append(f"\nIssues Found: {len(result.issues)}")
+        lines.append(
+            f"  Critical: {len(result.critical_issues)}, High: {len(result.high_issues)}"
+        )
+
+        lines.append("\nDetailed Issues:")
+        for i, issue in enumerate(result.issues, 1):
+            lines.append(f"\n  {i}. [{issue.severity.value.upper()}] {issue.category.value}")
+            lines.append(f"     {issue.message}")
+            lines.append(f"     Location: {issue.location}")
+            lines.append(f"     Suggestion: {issue.suggestion}")
+            if verbose:
+                lines.append(f"     Confidence: {issue.confidence:.1%}")
+    else:
+        lines.append("\n✓ No issues found!")
+
+    lines.append("\n" + "=" * 80)
+    return "\n".join(lines)
+
+
+def _format_markdown(result, verbose: bool) -> str:
+    """Format analysis result as markdown."""
+    lines = []
+    lines.append("# Prompt Safety Analysis Report\n")
+
+    # Overall score
+    lines.append(f"**Overall Score:** {result.overall_score:.1f}/100")
+    lines.append(f"**Risk Level:** {result.risk_level}\n")
+
+    # Component scores
+    lines.append("## Component Scores\n")
+    lines.append("| Component | Score |")
+    lines.append("|-----------|-------|")
+    lines.append(f"| Safety | {result.safety_score.value:.1f}/100 |")
+    lines.append(f"| Bias | {result.bias_score.value:.1f}/100 |")
+    lines.append(f"| Security | {result.security_score.value:.1f}/100 |")
+    lines.append(f"| Effectiveness | {result.effectiveness_score.value:.1f}/100 |")
+    lines.append(f"| Robustness | {result.robustness_score.value:.1f}/100 |")
+    lines.append(f"| Performance | {result.performance_score.value:.1f}/100 |")
+
+    # Issues
+    if result.issues:
+        lines.append(f"\n## Issues Found: {len(result.issues)}\n")
+        lines.append(
+            f"- **Critical:** {len(result.critical_issues)}"
+        )
+        lines.append(f"- **High:** {len(result.high_issues)}\n")
+
+        lines.append("### Detailed Issues\n")
+        for i, issue in enumerate(result.issues, 1):
+            lines.append(
+                f"#### {i}. [{issue.severity.value.upper()}] {issue.category.value}\n"
+            )
+            lines.append(f"**Message:** {issue.message}")
+            lines.append(f"**Location:** {issue.location}")
+            lines.append(f"**Suggestion:** {issue.suggestion}")
+            if verbose:
+                lines.append(f"**Confidence:** {issue.confidence:.1%}")
+            lines.append("")
+    else:
+        lines.append("\n## ✓ No issues found!\n")
+
+    return "\n".join(lines)
 
 
 def main() -> None:
