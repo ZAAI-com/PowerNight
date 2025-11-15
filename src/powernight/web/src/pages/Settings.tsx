@@ -306,20 +306,20 @@ const Settings: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-3xl font-bold text-gray-900 mb-6">Settings</h1>
+      <main className="max-w-7xl mx-auto py-4 sm:py-6 px-3 sm:px-4 md:px-6 lg:px-8">
+        <div className="space-y-4 sm:space-y-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Settings</h1>
 
           {/* Error Display */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+            <div className="p-3 sm:p-4 bg-red-50 border border-red-200 rounded-md">
               <p className="text-red-800 text-sm">{error}</p>
             </div>
           )}
 
           {/* Tesla Account Section */}
-          <div className="bg-white shadow rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Tesla Account</h2>
+          <div className="bg-white shadow rounded-lg p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Tesla Account</h2>
 
             {currentStep === 'initial' && (
               <div className="space-y-4">
@@ -327,19 +327,19 @@ const Settings: React.FC = () => {
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                     Tesla Account Email
                   </label>
-                  <div className="flex gap-3">
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <input
                       type="email"
                       id="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="your-email@example.com"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
                     />
                     <button
                       onClick={handleConnect}
                       disabled={isLoading}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full sm:w-auto bg-blue-600 text-white px-6 py-3 sm:py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium min-h-[44px] sm:min-h-0"
                     >
                       {isLoading ? 'Connecting...' : 'Connect'}
                     </button>
@@ -360,19 +360,19 @@ const Settings: React.FC = () => {
                   <label htmlFor="callbackUrl" className="block text-sm font-medium text-gray-700 mb-2">
                     URL of the Tesla Not-Found Page
                   </label>
-                  <div className="flex gap-3">
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <input
                       type="text"
                       id="callbackUrl"
                       value={callbackUrl}
                       onChange={(e) => setCallbackUrl(e.target.value)}
                       placeholder="https://auth.tesla.com/void/callback?code=abc123&state=xyz789"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
                     />
                     <button
                       onClick={handleVerify}
                       disabled={isLoading}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full sm:w-auto bg-blue-600 text-white px-6 py-3 sm:py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium min-h-[44px] sm:min-h-0"
                     >
                       {isLoading ? 'Verifying...' : 'Verify'}
                     </button>
@@ -393,8 +393,8 @@ const Settings: React.FC = () => {
 
           {/* Energy Sites Section */}
           {sites.length > 0 && (
-            <div className="bg-white shadow rounded-lg p-6 mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Energy Sites</h2>
+            <div className="bg-white shadow rounded-lg p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Energy Sites</h2>
 
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -445,8 +445,8 @@ const Settings: React.FC = () => {
 
           {/* PyPowerwall Auth Info Section */}
           {authInfo && (
-            <div className="bg-white shadow rounded-lg p-6 mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">PyPowerwall Authentication</h2>
+            <div className="bg-white shadow rounded-lg p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">PyPowerwall Authentication</h2>
 
               {authInfoLoading ? (
                 <div className="flex items-center justify-center py-8">
@@ -584,8 +584,8 @@ const Settings: React.FC = () => {
           )}
 
           {/* Timezone Configuration Section */}
-          <div className="bg-white shadow rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Timezone Configuration</h2>
+          <div className="bg-white shadow rounded-lg p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Timezone Configuration</h2>
 
             {timezoneLoading ? (
               <div className="flex items-center justify-center py-8">
@@ -651,8 +651,8 @@ const Settings: React.FC = () => {
           </div>
 
           {/* Version Information Section */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Version Information</h2>
+          <div className="bg-white shadow rounded-lg p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Version Information</h2>
 
             {versionLoading ? (
               <div className="flex items-center justify-center py-8">

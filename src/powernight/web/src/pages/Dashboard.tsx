@@ -48,31 +48,31 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-3xl font-bold text-gray-900 mb-6">Dashboard</h1>
+      <main className="max-w-7xl mx-auto py-4 sm:py-6 px-3 sm:px-4 md:px-6 lg:px-8">
+        <div className="space-y-4 sm:space-y-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
 
           {/* Error Display */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+            <div className="p-3 sm:p-4 bg-red-50 border border-red-200 rounded-md">
               <p className="text-red-800 text-sm">{error}</p>
             </div>
           )}
 
           {/* Powerwall System Status Section */}
-          <div className="bg-white shadow rounded-lg p-6 mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Powerwall System Status</h2>
-              <div className="flex items-center gap-4">
+          <div className="bg-white shadow rounded-lg p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Powerwall System Status</h2>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                 {siteDetails?.timestamp && (
-                  <span className="text-sm text-gray-500">
+                  <span className="text-xs sm:text-sm text-gray-500">
                     Last Updated: {formatDate(siteDetails.timestamp)}
                   </span>
                 )}
                 <button
                   onClick={fetchSiteDetails}
                   disabled={siteDetailsLoading}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-auto bg-blue-600 text-white px-4 py-3 sm:py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0"
                 >
                   {siteDetailsLoading ? 'Updating...' : 'Update Data'}
                 </button>
@@ -85,13 +85,13 @@ const Dashboard: React.FC = () => {
                 <span className="ml-2 text-gray-600">Loading Powerwall data...</span>
               </div>
             ) : siteDetails ? (
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {/* Top Row: System Information and Power Data */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                   {/* Left Column: System Information and Grid Settings */}
-                  <div className="space-y-6">
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="text-lg font-medium text-gray-900 mb-3">Site Details</h3>
+                  <div className="space-y-4 sm:space-y-6">
+                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                      <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3">Site Details</h3>
                       <dl className="space-y-2">
                         <div>
                           <dt className="text-sm font-medium text-gray-500">Site Name</dt>
@@ -108,8 +108,8 @@ const Dashboard: React.FC = () => {
                       </dl>
                     </div>
 
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="text-lg font-medium text-gray-900 mb-3">Powerwall Settings</h3>
+                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                      <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3">Powerwall Settings</h3>
                       <dl className="space-y-2">
                         <div>
                           <dt className="text-sm font-medium text-gray-500">Backup Reserve</dt>
@@ -134,8 +134,8 @@ const Dashboard: React.FC = () => {
                   </div>
 
                   {/* Right Column: Power Data */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h3 className="text-lg font-medium text-gray-900 mb-3">Power Data</h3>
+                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                    <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3">Power Data</h3>
                     <dl className="space-y-2">
                       <div>
                         <dt className="text-sm font-medium text-gray-500">Battery Level</dt>
@@ -172,12 +172,12 @@ const Dashboard: React.FC = () => {
                 </div>
 
                 {/* Raw Data Section (Collapsible) */}
-                <details className="bg-gray-50 p-4 rounded-lg">
-                  <summary className="text-lg font-medium text-gray-900 cursor-pointer hover:text-blue-600">
+                <details className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                  <summary className="text-base sm:text-lg font-medium text-gray-900 cursor-pointer hover:text-blue-600">
                     Raw Powerwall Data
                   </summary>
-                  <div className="mt-4">
-                    <pre className="bg-white p-4 rounded text-xs overflow-x-auto border">
+                  <div className="mt-3 sm:mt-4">
+                    <pre className="bg-white p-3 sm:p-4 rounded text-xs overflow-x-auto border">
                       {JSON.stringify(siteDetails, null, 2)}
                     </pre>
                   </div>

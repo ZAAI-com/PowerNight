@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Header from './components/Header';
+import BottomNav from './components/BottomNav';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { useAuth } from './hooks/useAuth';
 import { TimezoneProvider } from './contexts/TimezoneContext';
@@ -35,7 +36,7 @@ const AppContent: React.FC = () => {
     <Router>
       <div className="min-h-screen bg-gray-50">
         <Header />
-        <main className="flex-1 pt-16">
+        <main className="flex-1 pt-14 md:pt-16 pb-16 md:pb-0">
           <Suspense fallback={
             <div className="min-h-screen flex items-center justify-center">
               <LoadingSpinner size="lg" text="Loading..." />
@@ -50,6 +51,7 @@ const AppContent: React.FC = () => {
             </Routes>
           </Suspense>
         </main>
+        <BottomNav />
       </div>
     </Router>
   );

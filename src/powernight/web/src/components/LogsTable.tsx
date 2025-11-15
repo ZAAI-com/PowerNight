@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { TaskExecutionLog } from '../types';
 import Tooltip from './Tooltip';
+import { ResponsiveTable } from './ResponsiveTable';
 import { formatDate } from '../utils/helpers';
 
 interface LogsTableProps {
@@ -157,10 +158,10 @@ const LogsTable: React.FC<LogsTableProps> = ({ logs, isLoading = false }) => {
   }
 
   return (
-    <div className="bg-white shadow overflow-hidden sm:rounded-md">
-      <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+    <div className="bg-white shadow overflow-hidden rounded-lg">
+      <div className="px-3 sm:px-4 md:px-6 py-4 sm:py-5 border-b border-gray-200">
         <div>
-          <h3 className="text-lg leading-6 font-medium text-gray-900">
+          <h3 className="text-base sm:text-lg leading-6 font-medium text-gray-900">
             Task Execution Logs
           </h3>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">
@@ -169,29 +170,29 @@ const LogsTable: React.FC<LogsTableProps> = ({ logs, isLoading = false }) => {
         </div>
       </div>
 
-      <div>
+      <ResponsiveTable>
         <table className="w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                 <SortButton field="started_at">Timestamp</SortButton>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                 <SortButton field="task_name">Task Name</SortButton>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 <SortButton field="execution_type">Type</SortButton>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 <SortButton field="command">Command</SortButton>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 <span className="text-gray-900">Parameters</span>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                 <span className="text-gray-900">API Response</span>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 <SortButton field="status">Status</SortButton>
               </th>
             </tr>
@@ -204,35 +205,41 @@ const LogsTable: React.FC<LogsTableProps> = ({ logs, isLoading = false }) => {
 
               return (
                 <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
-                    {timestamp}
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 font-mono">
+                    <div className="break-words max-w-[120px] sm:max-w-none">
+                      {timestamp}
+                    </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {log.task_name || 'Unknown'}
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-900">
+                    <div className="break-words max-w-[120px] sm:max-w-none">
+                      {log.task_name || 'Unknown'}
+                    </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                     <span className={getExecutionTypeBadge(log.execution_type)}>
                       {log.execution_type.charAt(0).toUpperCase() + log.execution_type.slice(1)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {log.command}
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-900">
+                    <div className="break-words max-w-[100px] sm:max-w-none">
+                      {log.command}
+                    </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-900 max-w-[150px] sm:max-w-xs">
                     <Tooltip content={<pre className="whitespace-pre-wrap">{commandParams}</pre>}>
                       <div className="truncate cursor-help">
                         {commandParams.length > 50 ? `${commandParams.substring(0, 50)}...` : commandParams}
                       </div>
                     </Tooltip>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-900 max-w-[150px] sm:max-w-xs">
                     <Tooltip content={<pre className="whitespace-pre-wrap">{apiResponse}</pre>}>
                       <div className="truncate cursor-help">
                         {apiResponse.length > 50 ? `${apiResponse.substring(0, 50)}...` : apiResponse}
                       </div>
                     </Tooltip>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                     <span className={getStatusBadge(log.status)}>
                       {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
                     </span>
@@ -247,7 +254,7 @@ const LogsTable: React.FC<LogsTableProps> = ({ logs, isLoading = false }) => {
             })}
           </tbody>
         </table>
-      </div>
+      </ResponsiveTable>
     </div>
   );
 };

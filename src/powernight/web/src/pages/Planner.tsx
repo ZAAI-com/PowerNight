@@ -3,6 +3,7 @@ import { Task, CommandType, CommandDefinition, TaskFormData } from '../types';
 import { api } from '../utils/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import StatusBadge from '../components/StatusBadge';
+import { ResponsiveTable } from '../components/ResponsiveTable';
 import { formatDate } from '../utils/helpers';
 
 const Planner: React.FC = () => {
@@ -313,19 +314,19 @@ const Planner: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <main className="max-w-7xl mx-auto py-4 sm:py-6 px-3 sm:px-4 md:px-6 lg:px-8">
+        <div className="space-y-4 sm:space-y-6">
           {/* Header */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Planner</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Planner</h1>
               <p className="mt-1 text-sm text-gray-600">
                 Manage automated tasks for your Powerwall
               </p>
             </div>
             <button
               onClick={() => setShowForm(!showForm)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full sm:w-auto px-4 py-3 sm:py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium transition-colors min-h-[44px] sm:min-h-0"
             >
               {showForm ? 'Cancel' : 'Create Task'}
             </button>
@@ -340,8 +341,8 @@ const Planner: React.FC = () => {
 
           {/* Form */}
           {showForm && (
-            <div className="mb-6 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h2 className="text-xl font-semibold mb-4">
+            <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200">
+              <h2 className="text-lg sm:text-xl font-semibold mb-4">
                 {editingTask ? 'Edit Task' : 'Create New Task'}
               </h2>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -353,7 +354,7 @@ const Planner: React.FC = () => {
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
                     required
                   />
                 </div>
@@ -366,7 +367,7 @@ const Planner: React.FC = () => {
                     type="time"
                     value={formData.time}
                     onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
                     step="60"
                     pattern="[0-9]{2}:[0-9]{2}"
                     required
@@ -380,7 +381,7 @@ const Planner: React.FC = () => {
                   <select
                     value={formData.command}
                     onChange={(e) => handleCommandChange(e.target.value as CommandType)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
                     required
                   >
                     {Object.entries(commands || {}).map(([cmd, def]) => (
@@ -405,17 +406,17 @@ const Planner: React.FC = () => {
                   </label>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full sm:w-auto px-4 py-3 sm:py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium transition-colors min-h-[44px] sm:min-h-0"
                   >
                     {editingTask ? 'Update' : 'Create'}
                   </button>
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    className="w-full sm:w-auto px-4 py-3 sm:py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 font-medium transition-colors min-h-[44px] sm:min-h-0"
                   >
                     Cancel
                   </button>
@@ -426,35 +427,35 @@ const Planner: React.FC = () => {
 
           {/* Tasks List */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-xl font-semibold">Tasks</h2>
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
+              <h2 className="text-lg sm:text-xl font-semibold">Tasks</h2>
             </div>
-            
+
             {tasks.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
+              <div className="p-6 sm:p-8 text-center text-gray-500">
                 No tasks configured. Create one to get started!
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <ResponsiveTable>
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Name
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         Time
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Command
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         Last Execution
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
@@ -462,17 +463,17 @@ const Planner: React.FC = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {tasks.map((task) => (
                       <tr key={task.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{task.name}</div>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4">
+                          <div className="text-sm font-medium text-gray-900 break-words max-w-xs">{task.name}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-900">
                           {task.time}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-900">
                           {task.command_params && Object.keys(task.command_params).length > 0 ? (
-                            <div className="text-xs">
+                            <div className="text-xs space-y-1">
                               {Object.entries(task.command_params).map(([key, value]) => (
-                                <div key={key} className="whitespace-nowrap">
+                                <div key={key} className="break-words">
                                   <span className="font-medium">{key}:</span> {String(value)}
                                 </div>
                               ))}
@@ -481,12 +482,12 @@ const Planner: React.FC = () => {
                             <span className="text-gray-400">-</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                           <StatusBadge
                             status={task.enabled ? 'enabled' : 'disabled'}
                           />
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-500">
                           {executingTasks[task.id] ? (
                             <div>
                               <div className="text-blue-600 font-medium">Executing...</div>
@@ -503,52 +504,54 @@ const Planner: React.FC = () => {
                             'Never'
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={() => handleToggle(task.id)}
-                            className="text-blue-600 hover:text-blue-900 mr-3"
-                          >
-                            {task.enabled ? 'Disable' : 'Enable'}
-                          </button>
-                          <button
-                            onClick={() => handleEdit(task)}
-                            className="text-indigo-600 hover:text-indigo-900 mr-3"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleExecute(task.id)}
-                            disabled={executingTasks[task.id] !== undefined}
-                            className={`mr-3 ${
-                              executingTasks[task.id] !== undefined
-                                ? 'text-gray-400 cursor-not-allowed'
-                                : 'text-green-600 hover:text-green-900'
-                            }`}
-                          >
-                            {executingTasks[task.id] !== undefined ? (
-                              <span className="flex items-center">
-                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Executing...
-                              </span>
-                            ) : (
-                              'Execute'
-                            )}
-                          </button>
-                          <button
-                            onClick={() => handleDelete(task.id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Delete
-                          </button>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-sm font-medium">
+                          <div className="flex flex-col sm:flex-row sm:justify-end gap-2 sm:gap-3 min-w-[120px]">
+                            <button
+                              onClick={() => handleToggle(task.id)}
+                              className="text-blue-600 hover:text-blue-900 font-medium min-h-[32px] px-2 sm:px-0"
+                            >
+                              {task.enabled ? 'Disable' : 'Enable'}
+                            </button>
+                            <button
+                              onClick={() => handleEdit(task)}
+                              className="text-indigo-600 hover:text-indigo-900 font-medium min-h-[32px] px-2 sm:px-0"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleExecute(task.id)}
+                              disabled={executingTasks[task.id] !== undefined}
+                              className={`font-medium min-h-[32px] px-2 sm:px-0 ${
+                                executingTasks[task.id] !== undefined
+                                  ? 'text-gray-400 cursor-not-allowed'
+                                  : 'text-green-600 hover:text-green-900'
+                              }`}
+                            >
+                              {executingTasks[task.id] !== undefined ? (
+                                <span className="flex items-center justify-center sm:justify-start">
+                                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  <span className="text-xs sm:text-sm">Executing...</span>
+                                </span>
+                              ) : (
+                                'Execute'
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleDelete(task.id)}
+                              className="text-red-600 hover:text-red-900 font-medium min-h-[32px] px-2 sm:px-0"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ResponsiveTable>
             )}
           </div>
         </div>

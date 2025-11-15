@@ -17,8 +17,10 @@ const Tooltip: React.FC<TooltipProps> = ({
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const updatePosition = () => {
     if (!triggerRef.current || !tooltipRef.current) return;
@@ -66,15 +68,20 @@ const Tooltip: React.FC<TooltipProps> = ({
     setTooltipPosition({ top, left });
   };
 
+  // Detect touch device
+  useEffect(() => {
+    setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
+
   useEffect(() => {
     if (isVisible) {
       updatePosition();
       const handleScroll = () => updatePosition();
       const handleResize = () => updatePosition();
-      
+
       window.addEventListener('scroll', handleScroll);
       window.addEventListener('resize', handleResize);
-      
+
       return () => {
         window.removeEventListener('scroll', handleScroll);
         window.removeEventListener('resize', handleResize);
@@ -82,12 +89,61 @@ const Tooltip: React.FC<TooltipProps> = ({
     }
   }, [isVisible, position]);
 
+  // Auto-hide tooltip after 3 seconds on touch devices
+  useEffect(() => {
+    if (isVisible && isTouchDevice) {
+      hideTimeoutRef.current = setTimeout(() => {
+        setIsVisible(false);
+      }, 3000);
+
+      return () => {
+        if (hideTimeoutRef.current) {
+          clearTimeout(hideTimeoutRef.current);
+        }
+      };
+    }
+  }, [isVisible, isTouchDevice]);
+
+  // Close tooltip when clicking outside on touch devices
+  useEffect(() => {
+    if (isVisible && isTouchDevice) {
+      const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+        if (
+          triggerRef.current &&
+          !triggerRef.current.contains(e.target as Node) &&
+          tooltipRef.current &&
+          !tooltipRef.current.contains(e.target as Node)
+        ) {
+          setIsVisible(false);
+        }
+      };
+
+      document.addEventListener('touchstart', handleClickOutside);
+      document.addEventListener('click', handleClickOutside);
+
+      return () => {
+        document.removeEventListener('touchstart', handleClickOutside);
+        document.removeEventListener('click', handleClickOutside);
+      };
+    }
+  }, [isVisible, isTouchDevice]);
+
   const handleMouseEnter = () => {
-    setIsVisible(true);
+    if (!isTouchDevice) {
+      setIsVisible(true);
+    }
   };
 
   const handleMouseLeave = () => {
-    setIsVisible(false);
+    if (!isTouchDevice) {
+      setIsVisible(false);
+    }
+  };
+
+  const handleClick = () => {
+    if (isTouchDevice) {
+      setIsVisible(!isVisible);
+    }
   };
 
   return (
@@ -96,7 +152,8 @@ const Tooltip: React.FC<TooltipProps> = ({
         ref={triggerRef}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className="inline-block"
+        onClick={handleClick}
+        className="inline-block cursor-pointer"
       >
         {children}
       </div>
