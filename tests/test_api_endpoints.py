@@ -9,13 +9,14 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone
 
 from powernight.web import create_app
-from powernight.core.config import PowerNightConfig, PowerwallSettings, AutomationSettings, WebInterfaceSettings, LoggingSettings, MonitoringSettings
+from powernight.core.config import PowerNightConfig, PowerwallSettings, AutomationSettings, WebInterfaceSettings, LoggingSettings, MonitoringSettings, create_dummy_config
 
 
 @pytest.fixture
 def app():
     """Create test Flask application."""
-    app = create_app()
+    config = create_dummy_config()
+    app = create_app(config, testing=True)
     app.config['TESTING'] = True
     return app
 
