@@ -8,8 +8,8 @@ from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime, timezone
 from typing import Dict, Any
 
-from ...core.database.services import TaskService, TaskExecutionService
-from ...core.database.exceptions import DatabaseError, TaskNotFoundError
+from ...core.database.services import TaskService, TaskExecutionService, TaskPresetService
+from ...core.database.exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError
 from ...core.planner import get_task_manager
 from ...core.powerwall.commands import CronCommand, CommandType
 from ...core.powerwall.exceptions import PowerwallError
@@ -669,6 +669,157 @@ def reload_all_tasks():
             'success': False,
             'error': 'Internal Server Error',
             'message': f'Failed to reload tasks: {e}',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+
+@tasks_blueprint.route('/presets', methods=['GET'])
+@require_auth
+def list_presets():
+    """Get all task presets (built-in and user-defined)."""
+    try:
+        preset_service = TaskPresetService()
+        presets = preset_service.list_presets()
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'presets': presets,
+                'total': len(presets)
+            },
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to list presets: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal Server Error',
+            'message': f'Failed to list presets: {e}',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+
+@tasks_blueprint.route('/presets', methods=['POST'])
+@require_auth
+def create_preset():
+    """Create a new user-defined task preset."""
+    try:
+        if not request.is_json:
+            raise ValidationError("Request must contain JSON data")
+
+        data = request.get_json()
+
+        # Validate required fields
+        if not data.get('name', '').strip():
+            raise ValidationError("Preset name is required")
+        if not data.get('command'):
+            raise ValidationError("Command is required")
+
+        # Validate command type
+        try:
+            CommandType(data['command'])
+        except ValueError:
+            raise ValidationError(
+                f"Invalid command type. Must be one of: {[c.value for c in CommandType]}"
+            )
+
+        # Validate command parameters if provided
+        command_params = data.get('command_params', {})
+        if command_params:
+            command = CronCommand(data['command'], command_params)
+            validation = command.validate()
+            if not validation.valid:
+                raise ValidationError(f"Invalid command parameters: {', '.join(validation.errors)}")
+
+        # Validate default_time format if provided
+        default_time = data.get('default_time')
+        if default_time:
+            try:
+                hour, minute = default_time.split(':')
+                if not (0 <= int(hour) <= 23 and 0 <= int(minute) <= 59):
+                    raise ValueError("Invalid time range")
+            except (ValueError, IndexError):
+                raise ValidationError("Invalid time format. Must be HH:MM")
+
+        preset_service = TaskPresetService()
+        preset_data = preset_service.create_preset(
+            name=data['name'].strip(),
+            command=data['command'],
+            command_params=command_params,
+            default_time=default_time,
+            is_builtin=False,
+            sort_order=100
+        )
+
+        return jsonify({
+            'success': True,
+            'data': preset_data,
+            'message': 'Preset created successfully',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 201
+
+    except ValidationError as e:
+        return jsonify({
+            'success': False,
+            'error': 'Validation Error',
+            'message': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 422
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to create preset: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal Server Error',
+            'message': f'Failed to create preset: {e}',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+
+@tasks_blueprint.route('/presets/<preset_id>', methods=['DELETE'])
+@require_auth
+def delete_preset(preset_id: str):
+    """Delete a user-defined preset. Built-in presets cannot be deleted."""
+    try:
+        preset_service = TaskPresetService()
+        preset_service.delete_preset(preset_id)
+
+        return jsonify({
+            'success': True,
+            'message': 'Preset deleted successfully',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+
+    except PresetNotFoundError as e:
+        return jsonify({
+            'success': False,
+            'error': 'Not Found',
+            'message': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 404
+
+    except DatabaseError as e:
+        if "Built-in" in str(e):
+            return jsonify({
+                'success': False,
+                'error': 'Forbidden',
+                'message': str(e),
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }), 403
+        return jsonify({
+            'success': False,
+            'error': 'Internal Server Error',
+            'message': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to delete preset: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal Server Error',
+            'message': f'Failed to delete preset: {e}',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
