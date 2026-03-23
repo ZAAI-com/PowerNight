@@ -327,19 +327,19 @@ const Settings: React.FC = () => {
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                     Tesla Account Email
                   </label>
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <input
                       type="email"
                       id="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="your-email@example.com"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
                       onClick={handleConnect}
                       disabled={isLoading}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoading ? 'Connecting...' : 'Connect'}
                     </button>
@@ -360,19 +360,19 @@ const Settings: React.FC = () => {
                   <label htmlFor="callbackUrl" className="block text-sm font-medium text-gray-700 mb-2">
                     URL of the Tesla Not-Found Page
                   </label>
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <input
                       type="text"
                       id="callbackUrl"
                       value={callbackUrl}
                       onChange={(e) => setCallbackUrl(e.target.value)}
                       placeholder="https://auth.tesla.com/void/callback?code=abc123&state=xyz789"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
                       onClick={handleVerify}
                       disabled={isLoading}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoading ? 'Verifying...' : 'Verify'}
                     </button>
@@ -598,13 +598,13 @@ const Settings: React.FC = () => {
                   <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 mb-2">
                     Timezone
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <select
                       id="timezone"
                       value={selectedTimezone}
                       onChange={(e) => handleTimezoneChange(e.target.value)}
                       disabled={!isEditingTimezone}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100"
                     >
                       {availableTimezones.length === 0 && (
                         <option value="Europe/Berlin">Europe/Berlin (Germany)</option>
@@ -618,7 +618,7 @@ const Settings: React.FC = () => {
                     <button
                       onClick={isEditingTimezone ? handleSaveAndReloadTimezone : handleEditTimezone}
                       disabled={timezoneSaving}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
                       {timezoneSaving ? 'Saving...' : (isEditingTimezone ? 'Save' : 'Edit')}
                     </button>

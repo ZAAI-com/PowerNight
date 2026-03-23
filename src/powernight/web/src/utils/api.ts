@@ -14,7 +14,8 @@ import {
   TaskFormData,
   TaskExecution,
   TaskExecutionLogsResponse,
-  CommandDefinition
+  CommandDefinition,
+  TaskPreset
 } from '../types';
 
 class PowerNightAPI {
@@ -330,6 +331,35 @@ class PowerNightAPI {
       throw new Error(response.data.error || 'Failed to get task executions');
     }
     return response.data.data!;
+  }
+
+  // Task Preset endpoints
+  async getTaskPresets(): Promise<{ presets: TaskPreset[]; total: number }> {
+    const response = await this.client.get<ApiResponse<{ presets: TaskPreset[]; total: number }>>('/tasks/presets');
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to get presets');
+    }
+    return response.data.data!;
+  }
+
+  async createTaskPreset(preset: {
+    name: string;
+    command: CommandType;
+    command_params: Record<string, any>;
+    default_time?: string;
+  }): Promise<TaskPreset> {
+    const response = await this.client.post<ApiResponse<TaskPreset>>('/tasks/presets', preset);
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to create preset');
+    }
+    return response.data.data!;
+  }
+
+  async deleteTaskPreset(id: string): Promise<void> {
+    const response = await this.client.delete<ApiResponse>(`/tasks/presets/${id}`);
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to delete preset');
+    }
   }
 
   // Task Execution Logs endpoints

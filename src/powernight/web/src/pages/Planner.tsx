@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Task, CommandType, CommandDefinition, TaskFormData } from '../types';
+import { Task, CommandType, CommandDefinition, TaskFormData, TaskPreset } from '../types';
 import { api } from '../utils/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import StatusBadge from '../components/StatusBadge';
@@ -15,6 +15,12 @@ const Planner: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   
+  // Preset state
+  const [presets, setPresets] = useState<TaskPreset[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('');
+  const [showSavePresetModal, setShowSavePresetModal] = useState(false);
+  const [presetName, setPresetName] = useState('');
+
   // Execution tracking state
   const [executingTasks, setExecutingTasks] = useState<Record<string, string>>({}); // taskId -> executionId
 
@@ -32,6 +38,7 @@ const Planner: React.FC = () => {
     console.log('Planner component useEffect running');
     loadTasks();
     loadCommands();
+    loadPresets();
   }, []);
 
   const loadTasks = async () => {
@@ -56,6 +63,60 @@ const Planner: React.FC = () => {
     } catch (err) {
       console.error('Failed to load commands:', err);
       setCommands({});
+    }
+  };
+
+  const loadPresets = async () => {
+    try {
+      const data = await api.getTaskPresets();
+      setPresets(data.presets || []);
+    } catch (err) {
+      console.error('Failed to load presets:', err);
+    }
+  };
+
+  const handlePresetSelect = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    if (!presetId) return;
+
+    const preset = presets.find(p => p.id === presetId);
+    if (!preset) return;
+
+    setFormData({
+      name: preset.name,
+      time: preset.default_time || '00:00',
+      command: preset.command,
+      command_params: preset.command_params || {},
+      enabled: true,
+    });
+  };
+
+  const handleSavePreset = async () => {
+    if (!presetName.trim()) return;
+    try {
+      await api.createTaskPreset({
+        name: presetName.trim(),
+        command: formData.command,
+        command_params: formData.command_params,
+        default_time: formData.time !== '00:00' ? formData.time : undefined,
+      });
+      setShowSavePresetModal(false);
+      setPresetName('');
+      await loadPresets();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save preset');
+    }
+  };
+
+  const handleDeletePreset = async (presetId: string) => {
+    try {
+      await api.deleteTaskPreset(presetId);
+      await loadPresets();
+      if (selectedPresetId === presetId) {
+        setSelectedPresetId('');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete preset');
     }
   };
 
@@ -221,6 +282,7 @@ const Planner: React.FC = () => {
     });
     setEditingTask(null);
     setShowForm(false);
+    setSelectedPresetId('');
   };
 
   const handleCommandChange = (command: CommandType) => {
@@ -316,7 +378,7 @@ const Planner: React.FC = () => {
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           {/* Header */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-wrap gap-4 justify-between items-start mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Planner</h1>
               <p className="mt-1 text-sm text-gray-600">
@@ -345,6 +407,51 @@ const Planner: React.FC = () => {
                 {editingTask ? 'Edit Task' : 'Create New Task'}
               </h2>
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Preset Selector - shown only when creating, not editing */}
+                {!editingTask && presets.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Load from Preset
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedPresetId}
+                        onChange={(e) => handlePresetSelect(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">-- Select a preset --</option>
+                        {presets.some(p => p.is_builtin) && (
+                          <optgroup label="Built-in Presets">
+                            {presets.filter(p => p.is_builtin).map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {presets.some(p => !p.is_builtin) && (
+                          <optgroup label="My Presets">
+                            {presets.filter(p => !p.is_builtin).map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                      {selectedPresetId && (() => {
+                        const selected = presets.find(p => p.id === selectedPresetId);
+                        return selected && !selected.is_builtin ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePreset(selectedPresetId)}
+                            className="px-3 py-2 text-red-600 border border-red-300 rounded-md hover:bg-red-50"
+                            title="Delete this preset"
+                          >
+                            Delete
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Name <span className="text-red-500">*</span>
@@ -412,6 +519,18 @@ const Planner: React.FC = () => {
                   >
                     {editingTask ? 'Update' : 'Create'}
                   </button>
+                  {!editingTask && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPresetName(formData.name);
+                        setShowSavePresetModal(true);
+                      }}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      Save as Preset
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={resetForm}
@@ -451,7 +570,7 @@ const Planner: React.FC = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Last Execution
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -486,7 +605,7 @@ const Planner: React.FC = () => {
                             status={task.enabled ? 'enabled' : 'disabled'}
                           />
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {executingTasks[task.id] ? (
                             <div>
                               <div className="text-blue-600 font-medium">Executing...</div>
@@ -503,46 +622,48 @@ const Planner: React.FC = () => {
                             'Never'
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={() => handleToggle(task.id)}
-                            className="text-blue-600 hover:text-blue-900 mr-3"
-                          >
-                            {task.enabled ? 'Disable' : 'Enable'}
-                          </button>
-                          <button
-                            onClick={() => handleEdit(task)}
-                            className="text-indigo-600 hover:text-indigo-900 mr-3"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleExecute(task.id)}
-                            disabled={executingTasks[task.id] !== undefined}
-                            className={`mr-3 ${
-                              executingTasks[task.id] !== undefined
-                                ? 'text-gray-400 cursor-not-allowed'
-                                : 'text-green-600 hover:text-green-900'
-                            }`}
-                          >
-                            {executingTasks[task.id] !== undefined ? (
-                              <span className="flex items-center">
-                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Executing...
-                              </span>
-                            ) : (
-                              'Execute'
-                            )}
-                          </button>
-                          <button
-                            onClick={() => handleDelete(task.id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Delete
-                          </button>
+                        <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex flex-col sm:flex-row gap-1 sm:gap-0 items-end sm:items-center">
+                            <button
+                              onClick={() => handleToggle(task.id)}
+                              className="text-blue-600 hover:text-blue-900 sm:mr-3"
+                            >
+                              {task.enabled ? 'Disable' : 'Enable'}
+                            </button>
+                            <button
+                              onClick={() => handleEdit(task)}
+                              className="text-indigo-600 hover:text-indigo-900 sm:mr-3"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleExecute(task.id)}
+                              disabled={executingTasks[task.id] !== undefined}
+                              className={`sm:mr-3 ${
+                                executingTasks[task.id] !== undefined
+                                  ? 'text-gray-400 cursor-not-allowed'
+                                  : 'text-green-600 hover:text-green-900'
+                              }`}
+                            >
+                              {executingTasks[task.id] !== undefined ? (
+                                <span className="flex items-center">
+                                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Executing...
+                                </span>
+                              ) : (
+                                'Execute'
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleDelete(task.id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -552,6 +673,56 @@ const Planner: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Save as Preset Modal */}
+        {showSavePresetModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Save as Preset</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Preset Name
+                  </label>
+                  <input
+                    type="text"
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                    placeholder="Enter preset name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                  />
+                </div>
+                <p className="text-sm text-gray-500">
+                  Command: <span className="font-medium">{formData.command}</span>
+                  {formData.time !== '00:00' && (
+                    <> | Time: <span className="font-medium">{formData.time}</span></>
+                  )}
+                  {Object.keys(formData.command_params).length > 0 && (
+                    <> | Params: <span className="font-medium">
+                      {Object.entries(formData.command_params).map(([k, v]) => `${k}=${v}`).join(', ')}
+                    </span></>
+                  )}
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setShowSavePresetModal(false)}
+                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSavePreset}
+                    disabled={!presetName.trim()}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

@@ -61,9 +61,9 @@ const Dashboard: React.FC = () => {
 
           {/* Powerwall System Status Section */}
           <div className="bg-white shadow rounded-lg p-6 mb-6">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-wrap gap-3 justify-between items-start mb-4">
               <h2 className="text-xl font-semibold text-gray-900">Powerwall System Status</h2>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-3">
                 {siteDetails?.timestamp && (
                   <span className="text-sm text-gray-500">
                     Last Updated: {formatDate(siteDetails.timestamp)}

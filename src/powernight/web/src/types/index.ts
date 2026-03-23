@@ -86,6 +86,18 @@ export interface ParamDefinition {
   unit?: string;
 }
 
+export interface TaskPreset {
+  id: string;
+  name: string;
+  command: CommandType;
+  command_params: Record<string, any>;
+  default_time?: string;
+  is_builtin: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface TaskFormData {
   name: string;
   time: string;

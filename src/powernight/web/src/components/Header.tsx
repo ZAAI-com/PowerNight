@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 const Header: React.FC = () => {
   const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const isActive = (path: string) => {
     return location.pathname === path;
@@ -28,8 +29,8 @@ const Header: React.FC = () => {
             </div>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex space-x-8">
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex space-x-8">
             {navItems.map((item) => (
               <Link
                 key={item.path}
@@ -45,10 +46,50 @@ const Header: React.FC = () => {
             ))}
           </nav>
 
-          {/* Empty div to maintain layout balance */}
-          <div className="flex items-center">
+          {/* Empty div to maintain layout balance (desktop only) */}
+          <div className="hidden md:flex items-center">
+          </div>
+
+          {/* Mobile menu button */}
+          <div className="flex items-center md:hidden">
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="text-white p-2 rounded-md hover:bg-white/10 focus:outline-none"
+              aria-label="Toggle navigation menu"
+              aria-expanded={menuOpen}
+            >
+              {menuOpen ? (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Dropdown */}
+        {menuOpen && (
+          <div className="md:hidden border-t border-white/20 pb-3 pt-2">
+            {navItems.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={() => setMenuOpen(false)}
+                className={`block px-4 py-2 text-sm font-bold transition-colors ${
+                  isActive(item.path)
+                    ? 'bg-white/20 text-white'
+                    : 'text-white/90 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </header>
   );

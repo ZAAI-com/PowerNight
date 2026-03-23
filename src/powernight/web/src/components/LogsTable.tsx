@@ -169,8 +169,8 @@ const LogsTable: React.FC<LogsTableProps> = ({ logs, isLoading = false }) => {
         </div>
       </div>
 
-      <div>
-        <table className="w-full divide-y divide-gray-200">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -218,14 +218,14 @@ const LogsTable: React.FC<LogsTableProps> = ({ logs, isLoading = false }) => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {log.command}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs min-w-[120px]">
                     <Tooltip content={<pre className="whitespace-pre-wrap">{commandParams}</pre>}>
                       <div className="truncate cursor-help">
                         {commandParams.length > 50 ? `${commandParams.substring(0, 50)}...` : commandParams}
                       </div>
                     </Tooltip>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs min-w-[120px]">
                     <Tooltip content={<pre className="whitespace-pre-wrap">{apiResponse}</pre>}>
                       <div className="truncate cursor-help">
                         {apiResponse.length > 50 ? `${apiResponse.substring(0, 50)}...` : apiResponse}
