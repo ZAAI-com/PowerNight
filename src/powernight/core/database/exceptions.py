@@ -28,3 +28,8 @@ class DatabaseMigrationError(DatabaseError):
 class TaskNotFoundError(DatabaseError):
     """Raised when a requested task is not found."""
     pass
+
+
+class PresetNotFoundError(DatabaseError):
+    """Raised when a requested preset is not found."""
+    pass

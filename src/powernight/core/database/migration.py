@@ -12,7 +12,7 @@ from sqlalchemy import text
 
 from .connection import get_database_manager, initialize_database
 from .models import ScheduleEntry, TaskExecution
-from .services import ScheduleService
+from .services import ScheduleService, TaskPresetService
 from .exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
@@ -167,6 +167,82 @@ def migrate_task_executions_table() -> bool:
         return False
 
 
+BUILTIN_PRESETS = [
+    {
+        "name": "Night Charge to 100%",
+        "command": "reserve",
+        "command_params": {"reserve": 100},
+        "default_time": "22:00",
+        "sort_order": 1,
+    },
+    {
+        "name": "Morning Low Reserve",
+        "command": "reserve",
+        "command_params": {"reserve": 20},
+        "default_time": "06:00",
+        "sort_order": 2,
+    },
+    {
+        "name": "Enable Grid Charging",
+        "command": "gridcharging",
+        "command_params": {"enabled": True},
+        "default_time": None,
+        "sort_order": 3,
+    },
+    {
+        "name": "Disable Grid Charging",
+        "command": "gridcharging",
+        "command_params": {"enabled": False},
+        "default_time": None,
+        "sort_order": 4,
+    },
+    {
+        "name": "Self-Consumption Mode",
+        "command": "mode",
+        "command_params": {"mode": "self_consumption"},
+        "default_time": None,
+        "sort_order": 5,
+    },
+    {
+        "name": "Backup Mode",
+        "command": "mode",
+        "command_params": {"mode": "backup"},
+        "default_time": None,
+        "sort_order": 6,
+    },
+    {
+        "name": "Export PV Only",
+        "command": "gridexport",
+        "command_params": {"mode": "pv_only"},
+        "default_time": None,
+        "sort_order": 7,
+    },
+]
+
+
+def seed_builtin_presets() -> bool:
+    """Seed built-in task presets if they don't already exist."""
+    try:
+        logger.info("Starting built-in preset seeding")
+        initialize_database()
+
+        preset_service = TaskPresetService()
+
+        for preset_data in BUILTIN_PRESETS:
+            if not preset_service.preset_exists_by_name(preset_data["name"]):
+                preset_service.create_preset(
+                    is_builtin=True,
+                    **preset_data
+                )
+                logger.info(f"Created built-in preset: {preset_data['name']}")
+
+        logger.info("Built-in preset seeding completed")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to seed built-in presets: {e}")
+        return False
+
+
 def run_migration() -> bool:
     """
     Run database migration.
@@ -178,11 +254,14 @@ def run_migration() -> bool:
     """
     # Run default data initialization
     default_data_success = initialize_default_data()
-    
+
     # Run task executions table migration
     task_executions_success = migrate_task_executions_table()
-    
-    return default_data_success and task_executions_success
+
+    # Seed built-in task presets
+    presets_success = seed_builtin_presets()
+
+    return default_data_success and task_executions_success and presets_success
 
 
 def get_migration_status() -> Dict[str, Any]:

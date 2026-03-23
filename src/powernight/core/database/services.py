@@ -10,8 +10,8 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from .models import ScheduleEntry, Task, TaskExecution
-from .exceptions import DatabaseError, ScheduleNotFoundError, TaskNotFoundError
+from .models import ScheduleEntry, Task, TaskExecution, TaskPreset
+from .exceptions import DatabaseError, ScheduleNotFoundError, TaskNotFoundError, PresetNotFoundError
 from .connection import get_db_session_context
 
 
@@ -738,3 +738,99 @@ class TaskExecutionService:
 
         except Exception as e:
             raise DatabaseError(f"Failed to get execution logs: {e}")
+
+
+class TaskPresetService:
+    """Service for managing task presets."""
+
+    def __init__(self, session: Optional[Session] = None):
+        self.session = session
+
+    def _get_session(self) -> Session:
+        """Get database session."""
+        if self.session:
+            return self.session
+        return get_db_session_context()
+
+    def create_preset(
+        self,
+        name: str,
+        command: str,
+        command_params: Optional[Dict[str, Any]] = None,
+        default_time: Optional[str] = None,
+        is_builtin: bool = False,
+        sort_order: int = 0
+    ) -> Dict[str, Any]:
+        """Create a new task preset."""
+        try:
+            with self._get_session() as session:
+                preset = TaskPreset(
+                    name=name,
+                    command=command,
+                    command_params=command_params or {},
+                    default_time=default_time,
+                    is_builtin=is_builtin,
+                    sort_order=sort_order
+                )
+                session.add(preset)
+                session.commit()
+                session.refresh(preset)
+                return preset.to_dict()
+        except Exception as e:
+            raise DatabaseError(f"Failed to create preset: {e}")
+
+    def list_presets(self) -> List[Dict[str, Any]]:
+        """List all presets, ordered by sort_order then name."""
+        try:
+            with self._get_session() as session:
+                presets = session.query(TaskPreset).order_by(
+                    TaskPreset.sort_order, TaskPreset.name
+                ).all()
+                return [p.to_dict() for p in presets]
+        except Exception as e:
+            raise DatabaseError(f"Failed to list presets: {e}")
+
+    def get_preset(self, preset_id: str) -> Dict[str, Any]:
+        """Get a preset by ID."""
+        try:
+            with self._get_session() as session:
+                preset = session.query(TaskPreset).filter(
+                    TaskPreset.id == preset_id
+                ).first()
+                if not preset:
+                    raise PresetNotFoundError(f"Preset {preset_id} not found")
+                return preset.to_dict()
+        except PresetNotFoundError:
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to get preset: {e}")
+
+    def delete_preset(self, preset_id: str) -> bool:
+        """Delete a user preset. Built-in presets cannot be deleted."""
+        try:
+            with self._get_session() as session:
+                preset = session.query(TaskPreset).filter(
+                    TaskPreset.id == preset_id
+                ).first()
+                if not preset:
+                    raise PresetNotFoundError(f"Preset {preset_id} not found")
+                if preset.is_builtin:
+                    raise DatabaseError("Built-in presets cannot be deleted")
+                session.delete(preset)
+                session.commit()
+                return True
+        except (PresetNotFoundError, DatabaseError):
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to delete preset: {e}")
+
+    def preset_exists_by_name(self, name: str) -> bool:
+        """Check if a preset with the given name already exists."""
+        try:
+            with self._get_session() as session:
+                count = session.query(TaskPreset).filter(
+                    TaskPreset.name == name
+                ).count()
+                return count > 0
+        except Exception:
+            return False

@@ -87,6 +87,36 @@ class Task(Base):
         }
 
 
+class TaskPreset(Base):
+    """Task preset model for reusable task templates."""
+
+    __tablename__ = 'task_presets'
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    name = Column(String(255), nullable=False)
+    command = Column(String(50), nullable=False)
+    command_params = Column(JSON, nullable=True)
+    default_time = Column(String(8), nullable=True)  # Optional HH:MM
+    is_builtin = Column(Boolean, default=False)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert task preset to dictionary."""
+        return {
+            'id': str(self.id),
+            'name': self.name,
+            'command': self.command,
+            'command_params': self.command_params,
+            'default_time': self.default_time,
+            'is_builtin': self.is_builtin,
+            'sort_order': self.sort_order,
+            'created_at': safe_format_datetime(self.created_at),
+            'updated_at': safe_format_datetime(self.updated_at),
+        }
+
+
 class TaskExecution(Base):
     """Task execution model for tracking async task execution status."""
 
