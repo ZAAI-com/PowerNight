@@ -64,7 +64,7 @@ services:
     # Labels for container management
     labels:
       - "com.zaai.powernight.description=Schedule Tesla Powerwall Grid-Charging during the night"
-      - "com.zaai.powernight.version=1.0.0"
+      - "com.zaai.powernight.version=2.0.0"
 
 
 # Named volumes for data persistence

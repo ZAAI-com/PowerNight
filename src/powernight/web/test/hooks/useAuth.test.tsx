@@ -1,21 +1,22 @@
+import { vi, type Mocked } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useAuth } from '../../src/hooks/useAuth';
 import { api } from '../../src/utils/api';
 
 // Mock the API
-jest.mock('../../src/utils/api', () => ({
+vi.mock('../../src/utils/api', () => ({
   api: {
-    isAuthenticated: jest.fn(),
-    authenticate: jest.fn(),
-    logout: jest.fn(),
+    isAuthenticated: vi.fn(),
+    authenticate: vi.fn(),
+    logout: vi.fn(),
   },
 }));
 
-const mockApi = api as jest.Mocked<typeof api>;
+const mockApi = api as Mocked<typeof api>;
 
 describe('useAuth', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockApi.isAuthenticated.mockReturnValue(false);
   });
 

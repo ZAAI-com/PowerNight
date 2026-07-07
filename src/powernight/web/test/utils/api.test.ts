@@ -1,13 +1,14 @@
+import { vi, type Mocked } from 'vitest';
 import { api } from '../../src/utils/api';
 
 // Mock axios
-jest.mock('axios');
+vi.mock('axios');
 import axios from 'axios';
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedAxios = axios as Mocked<typeof axios>;
 
 describe('PowerNightAPI', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     localStorage.clear();
   });
 
@@ -104,11 +105,11 @@ describe('PowerNightAPI', () => {
 
   describe('Polling', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should start and stop polling', () => {

@@ -2,7 +2,7 @@
 # Multi-stage build for optimized image size
 
 # Build stage - Install dependencies and build requirements
-FROM python:3.11-slim AS builder
+FROM python:3.13-slim AS builder
 
 # Set environment variables for build
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -28,7 +28,7 @@ RUN pip install --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
 
 # Production stage - Runtime environment
-FROM python:3.11-slim AS production
+FROM python:3.13-slim AS production
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
