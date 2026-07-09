@@ -10,6 +10,7 @@ from typing import Dict, Any, Tuple, Optional
 import logging
 import os
 
+from ... import __version__
 from ...core.config import get_config, ConfigManager
 from ...core.powerwall import get_powerwall_connector
 from ...core.planner import get_planner
@@ -957,7 +958,7 @@ def get_system_status():
             'timestamp': format_datetime_for_display(datetime.now(timezone.utc)),
             'system': {
                 'healthy': True,
-                'version': '1.0.0',
+                'version': __version__,
                 'active_profile': profile_id
             },
             'powerwall': {
@@ -1244,7 +1245,7 @@ def health_check():
         health_data = {
             'status': 'healthy',
             'timestamp': datetime.now(timezone.utc).isoformat(),
-            'version': '1.0.0',
+            'version': __version__,
             'uptime_seconds': 0
         }
 

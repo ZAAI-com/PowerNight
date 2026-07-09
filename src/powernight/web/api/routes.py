@@ -9,6 +9,8 @@ from flask import Blueprint, jsonify, current_app, send_from_directory
 from datetime import datetime, timezone
 import os
 
+from ... import __version__
+
 
 # Create main blueprint
 main_blueprint = Blueprint('main', __name__)
@@ -35,7 +37,7 @@ def health_check():
         health_status = {
             'status': 'healthy',
             'timestamp': datetime.now(timezone.utc).isoformat(),
-            'version': '1.0.0',
+            'version': __version__,
         }
         return jsonify(health_status), 200
 
@@ -57,7 +59,7 @@ def version_info():
     """
     return jsonify({
         'application': 'PowerNight',
-        'version': '1.0.0',
+        'version': __version__,
         'build_date': '2025-10-18',
         'python_version': '3.13+',
         'dependencies': {

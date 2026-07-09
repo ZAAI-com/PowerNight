@@ -729,7 +729,7 @@ class LogEntry:
 {
   "status": "healthy|degraded|unhealthy",
   "timestamp": "2025-10-18T10:00:00Z",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "checks": {
     "configuration": true,
     "powerwall": false,

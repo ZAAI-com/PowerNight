@@ -10,6 +10,7 @@ import json
 from datetime import datetime
 
 from flask import Blueprint, jsonify, render_template_string
+from ... import __version__
 from ...core.config import get_config
 
 
@@ -608,7 +609,7 @@ All endpoints have rate limits to ensure system stability:
 
 Rate limit headers are included in all responses.
                 ''',
-                'version': '1.0.0',
+                'version': __version__,
                 'contact': {
                     'name': 'PowerNight Support',
                     'url': 'https://github.com/your-org/powernight'
