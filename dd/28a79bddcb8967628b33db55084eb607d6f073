@@ -1,0 +1,391 @@
+src/powernight/web/api/auth_api.py
+  s_182db34532a7d5::t_a6d83607e63fce 11,14
+  s_182db34532a7d5::t_b70dd72aef2131 142-176
+  s_182db34532a7d5::t_cea5a8488f468a 35,56,62,115,224,243-244,278,297-298,333,339,363,399,436,485,530,540,773
+  s_182db34532a7d5::t_f9d260602f9222 188-189
+  s_182db34532a7d5::t_050335177ad006 451-460,463,479
+src/powernight/web/app.py
+  s_182db34532a7d5::t_72a8d0eb5bf3b7 23-46
+  s_182db34532a7d5::t_3990ffee5a8517 83-85,93-110
+  s_182db34532a7d5::t_d6d2200e342988 8,16
+  s_182db34532a7d5::t_0dcb0270672375 81
+  s_182db34532a7d5::t_00f69b57055ee0 82
+  s_182db34532a7d5::t_3f8398d94d3f08 111
+src/powernight/core/database/connection.py
+  s_182db34532a7d5::t_ca38abfe76c090 8,17
+  s_182db34532a7d5::t_af649ce014303a 132,136,139-143
+  s_182db34532a7d5::t_b036e2cfa734ed 36,43-50
+tests/web/test_routes.py
+  s_182db34532a7d5::t_69ba7de54081ce 18,33-35
+  s_182db34532a7d5::t_133053e8a1e6d9 2-5,11-17,19-32,36-38,42,44,46-47,52,57,62,66,68,71-73,78-79,82-83,86,92-94,100-101,103-104,106
+src/powernight/core/config/manager.py
+  s_182db34532a7d5::t_d23dc6d3f874c7 386
+  s_182db34532a7d5::t_8d675fac831bf2 181-186
+  s_182db34532a7d5::t_aa651a99739a73 15
+  s_182db34532a7d5::t_adbab46caed760 362-364
+  s_182db34532a7d5::t_6bbd71d5ef94c8 16
+tests/unit/test_web_api.py
+  s_182db34532a7d5::t_dccd7653e05cb1 4-8,12,14-18,21-27,29-42,46-48,51-52,54-56,58-59,61-64,66-69,71-72,74,76-83,85-137,143-144,146-151,153-154,161-163,165-168,170-171,177-178,180-183,186-187,189-194,201-232,234-237,239-242,244-255,257-258,260,267-268,270-273,276-277,279,281-282,284-289,291-292,294-313,315-317,319-322,324-326,328,331-333,335-339,341-342,344-346,348-350,353-354,356-361,363-364,366-372,375-376,378-379,381-385,387-388,390-394,396,398-404,407-416,418-422,426
+  s_182db34532a7d5::t_dec3c5ece89da0 28,43-45
+  s_182db34532a7d5::t_9d098e3fdfbfbd 329
+src/powernight/core/auth/token_storage.py
+  s_182db34532a7d5::t_25f0ffd6c95ff9 71-75,80-81,90
+  s_182db34532a7d5::t_08ed5377a29ab0 11
+  s_182db34532a7d5::t_182955ae02fcc3 39,41-44
+src/powernight/web/api/validation.py
+  s_182db34532a7d5::t_bc8ead0a4e7b6e 38-42
+src/powernight/web/api/logs_api.py
+  s_182db34532a7d5::t_eac8d70521d3b8 16,25
+src/powernight/core/database/migration.py
+  s_182db34532a7d5::t_ddb4f35097b58e 245-248,252,255-256
+  s_182db34532a7d5::t_282c07eade2f30 4,12,17,19-23,25,29-32,35
+  s_182db34532a7d5::t_a436a718263dd5 183-211,214-215,223-233
+  s_182db34532a7d5::t_8d4eba9e06f2f5 258-259,261-262,264-265
+config/config.yaml
+  s_182db34532a7d5::t_b6b929f0f97c80 19-23
+src/powernight/core/config/schema.py
+  s_182db34532a7d5::t_5a8a10a44a00ca 361
+  s_182db34532a7d5::t_48450c8569dad2 7
+  s_182db34532a7d5::t_8b125e436f8465 334-340,365-366,373
+  s_182db34532a7d5::t_955cbde0f4f54e 400-404,409-410,415-416,428
+  s_182db34532a7d5::t_926764ddf2b016 136
+  s_182db34532a7d5::t_e8e0ac2d75601b 294,298-299,304
+src/powernight/utils/logging.py
+  s_182db34532a7d5::t_4f85c0de58b44d 217-246
+.github/workflows/ci.yml
+  s_182db34532a7d5::t_8b8cc2f6d59475 1-77
+src/powernight/web/src/pages/Dashboard.tsx
+  s_d5fa9a7f3d2d01::t_7a6db207a24640 5
+  s_182db34532a7d5::t_409b76649c87ff 25-28,35-36,46,49-51,53-62,64-68
+  s_182db34532a7d5::t_ee543cb4579104 1,9
+  s_182db34532a7d5::t_92c3636afd78e3 103
+tests/test_configuration.py
+  s_182db34532a7d5::t_e30811299ce9be 9-11,14,19-20,30,63,75,82,86,91,95,102,106,113,116-118,121-130,136,152,155,157,162-173,177-192,197,199-201,207,210-215,222,227-228,230-231,233-238,240,242,247-248,250-251,253-257,259-260,262-264,271,276,281,287,292,297,302,307,312,317,326-334,337-341,343-344,346-347,350,362,367
+  s_182db34532a7d5::t_8a44c73df6dbbd 114-115
+src/powernight/web/middleware.py
+  s_182db34532a7d5::t_6d514d67c724a7 1-8,10-41,46-47,49,51-55,59,62-70,73,75-89
+src/powernight/web/api/api.py
+  s_182db34532a7d5::t_df33d3a17b487e 7-8,13
+  s_182db34532a7d5::t_4842c9efb8062c 502
+  s_182db34532a7d5::t_19a67f3972057d 178,183-185,187,189,191-193,196,199-200,202-217,219-229,231-232,234-236,238-241,243-276,279-281,284,287-291,414,446,606,700,777
+tests/test_integration.py
+  s_182db34532a7d5::t_ef278efa8c1fda 3-6,13-41,46,48,54-55,57,61-65,67,72-110,114-115,117-142,147,149,151-153,156-157,161-173,175-178,183-195,198-213,218-227,231-242
+src/powernight/web/src/components/LoadingSpinner.tsx
+  s_d5fa9a7f3d2d01::t_888f6cb70eac64 24-25
+src/powernight/web/src/pages/Planner.tsx
+  s_d5fa9a7f3d2d01::t_3ea7c760f6b13f 370
+  s_182db34532a7d5::t_32a90db121f8d5 29-46
+  s_182db34532a7d5::t_3636fabcb98629 800-811
+  s_182db34532a7d5::t_b2ae8c2bb51934 1,6-7,11
+  s_182db34532a7d5::t_e8f1513e682e59 267,272-289,293-296,299-300,303-304,306,308,313,317,320,323,326,328,334
+  s_182db34532a7d5::t_0430fbb743b47d 159-197,201-202,205-206
+  s_182db34532a7d5::t_52dcf5440b3b5e 221-227,229-230,233,235-236
+src/powernight/core/powerwall/data.py
+  s_182db34532a7d5::t_5b525573544795 280-281,288-305
+  s_182db34532a7d5::t_9172a9d4a87c28 306-307
+src/powernight/app.py
+  s_182db34532a7d5::t_52145c1d258d10 65-69
+  s_182db34532a7d5::t_25b0b95f2af8dc 63
+  s_182db34532a7d5::t_714f0fdc156563 70-79
+  s_182db34532a7d5::t_dc7b54f2a81a4b 267,273-274
+  s_182db34532a7d5::t_5612008588f06f 64
+tests/unit/test_config_manager.py
+  s_182db34532a7d5::t_ea3fe2ca0a024d 89,113
+  s_182db34532a7d5::t_136f426ce8036a 383,391-398
+  s_182db34532a7d5::t_446e0eb87dfcdf 123,137,144
+  s_182db34532a7d5::t_53f0188f3317a4 205
+  s_182db34532a7d5::t_3b4474fc931a88 169
+  s_182db34532a7d5::t_5a14298065c176 51,75
+  s_182db34532a7d5::t_6f9968205080c8 317,328
+  s_182db34532a7d5::t_4c9278bdadd793 385-388,399-422,424-425
+  s_182db34532a7d5::t_c6da7c1eecd186 7
+  s_182db34532a7d5::t_cdf8f35668b28c 355,368,371,377
+  s_182db34532a7d5::t_eb2a16ae07da2a 194
+tests/unit/test_auth_enforcement.py
+  s_182db34532a7d5::t_465e511ebb8758 1-20,41-45,50-112
+  s_182db34532a7d5::t_14c5d278c0b5a7 21-40,46-49
+CLAUDE.md
+  s_182db34532a7d5::t_579afdec896862 378-380
+  s_182db34532a7d5::t_d27ff6fd813c32 719
+  s_182db34532a7d5::t_8e256d6ed203e9 748,751-753,756,758,764-766
+  s_182db34532a7d5::t_07b37ceaa1ef3b 181-182
+  s_182db34532a7d5::t_5201fa5585a0f6 629-630,632
+  s_182db34532a7d5::t_fac613f17778c0 390-392
+  s_182db34532a7d5::t_05389bef50140b 438-442,444
+  s_182db34532a7d5::t_1e48b994aba7ec 572
+  s_182db34532a7d5::t_90ee8ea9d0df82 168-169,171
+  s_182db34532a7d5::t_db4861c4c8847f 695,698-704,708
+  s_182db34532a7d5::t_28c37b01d8e14c 744
+  s_182db34532a7d5::t_b1ec007d48da78 11
+  s_182db34532a7d5::t_402c7e17aaaf03 276-282
+  s_182db34532a7d5::t_eb2c2098011187 478-487
+  s_182db34532a7d5::t_05334fa38cc4ff 148-149,152,154,159-160
+  s_e4470e15d8376e::t_09017234ed2f02 350-358,360-367,369
+src/powernight/web/api/auth.py
+  s_182db34532a7d5::t_7e3e8f71f83ee3 8,11
+  s_182db34532a7d5::t_f21e3112b2670a 32-33,35
+  s_182db34532a7d5::t_b6a88ba8e1ee49 161-174,185,208
+src/powernight/web/api/tasks_api.py
+  s_182db34532a7d5::t_c30a9be4f3c7fc 429-435
+tests/unit/test_config_backup.py
+  s_182db34532a7d5::t_72f6e4998dd789 258-264,267,271-283,285,287
+  s_182db34532a7d5::t_b691cafd3edd82 194,205,210
+  s_182db34532a7d5::t_4e90946e979463 232
+  s_182db34532a7d5::t_2314922ca82ef2 424,438,447
+  s_182db34532a7d5::t_066c2f0280f368 65-72
+  s_182db34532a7d5::t_eb66573438b056 319
+  s_182db34532a7d5::t_c2de35f66152e3 347
+  s_21e565492050e3::t_44da96dbe0a2ac 172-177,179-184
+src/powernight/web/test/setup.ts
+  s_d5fa9a7f3d2d01::t_02ea6426484509 55,65
+  s_d5fa9a7f3d2d01::t_27a4f8878ad1da 4-6,8-17,19
+src/powernight/web/src/utils/helpers.ts
+  s_d5fa9a7f3d2d01::t_0b611c1d94fa65 242
+  s_d5fa9a7f3d2d01::t_6c52fa3fa5424d 255
+  s_d5fa9a7f3d2d01::t_69b766b0c7050e 39-40
+  s_d5fa9a7f3d2d01::t_ae96092aafb98d 2
+docs/FAQ.md
+  s_182db34532a7d5::t_25de607f13c65e 96-97
+src/powernight/web/src/types/index.ts
+  s_d5fa9a7f3d2d01::t_db8dd4ec91ef29 220
+  s_d5fa9a7f3d2d01::t_edf42c5b458872 151
+  s_d5fa9a7f3d2d01::t_60cca75e7bf1af 104
+  s_d5fa9a7f3d2d01::t_7a0af58ef1c6ba 53,82,94,116,146-147
+  s_d5fa9a7f3d2d01::t_defde5e00d6bc2 117
+tests/integration/test_application_startup_paths.py
+  s_182db34532a7d5::t_7e8a784e104f70 36,89,144,206,260,317,400,452,521
+src/powernight/web/src/App.tsx
+  s_182db34532a7d5::t_7d222adfbec185 62-66
+  s_182db34532a7d5::t_9b2f15b2ab7119 8
+build.sh
+  s_182db34532a7d5::t_242f6d89f6e1ce 185,188-196
+  s_182db34532a7d5::t_30f4f7a8d881b7 144,147-154
+pyproject.toml
+  s_182db34532a7d5::t_901885d16f01b2 45
+  s_182db34532a7d5::t_bb812ef9ad8959 55
+tests/unit/test_connector_resilience.py
+  s_182db34532a7d5::t_715af27321ca43 1-123
+tests/test_web_interface.py
+  s_182db34532a7d5::t_b653fd87e00aba 3-6,9,11,14-15,17-20,22-27,29-32,35-36,38-39,41-43,45-50,52-54,58,60-64,66-68,70-72,74-76,78-79,82-83,85-89,91-95
+src/powernight/main.py
+  s_182db34532a7d5::t_179668bae442fc 37
+tests/unit/test_planner_threading.py
+  s_182db34532a7d5::t_faf8eb443ac022 1-105
+src/powernight/core/powerwall/commands.py
+  s_182db34532a7d5::t_4b2e97d7ce0e5c 63-66,69
+tests/unit/test_config_validators.py
+  s_182db34532a7d5::t_ada5f20d150e4c 19
+  s_182db34532a7d5::t_eda2f4c4d6f0c4 213
+src/powernight/web/src/pages/Settings.tsx
+  s_182db34532a7d5::t_e48d11dc26045d 55
+  s_182db34532a7d5::t_fd94b8b4deb93c 4
+  s_182db34532a7d5::t_2be732b40b5e8c 74
+  s_d5fa9a7f3d2d01::t_d5b5f275f1a98e 196
+  s_d5fa9a7f3d2d01::t_43d8d455e9ca09 128,172
+  s_182db34532a7d5::t_2b3721851eb5e3 291-302,306
+  s_182db34532a7d5::t_99dd0fb98cd04d 274,277,281,285
+  s_182db34532a7d5::t_2e023823378c0a 121-124
+tests/unit/test_route_smoke.py
+  s_182db34532a7d5::t_be0f2cab72924b 1-163
+src/powernight/web/src/pages/History.tsx
+  s_182db34532a7d5::t_6946864af2d212 1,8-11,21-31,37-39,41-46,48,50,53,55,61-62,70-72,74,82,84-88,90
+  s_182db34532a7d5::t_1b37a51597c9ca 104-148
+package.json
+  s_182db34532a7d5::t_16ca6085d7deff 10
+src/powernight/web/tsconfig.json
+  s_d5fa9a7f3d2d01::t_dbea6652e6d527 8
+requirements.txt
+  s_182db34532a7d5::t_07ebeb6eb3a03b 24,28-29
+tests/unit/test_migration.py
+  s_182db34532a7d5::t_fda7ded6eb9d4c 1-81
+src/powernight/web/test/pages/Planner.test.tsx
+  s_182db34532a7d5::t_8446c29483becf 1-117
+docs/plans/2026-04-25-security-remediation.md
+  s_182db34532a7d5::t_825e82b0676dfa 28,36,82,100,136,173-175,208,220-222
+  s_182db34532a7d5::t_6fa6baff5d744c 3-22
+tests/test_api_endpoints.py
+  s_182db34532a7d5::t_960127258ba6b5 2-5,9-45,50-57,61-76,80-90,95-163,165-183,185,187-189,191-193,198-230,235-246,250,255-272
+src/powernight/web/test/components/StatusBadge.test.tsx
+  s_d5fa9a7f3d2d01::t_ee54e7ca5afffa 10-12
+  s_d5fa9a7f3d2d01::t_105249ae99bf5e 20
+  s_d5fa9a7f3d2d01::t_362030fc4470ec 28
+src/powernight/core/planner/planner.py
+  s_182db34532a7d5::t_4e7b8dbc95bd39 148-149,151
+tests/unit/test_tesla_oauth.py
+  s_182db34532a7d5::t_0daf9db49e8b4f 3-9,12-13,15-97,99-244,246,248-260,262-281,283-425
+src/powernight/web/src/components/Header.tsx
+  s_182db34532a7d5::t_30a8a110268ad4 1,3-23,28-59
+  s_182db34532a7d5::t_2c9561fdbb850b 83-89
+src/powernight/web/src/contexts/ToastContext.tsx
+  s_182db34532a7d5::t_f67d3c011e7241 1-102
+src/powernight/cli/commands.py
+  s_182db34532a7d5::t_e94d6adc236273 145
+  s_182db34532a7d5::t_a19b6c86ecce8c 11
+src/powernight/web/src/hooks/useAuth.ts
+  s_182db34532a7d5::t_e77a3915819396 52-56,60-61,63
+  s_d5fa9a7f3d2d01::t_89f20f10365a1c 84
+  s_182db34532a7d5::t_c64d8f035e024a 85-86,97-100
+src/powernight/web/src/components/LogsTable.tsx
+  s_d5fa9a7f3d2d01::t_852784156bbbcd 100-105
+  s_182db34532a7d5::t_8643ff47c36a30 157
+  s_182db34532a7d5::t_6d3eeddbda3dad 2
+  s_d5fa9a7f3d2d01::t_555a7b0733f8c1 71-73
+  s_d5fa9a7f3d2d01::t_bbca05cdd010fc 23
+tests/unit/test_web_app_paths.py
+  s_182db34532a7d5::t_411eeb6cd9580a 2,4-9,15-17,21-26,34-91,95-97,99-121
+  s_182db34532a7d5::t_29fbb253acbb1f 98
+src/powernight/web/test/utils/api.test.ts
+  s_d5fa9a7f3d2d01::t_964c7a15a0e588 120-121
+  s_d5fa9a7f3d2d01::t_a84f9085e44ed2 4-22,24
+  s_d5fa9a7f3d2d01::t_0213a4b4c2bc54 49
+  s_d5fa9a7f3d2d01::t_5905e6042ec600 30-32
+.gitignore
+  s_182db34532a7d5::t_c15fd15925357d 423-425
+AGENTS.md
+  s_182db34532a7d5::t_56db45bb010033 66,68-73,75,79
+  s_182db34532a7d5::t_de3c4e620ac003 291
+  s_182db34532a7d5::t_be3ab2438b0571 495
+  s_182db34532a7d5::t_588c6834e331e7 336-337
+  s_182db34532a7d5::t_d2091dc705a5a3 55-56
+  s_182db34532a7d5::t_e129f3781675fc 374
+  s_182db34532a7d5::t_49b4ca10966c40 11,14-15
+  s_182db34532a7d5::t_a07bce9bf250f9 202,207
+  s_182db34532a7d5::t_dd08e2f1162cf1 459
+  s_322ea3ad412683::t_29dec30442c5c9 208
+src/powernight/web/src/components/Tooltip.tsx
+  s_d5fa9a7f3d2d01::t_d34af89cc28b97 83-85
+src/powernight/web/test/hooks/useAuth.test.tsx
+  s_d5fa9a7f3d2d01::t_91e03cfd8163cd 2,12,22-23,26,29-31,33
+docker-compose.yml
+  s_182db34532a7d5::t_c15fd15925357d 26
+src/powernight/core/database/services.py
+  s_182db34532a7d5::t_be108b8d63eae7 4,11-12
+src/powernight/core/config/validators.py
+  s_182db34532a7d5::t_e5a65e4f8820bb 8
+tests/unit/test_web_app_paths_simple.py
+  s_182db34532a7d5::t_5525d3a89538dd 2,4,6-7,11-13,16-23,42,44-83,85-87,90-108,110-117
+.env.example
+  s_182db34532a7d5::t_c15fd15925357d 1-14
+src/powernight/core/config/backup.py
+  s_182db34532a7d5::t_4e06aebb4312e3 320-326
+  s_182db34532a7d5::t_157d9e25b1fb81 73-76,79-83,88-89
+  s_182db34532a7d5::t_d4b73445e8c408 90
+src/powernight/web/src/contexts/TimezoneContext.tsx
+  s_d5fa9a7f3d2d01::t_681d89d87c4354 118
+  s_d5fa9a7f3d2d01::t_dce24cf0c398b9 88-89,98-99
+src/powernight/web/src/utils/api.ts
+  s_d5fa9a7f3d2d01::t_3d3243875a3f95 335
+  s_d5fa9a7f3d2d01::t_01bc7fddb0dba5 109
+  s_d5fa9a7f3d2d01::t_1913d13ad789f3 266
+src/powernight/core/powerwall/connector.py
+  s_182db34532a7d5::t_94c969bee53207 22
+  s_182db34532a7d5::t_498aceed9a8436 180
+  s_182db34532a7d5::t_7df3513c8880ee 557-566,568,571-573,576,596-604
+  s_182db34532a7d5::t_782e29ad37d302 776-786,789,792-793,812,814,818-826
+  s_182db34532a7d5::t_bd867222c31666 9
+  s_182db34532a7d5::t_0267651906939a 96-118
+src/powernight/web/api/routes.py
+  s_182db34532a7d5::t_86f35602a45497 64
+  s_182db34532a7d5::t_95d0dfc27d6d85 11
+src/powernight/utils/__init__.py
+  s_182db34532a7d5::t_908e74442a5174 16
+src/powernight/core/planner/task_executor.py
+  s_d37515abf542f8::t_395689d6d3fd50 192-212
+  s_182db34532a7d5::t_2584009d5bbe5d 43-48,60-68,75,78-82
+docs/README.md
+  s_182db34532a7d5::t_8e239b8003f31f 187-195
+  s_182db34532a7d5::t_d533717ed2625e 34
+  s_182db34532a7d5::t_a9af8f8bd9fcd9 172,176
+  s_182db34532a7d5::t_371a890e0026b7 151,155,162
+  s_182db34532a7d5::t_612ff705d1550b 252,254,256-258,260,262
+  s_182db34532a7d5::t_df123e5a4d4f01 108-109,111,115
+  s_182db34532a7d5::t_fc4b3c52b6dce6 163
+tests/unit/test_config_paths.py
+  s_182db34532a7d5::t_86862f3201cc5b 15
+Dockerfile
+  s_182db34532a7d5::t_6d08edc181a712 81
+src/powernight/core/database/models.py
+  s_182db34532a7d5::t_dad7ec6612becc 64
+  s_182db34532a7d5::t_be108b8d63eae7 7-8,11-12,14
+src/powernight/web/src/hooks/useApi.ts
+  s_d5fa9a7f3d2d01::t_10fd16f3e4fa16 7
+tests/unit/test_config_recovery.py
+  s_182db34532a7d5::t_d484b22cd29b42 1-110
+src/powernight/web/test/contexts/ToastContext.test.tsx
+  s_182db34532a7d5::t_8deb956ead2aed 1-92
+src/powernight/web/api/config_api.py
+  s_182db34532a7d5::t_8d692132260da1 3,5,8-10,13-26
+  s_182db34532a7d5::t_cde9832b275b88 75-104
+  s_182db34532a7d5::t_6df908ff00dd71 142
+  s_182db34532a7d5::t_4902deac94b7c9 36-41
+  s_182db34532a7d5::t_44bb53b4529923 27,60-61,137-138,176-177,236-237
+tests/conftest.py
+  s_182db34532a7d5::t_d3102ed1bdd828 76-107
+  s_182db34532a7d5::t_b3bd1778e0386c 42-45
+docs/SECURITY.md
+  s_182db34532a7d5::t_72ba5a2d283102 5,7-9,11-16,20-23
+docs/plans/ux-improvement-roadmap.md
+  s_182db34532a7d5::t_825e82b0676dfa 13-15,27,29,191-202
+  s_182db34532a7d5::t_14fd0849df4425 3-12,16-21
+  s_182db34532a7d5::t_b9433b6d344044 94
+  s_182db34532a7d5::t_b5ec2dde3f7414 167
+  s_182db34532a7d5::t_8579d170e8b3d7 180
+src/powernight/core/database/__init__.py
+  s_182db34532a7d5::t_e0b3513a0a0daa 9-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "dd28a79bddcb8967628b33db55084eb607d6f073",
+  "prompts": {},
+  "sessions": {
+    "s_182db34532a7d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b8193224-1d1c-4eee-92d7-3a4f209207ba",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_21e565492050e3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a8f58fabd6fa7ac8d",
+        "model": "unknown"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_322ea3ad412683": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1a8f437-5e6b-47e0-94f4-54a928c31df5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_d37515abf542f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "da81eaad-8507-4d49-bb7a-530a1aebae6a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_d5fa9a7f3d2d01": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b46be459-7ad5-4f03-8933-ceb71b9d2f30",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_e4470e15d8376e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-acc8af3c27bb9255b",
+        "model": "unknown"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
