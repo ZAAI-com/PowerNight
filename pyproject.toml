@@ -38,21 +38,11 @@ dependencies = [
     "schedule>=1.2.2",
     "PyYAML>=6.0.3",
     "requests>=2.34.2",
-    "structlog>=26.1.0",
-    "tenacity>=9.1.4",
-    "python-dateutil>=2.9.0",
     "click>=8.4.2",
     "pytz>=2026.2",
-    "python-dotenv>=1.2.2",
     "jsonschema>=4.26.0",
     "psutil>=7.2.2",
-    "cryptography>=49.0.0",
-    "bcrypt>=5.0.0",
-    "passlib>=1.7.4",
-    "pyjwt>=2.13.0",
-    "authlib>=1.7.2",
-    "itsdangerous>=2.2.0",
-    "apscheduler>=3.11.3"
+    "cryptography>=49.0.0"
 ]
 
 [project.optional-dependencies]
@@ -62,6 +52,7 @@ dev = [
     "pytest-mock>=3.15.1",
     "black>=26.5.1",
     "flake8>=7.3.0",
+    "ruff>=0.9.0",
     "mypy>=2.1.0",
     "types-PyYAML>=6.0.12.20260518",
     "types-requests>=2.33.0.20260518",

@@ -8,6 +8,7 @@ Serves the React SPA for all non-API routes.
 from flask import Blueprint, jsonify, current_app, send_from_directory
 from datetime import datetime, timezone
 import os
+import sys
 
 from ... import __version__
 
@@ -60,13 +61,7 @@ def version_info():
     return jsonify({
         'application': 'PowerNight',
         'version': __version__,
-        'build_date': '2025-10-18',
-        'python_version': '3.13+',
-        'dependencies': {
-            'flask': 'Flask>=2.3.0',
-            'pypowerwall': 'pypowerwall>=0.10.5',
-            'schedule': 'schedule>=1.2.0'
-        },
+        'python_version': f"{sys.version_info.major}.{sys.version_info.minor}",
         'features': [
             'Tesla Powerwall automation',
             'Scheduled backup reserve changes',

@@ -23,7 +23,7 @@ services:
     environment:
       # Security settings
       - POWERNIGHT_AUTH_ENABLED=true
-      - POWERNIGHT_API_KEY=${POWERNIGHT_API_KEY:-your-secure-api-key-here}
+      - POWERNIGHT_API_KEY=${POWERNIGHT_API_KEY:?POWERNIGHT_API_KEY must be set - generate one with: openssl rand -hex 32}
 
       # Tesla OAuth configuration
       - TESLA_CLIENT_ID=${TESLA_CLIENT_ID:-ownerapi}

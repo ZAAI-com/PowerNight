@@ -31,7 +31,7 @@ PowerNight is a lightweight Docker-based application with a web interface that a
 - 🐳 **Docker-First Design** - Multi-stage builds, non-root user, security hardening
 - 🏗️ **Multi-Architecture** - Supports AMD64, ARM64, ARM/v7 (Raspberry Pi compatible)
 - 💾 **Persistent Storage** - SQLite database with Docker volume mounting
-- 🔄 **Auto-Recovery** - Circuit breaker pattern, exponential backoff, health monitoring
+- 🔄 **Resilience** - Circuit breaker pattern, 30s response caching, health monitoring
 - 📱 **Modern Web UI** - React SPA with responsive design
 - 📜 **Structured Logging** - JSON logs with component filtering and real-time updates
 
@@ -105,10 +105,14 @@ powernight status
 ## Quick Start
 
 1. **Install & Run PowerNight Docker Container**
+
+   Authentication is **on by default**, so an API key is required or the container will refuse to start.
    ```bash
+   # Generate a strong API key first: openssl rand -hex 32
    docker run -d \
      --name PowerNight \
      -p 8020:8020 \
+     -e POWERNIGHT_API_KEY=your-strong-key \
      -v ./PowerNight-Data:/data \
      zaaicom/powernight:latest
    ```
@@ -144,14 +148,18 @@ Docker Hub is recommended for most users, especially Synology NAS deployments.
 
 ```bash
 # Run with volume mount (IMPORTANT for data persistence)
+# Generate a strong API key first: openssl rand -hex 32
 docker run -d \
   --name PowerNight \
   -p 8020:8020 \
+  -e POWERNIGHT_API_KEY=your-strong-key \
   -v ./PowerNight-Data:/data \
   zaaicom/powernight:latest
 ```
 
 **⚠️ IMPORTANT**: Always use volume mounts (`-v ./PowerNight-Data:/data`) to persist OAuth tokens, database, and configuration. Without volumes, data is lost after container restart.
+
+**🔐 IMPORTANT**: Authentication is enabled by default, so `POWERNIGHT_API_KEY` must be set or the container will not start. Send the key with API requests as an `X-API-Key` header (or `Authorization: Bearer <key>`).
 
 ### GitHub CR (Container Registry)
 
@@ -161,10 +169,11 @@ Alternative registry hosted on GitHub Packages.
 # Pull from GHCR
 docker pull ghcr.io/zaai-com/powernight:latest
 
-# Run with volume mount
+# Run with volume mount (API key required; generate with: openssl rand -hex 32)
 docker run -d \
   --name PowerNight \
   -p 8020:8020 \
+  -e POWERNIGHT_API_KEY=your-strong-key \
   -v ./PowerNight-Data:/data \
   ghcr.io/zaai-com/powernight:latest
 ```
@@ -175,7 +184,15 @@ docker run -d \
 
 1. Download `docker-compose.yml` file
 
-2. Start the application:
+2. Create a `.env` file next to it (see `.env.example`) with a strong API key:
+
+```bash
+echo "POWERNIGHT_API_KEY=$(openssl rand -hex 32)" > .env
+```
+
+   Compose refuses to start if `POWERNIGHT_API_KEY` is not set.
+
+3. Start the application:
 
 ```bash
 docker-compose up -d
@@ -232,16 +249,17 @@ Access at [http://localhost:8020](http://localhost:8020)
 
 ## Security
 
-### Local Access Only
+### Authentication On By Default
 
-**PowerNight is designed for trusted local networks only**
+**PowerNight ships secure by default and still expects a trusted local network**
 
-- 🏠 **Local Network Only**: Deploy within your home/private network behind a firewall
-- 🔓 **Web UI Access**: The web interface is **NOT password protected**
+- 🔐 **API key required**: Authentication is enabled by default (`web_interface.auth_enabled=true`). Set `POWERNIGHT_API_KEY` (generate with `openssl rand -hex 32`); the app refuses to start if auth is enabled but no key/password is configured, and `docker-compose` will not start without it.
+- 🔑 **Sending the key**: Include it as an `X-API-Key` header or `Authorization: Bearer <key>`. Only `/health` and `/version` are public; all other API endpoints require authentication.
+- 🏠 **Local Network Preferred**: Deploy within your home/private network behind a firewall
 - ❌ **Do NOT expose to internet**: Never expose port 8020 directly to the public internet
-- 🔐 **Network Security Required**: Use firewall rules, VPN, or reverse proxy for access control
+- 🔐 **Defense in depth**: Use firewall rules, VPN, or reverse proxy in addition to the API key
 
-> **Warning**: Exposing PowerNight to the internet without additional security could allow unauthorized control of your Tesla Powerwall.
+> **Warning**: Even with the API key set, avoid exposing PowerNight directly to the internet; place it behind a VPN or reverse proxy to protect control of your Tesla Powerwall.
 
 For detailed security guidance, see [SECURITY.md](SECURITY.md).
 

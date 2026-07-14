@@ -35,10 +35,11 @@ def validate_config_data(data: Dict[str, Any]) -> List[str]:
         automation_errors = _validate_automation_config(data['automation'])
         errors.extend([f"automation.{error}" for error in automation_errors])
 
-    # Validate web configuration
-    if 'web' in data:
-        web_errors = _validate_web_config(data['web'])
-        errors.extend([f"web.{error}" for error in web_errors])
+    # Validate web interface configuration (config schema section name is
+    # 'web_interface')
+    if 'web_interface' in data:
+        web_errors = _validate_web_config(data['web_interface'])
+        errors.extend([f"web_interface.{error}" for error in web_errors])
 
     # Validate logging configuration
     if 'logging' in data:

@@ -8,9 +8,10 @@ from flask import Blueprint, request, jsonify, session, redirect, url_for
 from datetime import datetime, timezone
 
 from ...core.auth.tesla_oauth import TeslaOAuthManager
+from ...core.config import get_config
 from ...utils.logging import get_logger, ComponentType, OperationType
 from ...utils.timezone_utils import safe_format_datetime, format_datetime_for_display
-from .decorators import require_auth
+from .decorators import require_auth, get_current_user
 
 
 auth_blueprint = Blueprint('auth', __name__, url_prefix='/api/auth')
@@ -31,6 +32,7 @@ def init_auth_api(app):
 
 
 @auth_blueprint.route('/tesla/status', methods=['GET'])
+@require_auth
 def get_auth_status():
     """
     Get current Tesla authentication status.
@@ -51,12 +53,13 @@ def get_auth_status():
         logger.log_error(ComponentType.WEB, "Failed to get auth status", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
 
 @auth_blueprint.route('/tesla/info', methods=['GET'])
+@require_auth
 def get_auth_info():
     """
     Get detailed Tesla authentication information for display on settings page.
@@ -109,7 +112,7 @@ def get_auth_info():
         logger.log_error(ComponentType.WEB, "Failed to get auth info", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -136,6 +139,41 @@ def _mask_token(token) -> str:
 
 # New Auth Setup Endpoints
 
+def _setup_allowed():
+    """
+    Decide whether an OAuth setup request may proceed.
+
+    First-time setup must be possible on a fresh install (no credentials
+    exist yet), but once Tesla tokens exist, or when web auth is enabled,
+    setup endpoints must not be open to the network:
+    - Authenticated requests are always allowed.
+    - Web auth disabled: allowed (the whole UI is open by configuration).
+    - Otherwise: only when no Tesla tokens exist yet AND the request comes
+      from loopback (first-time bootstrap on the host itself).
+    """
+    try:
+        config = get_config()
+        if not config.web_interface.auth_enabled:
+            return True
+        if get_current_user():
+            return True
+        has_tokens = oauth_manager.auth_storage.has_auth_data()
+        is_loopback = request.remote_addr in ('127.0.0.1', '::1')
+        return not has_tokens and is_loopback
+    except Exception:
+        return False
+
+
+def _setup_denied_response():
+    """Standard 401 response for blocked setup requests."""
+    return jsonify({
+        'success': False,
+        'error': 'Authentication required',
+        'message': 'Tesla setup requires authentication once the app is configured',
+        'timestamp': datetime.now(timezone.utc).isoformat()
+    }), 401
+
+
 @auth_blueprint.route('/setup/start', methods=['POST'])
 def start_auth_setup():
     """
@@ -147,6 +185,8 @@ def start_auth_setup():
     Returns:
         JSON response with auth URL and session ID
     """
+    if not _setup_allowed():
+        return _setup_denied_response()
     try:
         data = request.get_json()
         if not data or 'email' not in data:
@@ -181,7 +221,7 @@ def start_auth_setup():
         logger.log_error(ComponentType.WEB, "Failed to start auth setup", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -200,6 +240,8 @@ def process_callback():
     Returns:
         JSON response with sites list
     """
+    if not _setup_allowed():
+        return _setup_denied_response()
     try:
         data = request.get_json()
         if not data or 'session_id' not in data or 'callback_url' not in data:
@@ -233,7 +275,7 @@ def process_callback():
         logger.log_error(ComponentType.WEB, "Failed to process callback", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -252,6 +294,8 @@ def complete_auth_setup():
     Returns:
         JSON response with setup completion result
     """
+    if not _setup_allowed():
+        return _setup_denied_response()
     try:
         data = request.get_json()
         if not data or 'session_id' not in data or 'site_id' not in data:
@@ -286,12 +330,13 @@ def complete_auth_setup():
         logger.log_error(ComponentType.WEB, "Failed to complete auth setup", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
 
 @auth_blueprint.route('/setup/status/<session_id>', methods=['GET'])
+@require_auth
 def get_setup_status(session_id):
     """
     Get status of an auth setup session.
@@ -315,7 +360,7 @@ def get_setup_status(session_id):
         logger.log_error(ComponentType.WEB, "Failed to get setup status", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -351,7 +396,7 @@ def refresh_access_token():
         logger.log_error(ComponentType.WEB, "Token refresh error", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -388,7 +433,7 @@ def logout():
         logger.log_error(ComponentType.WEB, "Logout error", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -403,9 +448,19 @@ def get_powerwalls():
         JSON response with Powerwall connection test result
     """
     try:
+        # A missing Tesla login is an expected state on a fresh install,
+        # not a server error
+        if not oauth_manager.auth_storage.has_auth_data():
+            return jsonify({
+                'success': False,
+                'error': 'No Tesla authentication configured',
+                'message': 'Complete the Tesla login in Settings first',
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }), 401
+
         # Test pypowerwall connection using stored auth data
         result = oauth_manager.test_pypowerwall_connection("")
-        
+
         if result['success']:
             return jsonify({
                 'success': True,
@@ -421,13 +476,13 @@ def get_powerwalls():
                 'success': False,
                 'error': result.get('error', 'Failed to connect to Powerwall'),
                 'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 500
+            }), 502
         
     except Exception as e:
         logger.log_error(ComponentType.WEB, "Failed to test Powerwall connection", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -472,7 +527,7 @@ def test_connection():
         logger.log_error(ComponentType.WEB, "Connection test failed", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'data': {
                 'api_accessible': False,
                 'connection_type': 'pypowerwall_cloud'
@@ -482,6 +537,7 @@ def test_connection():
 
 
 @auth_blueprint.route('/site-details', methods=['GET'])
+@require_auth
 def get_site_details():
     """
     Get detailed information for the authenticated energy site using pypowerwall.
@@ -714,6 +770,6 @@ def get_site_details():
         logger.log_error(ComponentType.WEB, "Failed to fetch site details", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500

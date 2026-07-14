@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { TaskExecutionLog } from '../types';
 import Tooltip from './Tooltip';
 import { formatDate } from '../utils/helpers';
@@ -19,7 +20,7 @@ const LogsTable: React.FC<LogsTableProps> = ({ logs, isLoading = false }) => {
     return formatDate(dateString);
   };
 
-  const formatCommandParams = (params: Record<string, any>) => {
+  const formatCommandParams = (params: Record<string, unknown>) => {
     if (!params || Object.keys(params).length === 0) {
       return 'None';
     }
@@ -67,8 +68,9 @@ const LogsTable: React.FC<LogsTableProps> = ({ logs, isLoading = false }) => {
 
   const sortedLogs = useMemo(() => {
     return [...logs].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
+      // Sort values are heterogeneous (timestamps as number, labels as string).
+      let aValue: string | number;
+      let bValue: string | number;
 
       switch (sortField) {
         case 'started_at':
@@ -95,8 +97,12 @@ const LogsTable: React.FC<LogsTableProps> = ({ logs, isLoading = false }) => {
           return 0;
       }
 
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      const compare =
+        typeof aValue === 'number' && typeof bValue === 'number'
+          ? aValue - bValue
+          : String(aValue).localeCompare(String(bValue));
+      if (compare < 0) return sortDirection === 'asc' ? -1 : 1;
+      if (compare > 0) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
   }, [logs, sortField, sortDirection]);
@@ -148,7 +154,7 @@ const LogsTable: React.FC<LogsTableProps> = ({ logs, isLoading = false }) => {
           <p className="mt-1 text-gray-500">Task executions will appear here once tasks are run.</p>
           <div className="mt-6">
             <p className="text-sm text-gray-400">
-              To create logs, go to the <a href="/scheduling" className="text-blue-600 hover:text-blue-500">Planner</a> page and execute a task.
+              To create logs, go to the <Link to="/planner" className="text-blue-600 hover:text-blue-500">Planner</Link> page and execute a task.
             </p>
           </div>
         </div>

@@ -1,6 +1,5 @@
 import logging
 import signal
-import sys
 import time
 import threading
 from typing import Optional
@@ -61,7 +60,23 @@ class PowerNightApp:
             else:
                 config = load_config()
 
-            self.logger.info(f"Configuration loaded successfully")
+            self.logger.info("Configuration loaded successfully")
+
+            # Apply configured log level (config.logging.level, which already
+            # reflects the POWERNIGHT_LOG_LEVEL environment override)
+            from .utils.logging import get_logger
+            get_logger().apply_log_level(config.logging.level)
+
+            # Fail closed: if auth is enabled but no credential is configured,
+            # refuse to start rather than serve an unprotected API
+            web = config.web_interface
+            if web.enabled and web.auth_enabled and not web.api_key and not web.password:
+                self.logger.error(
+                    "web_interface.auth_enabled is true but no api_key or password is set. "
+                    "Set POWERNIGHT_API_KEY (or configure a password), or set "
+                    "web_interface.auth_enabled=false to run without authentication."
+                )
+                return False
 
             # Initialize database
             self.logger.info("Initializing and migrating database")
@@ -195,72 +210,6 @@ class PowerNightApp:
         except Exception as e:
             self.logger.error(f"Error stopping web interface: {e}")
 
-    def add_custom_job(self, job_id: str, time_str: str, percentage: float,
-                      description: str = "") -> bool:
-        """
-        Add a custom scheduled job.
-
-        Args:
-            job_id: Unique identifier for the job
-            time_str: Time in HH:MM format
-            percentage: Target percentage (0-100)
-            description: Optional description
-
-        Returns:
-            True if job was added successfully, False otherwise
-        """
-        try:
-            job = create_reserve_change_job(time_str, percentage, description)
-
-            self.schedule_manager.add_job(
-                job_id=job_id,
-                name=job.name,
-                schedule_time=time_str,
-                job_func=job,
-                description=job.description,
-                enabled=True
-            )
-
-            self.logger.info(f"Added custom job: {job.name}")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Failed to add custom job: {e}")
-            return False
-
-    def run_job_manually(self, job_id: str) -> bool:
-        """
-        Manually execute a specific job.
-
-        Args:
-            job_id: ID of the job to execute
-
-        Returns:
-            True if job executed successfully, False otherwise
-        """
-        try:
-            job_info = self.schedule_manager.get_job_info(job_id)
-            self.logger.info(f"Manually executing job: {job_info.name}")
-
-            # For manual execution, we need to find and execute the job function
-            # This is a simplified approach - in practice, you might want to
-            # store job instances separately
-            matching_jobs = [job for job in self.schedule_manager._jobs.values()
-                           if job.job_id == job_id]
-
-            if not matching_jobs:
-                self.logger.error(f"Job {job_id} not found")
-                return False
-
-            # Execute the job (this is simplified - actual implementation
-            # would need to access the job function properly)
-            self.logger.info(f"Job {job_id} would be executed manually")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Failed to execute job manually: {e}")
-            return False
-
     def get_status(self) -> dict:
         """
         Get comprehensive application status.
@@ -315,12 +264,14 @@ class PowerNightApp:
             self.logger.info("Press Ctrl+C to shutdown gracefully")
 
             # Main application loop
+            last_status_log = time.monotonic()
             while not self._shutdown_requested:
                 try:
                     time.sleep(1)
 
                     # Periodic status logging (every 5 minutes)
-                    if int(time.time()) % 300 == 0:
+                    if time.monotonic() - last_status_log >= 300:
+                        last_status_log = time.monotonic()
                         status = self.get_status()
                         planner_status = status.get('planner', {})
                         self.logger.info(
@@ -347,28 +298,3 @@ class PowerNightApp:
         except Exception as e:
             self.logger.critical(f"Critical error in application: {e}")
             return 1
-
-
-def main() -> int:
-    """
-    Main entry point for the PowerNight application.
-
-    Returns:
-        Exit code
-    """
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-        ]
-    )
-
-    # Create and run application
-    app = PowerNightApp()
-    return app.run()
-
-
-if __name__ == "__main__":
-    sys.exit(main())

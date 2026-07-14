@@ -421,3 +421,5 @@ __marimo__/
 # =============================================================================
 # Generated version info (created during build)
 version-info.json
+# Config backups may contain credentials
+.config_backups/

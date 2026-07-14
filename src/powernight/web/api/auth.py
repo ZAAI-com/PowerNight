@@ -5,9 +5,10 @@ Authentication and authorization functions for the web API.
 """
 
 import base64
+import hmac
 import os
 from functools import wraps
-from typing import Optional, Tuple
+from typing import Optional
 from flask import request, current_app
 
 from .errors import AuthenticationError, AuthorizationError
@@ -28,8 +29,10 @@ def require_auth(f):
         try:
             config = get_config()
 
-            # Check if authentication is disabled
+            # Check if authentication is disabled (visible in logs so an
+            # open deployment is a deliberate choice, not a surprise)
             if not config.web_interface.auth_enabled:
+                _warn_auth_disabled_once()
                 return f(*args, **kwargs)
 
             # Try different authentication methods
@@ -155,6 +158,20 @@ def _check_basic_auth() -> bool:
         return False
 
 
+_auth_disabled_warned = False
+
+
+def _warn_auth_disabled_once() -> None:
+    """Log a single warning when requests are served with auth disabled."""
+    global _auth_disabled_warned
+    if not _auth_disabled_warned:
+        _auth_disabled_warned = True
+        current_app.logger.warning(
+            "Web authentication is DISABLED (web_interface.auth_enabled=false); "
+            "every API endpoint is open to anyone who can reach this port"
+        )
+
+
 def _check_no_auth_required() -> bool:
     """
     Check if no authentication is required for this endpoint.
@@ -165,9 +182,8 @@ def _check_no_auth_required() -> bool:
     try:
         config = get_config()
 
-        # Check if this is a public endpoint
+        # Liveness probes only; anything with system detail requires auth
         public_endpoints = [
-            '/api/v1/status',  # Status endpoint is always public
             '/health',         # Health check is always public
             '/version'         # Version info is always public
         ]
@@ -189,14 +205,7 @@ def _constant_time_compare(a: str, b: str) -> bool:
     Returns:
         True if strings are equal, False otherwise
     """
-    if len(a) != len(b):
-        return False
-
-    result = 0
-    for x, y in zip(a, b):
-        result |= ord(x) ^ ord(y)
-
-    return result == 0
+    return hmac.compare_digest(a.encode('utf-8'), b.encode('utf-8'))
 
 
 def generate_api_key(length: int = 32) -> str:

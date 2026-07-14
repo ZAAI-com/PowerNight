@@ -34,7 +34,7 @@ def main():
         else:
             # Run as web application
             app = PowerNightApp()
-            app.run()
+            sys.exit(app.run())
     except KeyboardInterrupt:
         logger.main_logger.info("Application interrupted by user")
         sys.exit(0)

@@ -3,7 +3,6 @@ powerwall:
   powerwall_id: ""
   timeout: 10.0
   retry_attempts: 3
-  cloud_mode_enabled: true
   verify_ssl: true
 
 automation:
@@ -17,7 +16,11 @@ web_interface:
   host: 0.0.0.0
   port: 8020
   debug: false
-  auth_required: false
+  # Authentication is ON by default. Set an api_key (or provide
+  # POWERNIGHT_API_KEY) to protect the API, or set auth_enabled: false to run
+  # on a trusted local network without authentication.
+  auth_enabled: true
+  api_key: ""
 
 logging:
   level: INFO

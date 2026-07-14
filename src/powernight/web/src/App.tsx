@@ -5,6 +5,7 @@ import Header from './components/Header';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { useAuth } from './hooks/useAuth';
 import { TimezoneProvider } from './contexts/TimezoneContext';
+import { ToastProvider } from './contexts/ToastContext';
 import Login from './pages/Login';
 
 // Lazy load pages for better performance
@@ -58,9 +59,11 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
-      <TimezoneProvider>
-        <AppContent />
-      </TimezoneProvider>
+      <ToastProvider>
+        <TimezoneProvider>
+          <AppContent />
+        </TimezoneProvider>
+      </ToastProvider>
     </ErrorBoundary>
   );
 };

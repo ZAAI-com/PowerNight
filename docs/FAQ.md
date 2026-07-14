@@ -93,8 +93,8 @@ docker logs PowerNight | grep "Task execution"
 # 3. Verify timezone configuration
 # Ensure automation.timezone matches your local timezone
 
-# 4. Check scheduler status
-curl http://localhost:8020/api/v1/tasks
+# 4. Check scheduler status (auth required; send your API key)
+curl -H "X-API-Key: $POWERNIGHT_API_KEY" http://localhost:8020/api/v1/tasks
 ```
 
 ### OAuth Token Expired

@@ -3,13 +3,9 @@ import {
   ApiResponse,
   SystemStatus,
   BackupReserveData,
-  ScheduleEntry,
   HealthStatus,
   Metrics,
-  ActivityEntry,
-  NotificationConfig,
   ReserveFormData,
-  ScheduleFormData,
   Task,
   TaskFormData,
   TaskExecution,
@@ -110,7 +106,7 @@ class PowerNightAPI {
       
       // If we get a 401, authentication is required
       return response.status === 401;
-    } catch (error) {
+    } catch {
       // If there's an error, assume auth is required for safety
       return true;
     }
@@ -157,89 +153,11 @@ class PowerNightAPI {
   }
 
 
-  // Schedule endpoints
-  async getSchedules(): Promise<ScheduleEntry[]> {
-    const response = await this.client.get<ApiResponse<ScheduleEntry[]>>('/schedules');
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Failed to get schedules');
-    }
-    return response.data.data!;
-  }
-
-  async createSchedule(schedule: ScheduleFormData): Promise<ScheduleEntry> {
-    const response = await this.client.post<ApiResponse<ScheduleEntry>>('/schedules', schedule);
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Failed to create schedule');
-    }
-    return response.data.data!;
-  }
-
-  async updateSchedule(id: string, schedule: Partial<ScheduleFormData>): Promise<ScheduleEntry> {
-    const response = await this.client.put<ApiResponse<ScheduleEntry>>(`/schedules/${id}`, schedule);
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Failed to update schedule');
-    }
-    return response.data.data!;
-  }
-
-  async deleteSchedule(id: string): Promise<void> {
-    const response = await this.client.delete<ApiResponse>(`/schedules/${id}`);
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Failed to delete schedule');
-    }
-  }
-
-  async executeSchedule(id: string): Promise<ApiResponse> {
-    const response = await this.client.post<ApiResponse>(`/schedules/${id}/execute`);
-    return response.data;
-  }
-
-  // Automation endpoints
-  async getAutomationStatus(): Promise<{ enabled: boolean; next_action?: string; next_action_time?: string }> {
-    const response = await this.client.get<ApiResponse<{ enabled: boolean; next_action?: string; next_action_time?: string }>>('/automation/status');
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Failed to get automation status');
-    }
-    return response.data.data!;
-  }
-
-  async toggleAutomation(enabled: boolean): Promise<ApiResponse> {
-    const response = await this.client.post<ApiResponse>('/automation/toggle', { enabled });
-    return response.data;
-  }
-
-
-  // Activity endpoints
-  async getActivity(limit: number = 10): Promise<ActivityEntry[]> {
-    const response = await this.client.get<ApiResponse<ActivityEntry[]>>(`/activity?limit=${limit}`);
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Failed to get activity');
-    }
-    return response.data.data!;
-  }
-
   // Metrics endpoints
   async getMetrics(): Promise<Metrics> {
     const response = await this.client.get<ApiResponse<Metrics>>('/metrics');
     if (!response.data.success) {
       throw new Error(response.data.error || 'Failed to get metrics');
-    }
-    return response.data.data!;
-  }
-
-  // Notification endpoints
-  async getNotificationConfig(): Promise<NotificationConfig> {
-    const response = await this.client.get<ApiResponse<NotificationConfig>>('/notifications/config');
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Failed to get notification config');
-    }
-    return response.data.data!;
-  }
-
-  async updateNotificationConfig(config: NotificationConfig): Promise<NotificationConfig> {
-    const response = await this.client.put<ApiResponse<NotificationConfig>>('/notifications/config', config);
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Failed to update notification config');
     }
     return response.data.data!;
   }
@@ -345,7 +263,7 @@ class PowerNightAPI {
   async createTaskPreset(preset: {
     name: string;
     command: CommandType;
-    command_params: Record<string, any>;
+    command_params: Record<string, unknown>;
     default_time?: string;
   }): Promise<TaskPreset> {
     const response = await this.client.post<ApiResponse<TaskPreset>>('/tasks/presets', preset);
@@ -414,7 +332,7 @@ class PowerNightAPI {
     try {
       await this.getHealth();
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

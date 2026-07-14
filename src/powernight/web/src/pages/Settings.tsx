@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatDateTimeWithTimezone } from '../utils/dateTimeFormatter';
 import { useTimezone } from '../contexts/TimezoneContext';
+import { useToast } from '../contexts/ToastContext';
 import api from '../utils/api';
 import { getAllCommonTimezones } from '../utils/timezones';
 
@@ -51,6 +52,7 @@ type FlowStep = 'initial' | 'awaiting_login' | 'awaiting_callback' | 'selecting_
 const Settings: React.FC = () => {
   // Get timezone context
   const { timezoneInfo, currentTime, isLoading: timezoneLoading, refreshTimezone } = useTimezone();
+  const { showToast } = useToast();
 
   // OAuth Flow State
   const [currentStep, setCurrentStep] = useState<FlowStep>('initial');
@@ -69,9 +71,8 @@ const Settings: React.FC = () => {
 
   // Timezone State
   const [availableTimezones, setAvailableTimezones] = useState<TimezoneOption[]>(getAllCommonTimezones()); // Initialize with local timezones
-  const [selectedTimezone, setSelectedTimezone] = useState<string>('Europe/Berlin'); // Default to Berlin
+  const [selectedTimezone, setSelectedTimezone] = useState<string>('Europe/Berlin'); // Pre-load placeholder only; replaced by the configured timezone on mount
   const [timezoneSaving, setTimezoneSaving] = useState(false);
-  const [timezoneSuccess, setTimezoneSuccess] = useState<string | null>(null);
   const [isEditingTimezone, setIsEditingTimezone] = useState(false);
 
   // UI State
@@ -117,11 +118,14 @@ const Settings: React.FC = () => {
         setCurrentStep('awaiting_login');
 
         // Open Tesla auth in NEW browser tab
-        window.open(data.auth_url, '_blank');
+        const authWindow = window.open(data.auth_url, '_blank');
+        if (!authWindow) {
+          setError('The Tesla authorization popup was blocked by your browser. Please allow popups for this site and try again.');
+        }
       } else {
         setError(data.error || 'Failed to start authentication');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to connect to server');
     } finally {
       setIsLoading(false);
@@ -165,7 +169,7 @@ const Settings: React.FC = () => {
       } else {
         setError(data.error || 'Failed to verify callback URL');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to connect to server');
     } finally {
       setIsLoading(false);
@@ -189,7 +193,7 @@ const Settings: React.FC = () => {
       } else {
         setError(data.error || 'Failed to complete setup');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to complete setup');
     }
   };
@@ -262,38 +266,44 @@ const Settings: React.FC = () => {
 
   const handleSaveAndReloadTimezone = async () => {
     setTimezoneSaving(true);
-    setTimezoneSuccess(null);
     setError(null);
 
     try {
       // Save timezone
       await api.updateTimezone(selectedTimezone);
-      
+
       // Reload all tasks with new timezone
       const reloadResult = await api.reloadAllTasks();
-      setTimezoneSuccess(reloadResult.message);
+      showToast(reloadResult.message || 'Timezone saved and tasks reloaded', 'success');
 
       // Refresh timezone info
       refreshTimezone();
-      
+
       // Exit edit mode
       setIsEditingTimezone(false);
-      
-      // Clear success message after 5 seconds
-      setTimeout(() => {
-        setTimezoneSuccess(null);
-      }, 5000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save timezone');
+      showToast(err instanceof Error ? err.message : 'Failed to save timezone', 'error');
     } finally {
       setTimezoneSaving(false);
     }
   };
 
-  // Load auth info, version info, and available timezones on component mount
+  const fetchCurrentTimezone = async () => {
+    try {
+      const data = await api.getTimezone();
+      setSelectedTimezone(data.timezone);
+    } catch (err) {
+      console.error('Failed to fetch current timezone:', err);
+      // Keep the pre-load placeholder; the timezoneInfo effect below will
+      // correct it once the context loads.
+    }
+  };
+
+  // Load auth info, version info, timezone, and available timezones on component mount
   useEffect(() => {
     fetchAuthInfo();
     fetchVersionInfo();
+    fetchCurrentTimezone();
     fetchAvailableTimezones();
   }, []);
 
@@ -641,11 +651,6 @@ const Settings: React.FC = () => {
                   </p>
                 </div>
 
-                {timezoneSuccess && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                    <p className="text-green-800 text-sm">✅ {timezoneSuccess}</p>
-                  </div>
-                )}
               </div>
             )}
           </div>

@@ -1,15 +1,35 @@
 import { vi, type Mocked } from 'vitest';
 import { api } from '../../src/utils/api';
 
-// Mock axios
-vi.mock('axios');
+// Mock axios. The `api` singleton is constructed at import time and calls
+// axios.create().interceptors.* in its constructor, so the mock must return a
+// client with an interceptors shape. create() returns the same object so that
+// `this.client === mockedAxios` and the per-test get/post stubs take effect.
+vi.mock('axios', () => {
+  const client = {
+    interceptors: {
+      request: { use: vi.fn() },
+      response: { use: vi.fn() },
+    },
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    create: vi.fn(),
+  };
+  client.create.mockReturnValue(client);
+  return { default: client };
+});
 import axios from 'axios';
-const mockedAxios = axios as Mocked<typeof axios>;
+const mockedAxios = axios as unknown as Mocked<typeof axios>;
 
 describe('PowerNightAPI', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    // `api` is a module singleton; reset its in-memory key so state does not
+    // bleed between tests.
+    api.clearApiKey();
   });
 
   describe('API Key management', () => {
@@ -26,7 +46,7 @@ describe('PowerNightAPI', () => {
 
     it('should load API key from localStorage on initialization', () => {
       localStorage.setItem('powernight_api_key', 'stored-key');
-      const newApi = new (api.constructor as any)();
+      const newApi = new (api.constructor as new () => typeof api)();
       expect(newApi.isAuthenticated()).toBe(true);
     });
   });
@@ -97,8 +117,8 @@ describe('PowerNightAPI', () => {
     it('should fail authentication with invalid API key', async () => {
       mockedAxios.get.mockRejectedValue(new Error('Unauthorized'));
 
-      const result = await api.authenticate('invalid-key');
-      expect(result).toBe(false);
+      // authenticate() re-throws on failure; the useAuth hook catches it.
+      await expect(api.authenticate('invalid-key')).rejects.toThrow('Unauthorized');
       expect(api.isAuthenticated()).toBe(false);
     });
   });

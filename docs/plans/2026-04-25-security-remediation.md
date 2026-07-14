@@ -1,11 +1,31 @@
 # PowerNight Security Remediation Plan
 
+## Status: IMPLEMENTED (with corrections)
+
+This plan has shipped. The hardened, fail-closed default deployment is in place:
+
+- **Auth on by default** (`schema.py` `WebInterfaceSettings.auth_enabled=True`) with a startup fail-closed check that refuses to boot if auth is enabled and no `api_key`/`password` is set (`app.py`).
+- **Sensitive endpoints require auth** via `@require_auth` (`/api/v1/status`, all `tasks/*`, `logs/executions`, all `/api/auth/tesla/*`, `site-details`, `tesla/info`, `POST /api/v1/config/timezone`); `/health` and `/version` remain public. OAuth setup endpoints are gated by an internal `_setup_allowed()` (loopback bootstrap or authenticated).
+- **Flask `SECRET_KEY`** is set from `FLASK_SECRET_KEY` or persisted to `<data>/.flask_secret` (mode `0o600`).
+- **Security headers + rate limiting + restricted CORS** are applied in `web/middleware.py`; HSTS is conditional on HTTPS.
+- **docker-compose requires `POWERNIGHT_API_KEY`** (compose refuses to start without it) and a `.env.example` was added.
+
+Corrections found while implementing (the plan's assumptions did not all hold):
+
+1. **Password hashing (Phase 3.1) was dropped, not added.** `passlib` 1.7.4 is incompatible with `bcrypt` >= 4.1, so rather than hash passwords with passlib+bcrypt, `bcrypt`, `passlib`, `pyjwt`, and `authlib` were **removed** from runtime dependencies entirely. Authentication relies on the API key / password comparison with `hmac.compare_digest`.
+2. **Tokens were hardened with file permissions, not Fernet (Phase 1.4).** `pypowerwall`/`teslapy` read and rewrite the `.pypowerwall.auth` file directly (the connector passes `authpath=...`), so encrypting it at rest would break the Tesla cloud connection. Instead the auth/site files are `0o600` and the data directory is `0o700`. The file stays plain JSON by necessity.
+3. **The "enterprise" modules were deleted, not wired up.** The `web/api/middleware.py`, `web/api/config_manager.py`, and `web/api/docs.py` (OpenAPI) modules referenced throughout this plan no longer exist. Security headers and rate limiting now live in a new, smaller `web/middleware.py`, and there is no `/docs` OpenAPI blueprint.
+
+The remaining sections below are the original plan as written, kept for historical context.
+
+---
+
 ## Context
 
 A security review of the PowerNight codebase (a Tesla Powerwall management web app exposing port 8020) surfaced **5 critical**, **3 high**, **6 medium**, and **3 low** severity findings. The most consequential issues stem from:
 
 1. Authentication being **disabled by default** (`auth_enabled=False`), making the entire API world-readable in a default deployment.
-2. **6 endpoints in the auth blueprint** that have no `@require_auth` decorator regardless of the auth setting — including OAuth setup, Tesla credential info, and live site sensor data.
+2. **6 endpoints in the auth blueprint** that have no `@require_auth` decorator regardless of the auth setting: including OAuth setup, Tesla credential info, and live site sensor data.
 3. **Tesla OAuth tokens stored in plaintext** on disk despite `cryptography` (Fernet) already being a dependency.
 4. **Implemented-but-unused security middleware** (`@rate_limit`, `@secure_endpoint`, `SecurityMiddleware.add_security_headers`) that is never wired to any endpoint.
 
@@ -13,7 +33,7 @@ The intended outcome is a hardened default deployment that does not require user
 
 ---
 
-## Phase 1 — Critical: Close the open-by-default holes
+## Phase 1: Critical: Close the open-by-default holes
 
 ### 1.1 Default authentication ON
 **File:** `src/powernight/core/config/schema.py:140-146` (`WebInterfaceSettings`)
@@ -59,7 +79,7 @@ Implement a new helper `_setup_allowed()` in `auth_api.py` and gate the three se
 
 ---
 
-## Phase 2 — High: Authentication and session integrity
+## Phase 2: High: Authentication and session integrity
 
 ### 2.1 Protect logs and config-write endpoints
 **File:** `src/powernight/web/api/logs_api.py:24-26`
@@ -77,7 +97,7 @@ Implement a new helper `_setup_allowed()` in `auth_api.py` and gate the three se
 
 ---
 
-## Phase 3 — Medium: Defense in depth
+## Phase 3: Medium: Defense in depth
 
 ### 3.1 Hash passwords with bcrypt
 **Files:** `src/powernight/core/config/schema.py:144`, `src/powernight/web/api/auth.py:143-152`
@@ -113,7 +133,7 @@ Implement a new helper `_setup_allowed()` in `auth_api.py` and gate the three se
 
 ---
 
-## Phase 4 — Low: Hygiene
+## Phase 4: Low: Hygiene
 
 ### 4.1 Validate `auth_url` client-side
 **File:** `src/powernight/web/src/pages/Login.tsx:27-28`
@@ -150,9 +170,9 @@ Implement a new helper `_setup_allowed()` in `auth_api.py` and gate the three se
 | `.gitignore` | 3.6 |
 
 Existing utilities to reuse (no new code needed):
-- `cryptography.fernet.Fernet` — already imported in `token_storage.py`
-- `bcrypt` 4.2.1 + `passlib` 1.7.4 — already in `pyproject.toml`
-- `rate_limit()`, `secure_endpoint()`, `SecurityMiddleware.add_security_headers()` — already implemented in `src/powernight/web/api/middleware.py`, just unused
+- `cryptography.fernet.Fernet`: already imported in `token_storage.py`
+- `bcrypt` 4.2.1 + `passlib` 1.7.4: already in `pyproject.toml`
+- `rate_limit()`, `secure_endpoint()`, `SecurityMiddleware.add_security_headers()`: already implemented in `src/powernight/web/api/middleware.py`, just unused
 
 No new dependencies are required.
 
@@ -185,7 +205,7 @@ After each phase, run:
    - Stop and restart the container; tokens still load (decryption works).
 
 4. **Rate limit verification**
-   - Loop 20 wrong-password POSTs to `/api/v1/auth/login` — expect HTTP 429 after the threshold (Phase 3.4).
+   - Loop 20 wrong-password POSTs to `/api/v1/auth/login`: expect HTTP 429 after the threshold (Phase 3.4).
 
 5. **Security headers**
    - `curl -I http://localhost:8020/` shows `X-Frame-Options`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy`, `Referrer-Policy` (Phase 3.4).
@@ -197,6 +217,6 @@ After each phase, run:
 
 ## Out of scope
 
-- Adding multi-user / role-based access — single-tenant is by design (per CLAUDE.md "Known Limitations").
-- Migrating away from SQLite — also called out as a known limitation.
-- Adding TLS termination — expected to be handled by a reverse proxy in production.
+- Adding multi-user / role-based access: single-tenant is by design (per CLAUDE.md "Known Limitations").
+- Migrating away from SQLite: also called out as a known limitation.
+- Adding TLS termination: expected to be handled by a reverse proxy in production.

@@ -1,13 +1,32 @@
 # PowerNight UX Improvement Roadmap
 
+## Status Update
+
+**Phase 1 (Quick Wins) is now IMPLEMENTED:**
+- 1.1 `ConfirmDialog` is wired into the Planner page (replacing native `confirm()`/`alert()`).
+- 1.2 A toast notification system exists (`contexts/ToastContext.tsx`) and is used across pages.
+- 1.3 A system health indicator is in the `Header`, polling `/api/v1/health` every 30s (the originally-planned `/health/detailed` endpoint no longer exists, so this was implemented against `/api/v1/health`).
+- 1.4 Dashboard auto-refreshes on an interval.
+- 1.5 History page supports server-side filtering (status and task name) via `GET /api/v1/logs/executions`.
+
+**Descoped / needs new backend** (the endpoints these items assumed have since been removed from the API):
+- 2.4 Circuit breaker & diagnostics panel: `/circuit-breakers`, `/health/detailed`, `/degradation` are gone. Needs a new backend endpoint.
+- 5.2 Notification configuration UI: the `/notifications/*` API was removed. Needs a new backend.
+- 5.4 Configuration history & rollback: `/config/history` and `/config/rollback` were removed. Needs a new backend.
+- 2.3 Next scheduled task widget relied on `/schedules/next-execution`, which was also removed; it would need a new endpoint (planner does expose a `next_run` via `/api/v1/status`).
+
+Items still valid as written include 3.1 (per-task sparkline uses the still-present `GET /api/v1/tasks/<id>/executions`) and the purely-frontend polish in Phases 3-5.
+
+---
+
 ## Context
 
 PowerNight's React frontend is functional but basic. Exploration of the codebase revealed that the backend exposes ~60+ API endpoints across 5 blueprints, but the frontend uses only ~25-40% of them. Many high-impact UX improvements are simply "wire up endpoints that already exist" rather than new backend work.
 
 Notable findings driving this plan:
-- A `ConfirmDialog` component already exists at `src/powernight/web/src/components/ConfirmDialog.tsx` but is unused — Planner uses native `confirm()`/`alert()` instead.
+- A `ConfirmDialog` component already exists at `src/powernight/web/src/components/ConfirmDialog.tsx` but is unused: Planner uses native `confirm()`/`alert()` instead.
 - `/health/detailed`, `/schedules/next-execution`, `/tasks/<id>/executions`, `/circuit-breakers`, `/notifications/*`, `/config/history` are all implemented but never called.
-- Dashboard requires a manual "Update Data" click — no auto-refresh.
+- Dashboard requires a manual "Update Data" click: no auto-refresh.
 - History page has no filtering despite the backend supporting filters by status, execution_type, date range, task_name, and pagination.
 - App is named "PowerNight" but has no dark mode.
 
@@ -72,6 +91,7 @@ These leverage existing backend APIs and unused frontend components.
 - **Effort:** ~1-2 hours
 
 ### 2.4 Circuit breaker & diagnostics panel
+> DESCOPED: the `/circuit-breakers`, `/health/detailed`, and `/degradation` endpoints were removed. Needs a new backend before this can be built.
 - **Why:** When things go wrong, users need to understand why - backend tracks all this but frontend hides it
 - **How:** Expandable panel on Dashboard or Settings showing circuit breaker state, failure rates, cache stats, last communication time.
 - **Files:** New `Diagnostics.tsx` component, update `api.ts`
@@ -144,6 +164,7 @@ These leverage existing backend APIs and unused frontend components.
 - **Effort:** ~4-6 hours
 
 ### 5.2 Notification configuration UI
+> DESCOPED: the `/notifications/*` API was removed. Needs a new backend before this can be built.
 - **Why:** Backend has full notification API (config, test, statistics) - none exposed
 - **How:** Settings section for notification preferences, test button, delivery history.
 - **Files:** New settings section, `api.ts` updates
@@ -156,6 +177,7 @@ These leverage existing backend APIs and unused frontend components.
 - **Effort:** ~3-4 hours
 
 ### 5.4 Configuration history & rollback
+> DESCOPED: the `/config/history` and `/config/rollback` endpoints were removed. Needs a new backend before this can be built.
 - **Why:** Backend supports config versioning but no UI exists
 - **How:** Settings page section showing change history with rollback buttons.
 - **Files:** New settings section, `api.ts` updates
@@ -166,18 +188,18 @@ These leverage existing backend APIs and unused frontend components.
 ## Critical Files Referenced
 
 Existing files that will be modified or whose patterns will be reused:
-- `src/powernight/web/src/App.tsx` — routing, lazy loading
-- `src/powernight/web/src/components/Header.tsx` — navigation, place for health indicator + dark mode toggle
-- `src/powernight/web/src/components/ConfirmDialog.tsx` — already built, currently unused; wire into Planner
-- `src/powernight/web/src/components/StatusBadge.tsx`, `LoadingSpinner.tsx`, `Tooltip.tsx`, `ErrorBoundary.tsx` — reuse
-- `src/powernight/web/src/components/LogsTable.tsx` — extend for filters
-- `src/powernight/web/src/pages/Dashboard.tsx` — auto-refresh, gauge, power flow, next task widget
-- `src/powernight/web/src/pages/Planner.tsx` — replace alert/confirm, add sparkline, timeline view, clone button
-- `src/powernight/web/src/pages/History.tsx` — add filtering UI, analytics summary
-- `src/powernight/web/src/pages/Settings.tsx` — searchable timezone, token refresh, config history
-- `src/powernight/web/src/utils/api.ts` — add typed methods for unused endpoints
-- `src/powernight/web/src/hooks/useAuth.ts` — pattern for new hooks
-- `tailwind.config.js` — enable dark mode
+- `src/powernight/web/src/App.tsx`: routing, lazy loading
+- `src/powernight/web/src/components/Header.tsx`: navigation, place for health indicator + dark mode toggle
+- `src/powernight/web/src/components/ConfirmDialog.tsx`: already built, currently unused; wire into Planner
+- `src/powernight/web/src/components/StatusBadge.tsx`, `LoadingSpinner.tsx`, `Tooltip.tsx`, `ErrorBoundary.tsx`: reuse
+- `src/powernight/web/src/components/LogsTable.tsx`: extend for filters
+- `src/powernight/web/src/pages/Dashboard.tsx`: auto-refresh, gauge, power flow, next task widget
+- `src/powernight/web/src/pages/Planner.tsx`: replace alert/confirm, add sparkline, timeline view, clone button
+- `src/powernight/web/src/pages/History.tsx`: add filtering UI, analytics summary
+- `src/powernight/web/src/pages/Settings.tsx`: searchable timezone, token refresh, config history
+- `src/powernight/web/src/utils/api.ts`: add typed methods for unused endpoints
+- `src/powernight/web/src/hooks/useAuth.ts`: pattern for new hooks
+- `tailwind.config.js`: enable dark mode
 
 Backend endpoints to newly consume:
 - `/api/v1/health/detailed`

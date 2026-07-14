@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Task, CommandType, CommandDefinition, TaskFormData, TaskPreset } from '../types';
 import { api } from '../utils/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import StatusBadge from '../components/StatusBadge';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { useToast } from '../contexts/ToastContext';
 import { formatDate } from '../utils/helpers';
 
 const Planner: React.FC = () => {
-  console.log('Planner component is rendering!');
+  const { showToast } = useToast();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [commands, setCommands] = useState<Record<string, CommandDefinition>>({});
@@ -24,6 +26,24 @@ const Planner: React.FC = () => {
   // Execution tracking state
   const [executingTasks, setExecutingTasks] = useState<Record<string, string>>({}); // taskId -> executionId
 
+  // Delete confirmation state
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+
+  // Track pending poll timeouts and mount state so polling cannot leak
+  // timers or update state after the component unmounts.
+  const pollTimeoutsRef = useRef<Set<number>>(new Set());
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    const pollTimeouts = pollTimeoutsRef.current;
+    return () => {
+      isMountedRef.current = false;
+      pollTimeouts.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      pollTimeouts.clear();
+    };
+  }, []);
+
   // Form state
   const [formData, setFormData] = useState<TaskFormData>({
     name: '',
@@ -35,7 +55,6 @@ const Planner: React.FC = () => {
 
   // Load tasks and available commands
   useEffect(() => {
-    console.log('Planner component useEffect running');
     loadTasks();
     loadCommands();
     loadPresets();
@@ -137,14 +156,54 @@ const Planner: React.FC = () => {
         return;
       }
 
-      console.log('Submitting form data:', formData);
+      // Validate required command parameters (as marked by the command
+      // definitions from the API and rendered by renderCommandParams).
+      const commandDef = commands[formData.command];
+      const submitParams = { ...formData.command_params };
+      const missingParams: string[] = [];
+
+      if (commandDef) {
+        for (const [paramName, paramDef] of Object.entries(commandDef.params)) {
+          if (!paramDef.required) continue;
+
+          const value = submitParams[paramName];
+
+          if (paramDef.type === 'boolean') {
+            // The boolean select renders an unset value as "Off", so
+            // normalize it to false instead of treating it as missing.
+            if (value === undefined || value === null) {
+              submitParams[paramName] = false;
+            }
+            continue;
+          }
+
+          const isMissing =
+            value === undefined ||
+            value === null ||
+            (typeof value === 'string' && value.trim() === '') ||
+            (typeof value === 'number' && Number.isNaN(value));
+
+          if (isMissing) {
+            missingParams.push(paramName);
+          }
+        }
+      }
+
+      if (missingParams.length > 0) {
+        setError(`Missing required parameter${missingParams.length > 1 ? 's' : ''}: ${missingParams.join(', ')}`);
+        return;
+      }
+
+      const taskData = { ...formData, command_params: submitParams };
 
       if (editingTask) {
         // Update existing task
-        await api.updateTask(editingTask.id, formData);
+        await api.updateTask(editingTask.id, taskData);
+        showToast(`Task "${taskData.name}" updated`, 'success');
       } else {
         // Create new task
-        await api.createTask(formData);
+        await api.createTask(taskData);
+        showToast(`Task "${taskData.name}" created`, 'success');
       }
 
       // Reload tasks
@@ -159,17 +218,22 @@ const Planner: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this task?')) {
-      return;
-    }
-    
+  const handleDelete = (id: string) => {
+    setTaskToDelete(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!taskToDelete) return;
+
     try {
-      await api.deleteTask(id);
+      await api.deleteTask(taskToDelete);
+      showToast('Task deleted', 'success');
       await loadTasks();
     } catch (err) {
-      setError('Failed to delete task');
+      showToast('Failed to delete task', 'error');
       console.error(err);
+    } finally {
+      setTaskToDelete(null);
     }
   };
 
@@ -200,64 +264,74 @@ const Planner: React.FC = () => {
     }
   };
 
-  const pollExecutionStatus = async (taskId: string, executionId: string) => {
+  const pollExecutionStatus = (taskId: string, executionId: string) => {
     const pollInterval = 2000; // Poll every 2 seconds
     const maxPolls = 45; // Max 90 seconds (45 * 2s)
     let pollCount = 0;
 
+    // Schedule a poll step and track the timeout id so it can be
+    // cancelled if the component unmounts.
+    const schedulePoll = (fn: () => void) => {
+      const timeoutId = window.setTimeout(() => {
+        pollTimeoutsRef.current.delete(timeoutId);
+        fn();
+      }, pollInterval);
+      pollTimeoutsRef.current.add(timeoutId);
+    };
+
+    const removeFromExecuting = () => {
+      setExecutingTasks(prev => {
+        const newState = { ...prev };
+        delete newState[taskId];
+        return newState;
+      });
+    };
+
     const poll = async () => {
       try {
         const execution = await api.getTaskExecution(taskId, executionId);
-        
+
+        // Never update state after unmount
+        if (!isMountedRef.current) return;
+
         // Check if execution is complete
         if (execution.status === 'success' || execution.status === 'error') {
-          // Remove from executing tasks
-          setExecutingTasks(prev => {
-            const newState = { ...prev };
-            delete newState[taskId];
-            return newState;
-          });
-          
+          removeFromExecuting();
+
           // Show result
           if (execution.status === 'success') {
-            alert(execution.result?.message || 'Task executed successfully');
+            const result = execution.result as { message?: string } | undefined;
+            showToast(result?.message || 'Task executed successfully', 'success');
           } else {
-            alert(`Task execution failed: ${execution.error_message || 'Unknown error'}`);
+            showToast(`Task execution failed: ${execution.error_message || 'Unknown error'}`, 'error');
           }
-          
+
           // Reload tasks to update status
           await loadTasks();
           return;
         }
-        
+
         // Continue polling if not complete and under limit
         pollCount++;
         if (pollCount < maxPolls) {
-          setTimeout(poll, pollInterval);
+          schedulePoll(poll);
         } else {
           // Timeout - remove from executing tasks
-          setExecutingTasks(prev => {
-            const newState = { ...prev };
-            delete newState[taskId];
-            return newState;
-          });
+          removeFromExecuting();
           setError('Task execution timed out after 90 seconds');
         }
-        
+
       } catch (err) {
         console.error('Error polling execution status:', err);
+        if (!isMountedRef.current) return;
         // Remove from executing tasks on error
-        setExecutingTasks(prev => {
-          const newState = { ...prev };
-          delete newState[taskId];
-          return newState;
-        });
+        removeFromExecuting();
         setError('Failed to check execution status');
       }
     };
 
     // Start polling
-    setTimeout(poll, pollInterval);
+    schedulePoll(poll);
   };
 
   const handleEdit = (task: Task) => {
@@ -293,7 +367,7 @@ const Planner: React.FC = () => {
     });
   };
 
-  const handleParamChange = (paramName: string, value: any) => {
+  const handleParamChange = (paramName: string, value: unknown) => {
     setFormData({
       ...formData,
       command_params: {
@@ -723,6 +797,18 @@ const Planner: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Delete Task Confirmation */}
+        <ConfirmDialog
+          isOpen={taskToDelete !== null}
+          title="Delete Task"
+          message="Are you sure you want to delete this task? This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          variant="danger"
+          onConfirm={confirmDelete}
+          onCancel={() => setTaskToDelete(null)}
+        />
       </main>
     </div>
   );

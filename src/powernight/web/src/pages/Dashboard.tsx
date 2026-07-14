@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { formatDate } from '../utils/helpers';
 
 interface SiteDetails {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 const STORAGE_KEY = 'powernight_site_details';
+const AUTO_REFRESH_INTERVAL_MS = 30000;
 
 const Dashboard: React.FC = () => {
   // Load initial data from localStorage
@@ -21,12 +22,17 @@ const Dashboard: React.FC = () => {
   const [siteDetailsLoading, setSiteDetailsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSiteDetails = async () => {
+  // Prevent state updates from in-flight requests after unmount
+  const isMountedRef = useRef(true);
+
+  const fetchSiteDetails = useCallback(async () => {
     setSiteDetailsLoading(true);
     setError(null);
     try {
       const response = await fetch('/api/auth/site-details');
       const data = await response.json();
+
+      if (!isMountedRef.current) return;
 
       if (data.success) {
         setSiteDetails(data.data);
@@ -37,14 +43,29 @@ const Dashboard: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to fetch site details:', err);
+      if (!isMountedRef.current) return;
       setError('Failed to fetch site details from server');
     } finally {
-      setSiteDetailsLoading(false);
+      if (isMountedRef.current) {
+        setSiteDetailsLoading(false);
+      }
     }
-  };
+  }, []);
 
-  // Do NOT auto-fetch on mount - only show last available data from localStorage
-  // User must click "Update Data" button to refresh
+  // Fetch on mount (localStorage cache is shown immediately as initial
+  // state) and auto-refresh every 30 seconds. The manual "Update Data"
+  // button remains available for on-demand refreshes.
+  useEffect(() => {
+    isMountedRef.current = true;
+    fetchSiteDetails();
+
+    const intervalId = window.setInterval(fetchSiteDetails, AUTO_REFRESH_INTERVAL_MS);
+
+    return () => {
+      isMountedRef.current = false;
+      window.clearInterval(intervalId);
+    };
+  }, [fetchSiteDetails]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -79,7 +100,7 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {siteDetailsLoading ? (
+            {siteDetailsLoading && !siteDetails ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 <span className="ml-2 text-gray-600">Loading Powerwall data...</span>

@@ -78,7 +78,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 CMD ["python", "-m", "powernight.main"]
 
 # Build arguments for metadata
-ARG VERSION=1.0.0
+ARG VERSION=2.0.0
 ARG BUILD_DATE
 ARG VCS_REF
 

@@ -141,18 +141,17 @@ get_backend_dependencies() {
         return
     fi
 
-    # Extract key dependencies with versions
-    # This is a simplified parser - ideally use a TOML parser
+    # Key runtime dependencies (kept in sync with pyproject.toml)
     DEPS=$(cat <<'EOF'
 {
-  "flask": ">=2.3.0",
-  "pypowerwall": ">=0.10.5",
-  "schedule": ">=1.2.0",
-  "pyyaml": ">=6.0.1",
-  "sqlalchemy": "Implicit (via Flask-SQLAlchemy)",
-  "requests": ">=2.31.0",
-  "structlog": ">=23.1.0",
-  "tenacity": ">=8.2.0"
+  "flask": ">=3.1.3",
+  "pypowerwall": ">=0.16.0",
+  "sqlalchemy": ">=2.0.51",
+  "schedule": ">=1.2.2",
+  "pyyaml": ">=6.0.3",
+  "requests": ">=2.34.2",
+  "click": ">=8.4.2",
+  "cryptography": ">=49.0.0"
 }
 EOF
 )
@@ -183,18 +182,18 @@ get_frontend_dependencies() {
             "@vitejs/plugin-react": .devDependencies["@vitejs/plugin-react"]
         }' package.json)
     else
-        # Fallback: Basic parsing without jq
+        # Fallback without jq (kept in sync with package.json)
         DEPS=$(cat <<'EOF'
 {
-  "react": "^18.2.0",
-  "react-dom": "^18.2.0",
-  "react-router-dom": "^6.20.1",
-  "axios": "^1.6.2",
-  "date-fns": "^2.30.0",
-  "vite": "^7.1.9",
-  "typescript": "^5.2.2",
-  "tailwindcss": "^4.1.14",
-  "@vitejs/plugin-react": "^4.2.1"
+  "react": "^19.2.7",
+  "react-dom": "^19.2.7",
+  "react-router-dom": "^7.18.1",
+  "axios": "^1.18.1",
+  "date-fns": "^4.4.0",
+  "vite": "^8.1.3",
+  "typescript": "^6.0.3",
+  "tailwindcss": "^4.3.2",
+  "@vitejs/plugin-react": "^6.0.3"
 }
 EOF
 )

@@ -8,10 +8,11 @@ This document provides specific instructions for AI agents working on the PowerN
 PowerNight uses a **React SPA (Single Page Application)** with a Flask backend. There is ONLY ONE frontend implementation.
 
 **Frontend Stack:**
-- React 18 + TypeScript
+- React 19.2 + TypeScript
 - Vite (build tool)
 - Tailwind CSS (styling)
-- React Router v6 (client-side routing)
+- React Router 7 (client-side routing)
+- react-hook-form (forms); state is React hooks + localStorage (no React Query)
 - Axios (API client)
 
 **Backend Stack:**
@@ -51,7 +52,8 @@ src/powernight/web/
 │   │   ├── useApi.ts          # API integration hook
 │   │   └── useLocalStorage.ts # LocalStorage hook
 │   ├── contexts/              # React contexts
-│   │   └── TimezoneContext.tsx # Timezone management context
+│   │   ├── TimezoneContext.tsx # Timezone management context
+│   │   └── ToastContext.tsx   # Toast notification context
 │   ├── utils/                  # Utilities
 │   │   ├── api.ts             # Axios API client with typed methods
 │   │   └── helpers.ts         # Helper functions
@@ -61,23 +63,20 @@ src/powernight/web/
 │   ├── main.tsx               # React entry point
 │   └── index.css              # Tailwind CSS imports
 ├── api/                        # Flask API (Backend only)
-│   ├── routes.py              # Main routes + SPA catch-all
+│   ├── routes.py              # Main routes + SPA catch-all (main_blueprint)
 │   ├── api.py                 # Main API blueprint (/api/v1/*)
-│   ├── auth_api.py            # Auth endpoints
-│   ├── config_api.py          # Config endpoints
-│   ├── logs_api.py            # Logs endpoints
-│   ├── tasks_api.py           # Tasks/cronjobs endpoints
-│   ├── docs.py                # API documentation (Swagger/ReDoc)
-│   ├── auth.py                # Authentication utilities
-│   ├── config_manager.py      # Configuration management
-│   ├── decorators.py          # API decorators
+│   ├── auth_api.py            # Tesla OAuth + auth endpoints (/api/auth/*)
+│   ├── config_api.py          # Config endpoints (/api/v1/config/*)
+│   ├── logs_api.py            # Execution log endpoint (/api/v1/logs/executions)
+│   ├── tasks_api.py           # Task + preset endpoints (/api/v1/tasks/*)
+│   ├── auth.py                # Authentication utilities (@require_auth)
+│   ├── decorators.py          # API decorators (re-exports require_auth)
 │   ├── errors.py              # Error handling
-│   ├── middleware.py          # Flask middleware
-│   ├── monitoring.py          # Performance monitoring
+│   ├── monitoring.py          # Performance monitoring (not a blueprint)
 │   ├── schemas.py             # Data schemas
 │   └── validation.py          # Input validation
 ├── app.py                     # Flask app factory
-├── middleware.py              # Flask middleware
+├── middleware.py              # Flask middleware (CORS, security headers, rate limiting)
 └── index.html                 # HTML entry point for Vite
 
 dist/                           # Built React app (git-ignored)
@@ -200,10 +199,12 @@ python -m powernight.main        # Full app with web interface
 ### Authentication
 
 The React app uses **Tesla authentication** via pypowerwall framework in cloud mode:
-- Tesla tokens stored in `.pypowerwall.auth` file
+- Tesla tokens stored in `.pypowerwall.auth` file (plain JSON, mode `0o600`; not encrypted, because pypowerwall reads/rewrites it directly)
 - Managed by `useAuth` hook for authentication state
 - Tesla login flow handled through Settings page
 - Authentication state managed by `useAuth` hook with loading states
+
+Separately, the PowerNight web API is protected by app-level auth that is **on by default** (`web_interface.auth_enabled=True`). Sensitive endpoints require an API key sent as `X-API-Key` or `Authorization: Bearer <key>`; only `/health` and `/version` are public. Startup fails closed if auth is enabled but no `api_key`/`password` is set.
 
 **Authentication Flow:**
 1. User initiates Tesla login via Settings page
@@ -287,7 +288,7 @@ pytest tests/        # Python unit/integration tests
 
 ### Data Storage Architecture
 
-**Container Path:** `/app/data/`
+**Container Path:** `/data/`
 **Host Path:** `./PowerNight-Data/`
 
 **Files Stored:**
@@ -332,7 +333,8 @@ services:
       - "8020:8020"
     environment:
       - POWERNIGHT_AUTH_ENABLED=true
-      - POWERNIGHT_API_KEY=${POWERNIGHT_API_KEY:-your-secure-api-key-here}
+      # Compose refuses to start if POWERNIGHT_API_KEY is unset (generate with: openssl rand -hex 32)
+      - POWERNIGHT_API_KEY=${POWERNIGHT_API_KEY:?POWERNIGHT_API_KEY must be set}
       - TESLA_CLIENT_ID=${TESLA_CLIENT_ID:-ownerapi}
       - TESLA_EMAIL=${TESLA_EMAIL:-your-email@example.com}
       - POWERNIGHT_AUTOMATION_ENABLED=${AUTOMATION_ENABLED:-true}
@@ -369,7 +371,7 @@ docker inspect PowerNight | grep -A 5 "Mounts"
 
 # Should show:
 # "Source": "/path/to/PowerNight-Data"
-# "Destination": "/app/data"
+# "Destination": "/data"
 ```
 
 **Problem:** Lost Tesla OAuth tokens after restart
@@ -454,6 +456,7 @@ docker inspect PowerNight | grep -A 5 "Mounts"
 
 ### React Contexts
 - **TimezoneContext.tsx** - Timezone management and display
+- **ToastContext.tsx** - Toast notification provider used across pages
 
 ### TypeScript Types
 - **AuthStatus** - Authentication state interface
@@ -489,7 +492,7 @@ When working on PowerNight:
 5. ❌ NEVER ignore volume configuration
 
 **Data Persistence:**
-- All critical data in `/app/data` (container) → `./PowerNight-Data/` (host)
+- All critical data in `/data` (container) → `./PowerNight-Data/` (host)
 - SQLite database, OAuth tokens, logs all require persistent storage
 - Data loss occurs if container runs without volume mounts
 

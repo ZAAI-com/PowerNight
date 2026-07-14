@@ -80,6 +80,9 @@ const Tooltip: React.FC<TooltipProps> = ({
         window.removeEventListener('resize', handleResize);
       };
     }
+    // updatePosition is stable for the effect's purpose; re-subscribing on every
+    // render is unnecessary.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible, position]);
 
   // Dismiss tooltip when tapping outside (touch support)

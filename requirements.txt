@@ -17,31 +17,13 @@ PyYAML>=6.0.3
 # HTTP Client for API calls
 requests>=2.34.2
 
-# Logging and Monitoring
-structlog>=26.1.0
-
-# Error Handling and Retry Logic
-tenacity>=9.1.4
-
 # Utilities
-python-dateutil>=2.9.0
 click>=8.4.2
 pytz>=2026.2
 
-# Environment Management
-python-dotenv>=1.2.2
-
-# Enterprise Features
+# Validation and Monitoring
 jsonschema>=4.26.0
 psutil>=7.2.2
+
+# Token encryption
 cryptography>=49.0.0
-
-# Security and Authentication
-bcrypt>=5.0.0
-passlib>=1.7.4
-pyjwt>=2.13.0
-authlib>=1.7.2
-itsdangerous>=2.2.0
-
-# Advanced Scheduling
-apscheduler>=3.11.3

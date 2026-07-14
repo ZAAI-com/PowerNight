@@ -8,7 +8,7 @@ PowerNight is a Docker container application that automates Tesla Powerwall back
 
 **Technology Stack:**
 - Backend: Python 3.10+ (Flask, SQLAlchemy, pypowerwall)
-- Frontend: React 18 + TypeScript + Vite + Tailwind CSS
+- Frontend: React 19.2 + TypeScript + Vite + Tailwind CSS + React Router 7
 - Database: SQLite (file-based)
 - Deployment: Docker (multi-stage build)
 - Task Scheduling: Background thread with `schedule` library
@@ -145,19 +145,19 @@ powernight-cli --config config.yaml --verbose
 **1. Configuration System** (`src/powernight/core/config/`)
 - **Pattern:** Singleton with thread-safe access
 - **Components:** `ConfigManager` (singleton) → validation → backup/recovery
-- **File Search Order:** Env var → `./config.yaml` → `./config/` → `~/.powernight/`
-- **Features:** Auto-backup before changes, environment variable overrides, dummy mode fallback
+- **File Search Order:** `POWERNIGHT_CONFIG_PATH` → `./config.json` → `./config.yaml` → `./config/config.json` → `./config/config.yaml` → `~/.powernight/config.{json,yaml}`
+- **Features:** Auto-backup before changes, environment variable overrides, fail-fast on missing/invalid config (no dummy-mode fallback); auto-recovery only restores a verified backup
 
 **2. Powerwall Integration** (`src/powernight/core/powerwall/`)
-- **Pattern:** Connector with retry logic and circuit breaker
+- **Pattern:** Connector guarded by a circuit breaker
 - **Flow:** `PowerwallConnector` → Tesla OAuth → `pypowerwall` lib → Tesla Cloud API
-- **Resilience:** Exponential backoff (3 retries), circuit breaker, 30s cache TTL
+- **Resilience:** Circuit breaker (per site), 30s data cache TTL (serves stale cache on failure)
 - **Auth:** OAuth 2.0 with PKCE, automatic token refresh
 
 **3. Task Scheduling** (`src/powernight/core/planner/`)
 - **Pattern:** Background thread with `schedule` library (lightweight, no external deps)
-- **Flow:** Bootstrap from DB → Register with scheduler → 1s check loop → Execute → Update DB
-- **Models:** `CronJob` table with execution tracking (last_execution, last_status, execution_count)
+- **Flow:** Bootstrap from DB → Register with scheduler → 20s check loop → Execute in a background thread → Update DB
+- **Models:** `Task` table with execution tracking (last_execution, last_status, execution_count), plus `TaskExecution` history and `TaskPreset` templates
 - **Important:** NOT cron-based; uses Python `schedule` library for daily task execution
 
 **4. Web Interface** (`src/powernight/web/`)
@@ -165,10 +165,10 @@ powernight-cli --config config.yaml --verbose
   - `main_blueprint`: React SPA routing (catch-all `/<path:path>`)
   - `api_blueprint` (`/api/v1/*`): Core API endpoints
   - `auth_blueprint`, `config_blueprint`, `logs_blueprint`, `tasks_blueprint`
-- **Frontend:** React SPA with React Router
-  - Routes: `/` (Dashboard), `/settings`, `/scheduling` (formerly Planner), `/logs`
+- **Frontend:** React SPA with React Router 7
+  - Routes: `/` (Dashboard), `/planner` (task management), `/history` (execution history), `/settings`
   - API Client: Axios with typed methods in `src/utils/api.ts`
-  - State: React hooks + React Query + localStorage
+  - State: React hooks + localStorage + react-hook-form (no React Query)
   - **Dashboard Page:** Displays Powerwall System Status (fetched from `/api/auth/site-details`)
     - System Information: Site Name, Site ID, Operating Mode, Battery Level
     - Power Data: Grid, Home, Battery, Solar power readings
@@ -178,8 +178,8 @@ powernight-cli --config config.yaml --verbose
 
 **5. Database** (`src/powernight/core/database/`)
 - **ORM:** SQLAlchemy with SQLite
-- **Models:** `ScheduleEntry` (legacy), `CronJob` (current task system)
-- **Migration:** Auto-migration on startup via `migration.py`
+- **Models:** `Task`, `TaskExecution`, `TaskPreset` (`database/models.py`). The legacy `ScheduleEntry` and `CronJob` DB models are gone (a config-schema dataclass named `ScheduleEntry` still exists in `core/config/schema.py` for `config.yaml` schedule entries)
+- **Migration:** Auto-migration on startup via `migration.py` (drops the legacy `schedule_entries` table and seeds built-in task presets)
 - **Sessions:** Thread-safe session management with context managers
 
 ### Flask Routing Configuration
@@ -273,6 +273,13 @@ PowerNight uses automated GitHub Actions workflows for continuous integration an
 - **Trigger:** Changes to `docs/README.md`
 - **Purpose:** Keeps Docker Hub description synchronized
 
+**5. CI** (`.github/workflows/ci.yml`)
+- **Trigger:** Pull requests and pushes to `main`
+- **Purpose:** Runs the test/lint gate on every change:
+  - **Backend:** `pip install -e ".[dev]"`, `ruff check` (syntax/undefined-name selectors), `pytest -m "not slow"` with coverage
+  - **Frontend:** `npm ci`, `npm run lint`, `npm run type-check`, `npm run test:run` (vitest), `npm run build`
+  - **mypy:** backend type check (informational; `continue-on-error`)
+
 ### Workflow Documentation
 
 For detailed workflow documentation, troubleshooting, and configuration:
@@ -340,19 +347,26 @@ For detailed release procedures and troubleshooting:
 
 **Rationale:** Complete duplication was removed to maintain single source of truth.
 
-### 2. Configuration Fallback Strategy
+### 2. Configuration Loading (Fail-Fast)
 
-When Powerwall is unavailable:
-1. Attempt to load user config
-2. If fails or Powerwall unreachable → switch to dummy config
-3. Dummy config sets: `automation.enabled=False`, `debug=True`
-4. Application continues running for testing/development
+Configuration loading fails closed. There is NO dummy-mode fallback anymore (that code was deleted):
+1. Load the user config using the search order above
+2. If the file is missing, unparseable, or fails validation → raise `ConfigurationError` and refuse to start
+3. Auto-recovery (`ConfigRecoveryManager`) only ever restores from a verified backup; it never fabricates a default config over the user's file
+4. `create_default_config()` is used only by the explicit `create-config` CLI command, never on the load path
 
-**Environment Variables** (12 supported overrides):
-- `POWERNIGHT_CONFIG_PATH`, `POWERNIGHT_DATA_PATH`, `POWERNIGHT_LOGS_PATH`
-- `POWERNIGHT_WEB_HOST`, `POWERNIGHT_WEB_PORT`
-- `TESLA_EMAIL`, `TESLA_CLIENT_ID`
-- `AUTOMATION_ENABLED`, `POWERNIGHT_LOG_LEVEL`
+**Environment Variable Overrides**
+
+`ConfigManager._apply_env_overrides` maps 12 environment variables onto config sections:
+- `POWERNIGHT_LOG_LEVEL` → `logging.level`
+- `POWERNIGHT_WEB_PORT`, `POWERNIGHT_WEB_HOST`, `POWERNIGHT_WEB_DEBUG` → `web_interface.*`
+- `POWERNIGHT_AUTH_ENABLED`, `POWERNIGHT_API_KEY` → `web_interface.*`
+- `TESLA_EMAIL` and `POWERNIGHT_POWERWALL_EMAIL` → `powerwall.tesla_email`
+- `POWERNIGHT_POWERWALL_TIMEOUT` → `powerwall.timeout`
+- `POWERNIGHT_AUTOMATION_ENABLED`, `POWERNIGHT_AUTOMATION_INTERVAL` → `automation.*`
+- `POWERNIGHT_MONITORING_ENABLED` → `monitoring.enabled`
+
+Four more environment variables are read outside that map: `POWERNIGHT_CONFIG_PATH` (config search), `POWERNIGHT_DATA_PATH` (data/token/secret location), `POWERNIGHT_STATIC_PATH` (React build dir), and `FLASK_SECRET_KEY` (session secret).
 
 ### 3. Resilience Patterns
 
@@ -361,14 +375,9 @@ When Powerwall is unavailable:
 - Prevents cascading failures when Tesla API is unreliable
 - Configurable failure threshold and recovery timeout
 
-**Retry Logic:**
-```python
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type((ConnectionError, TimeoutError))
-)
-```
+**Retry Settings:**
+- The Powerwall connector exposes `retry_attempts` / `retry_delay` / `max_retry_delay` config knobs.
+- The former `tenacity`-based `@retry` decorator has been removed (tenacity is no longer a dependency); resilience is provided by the circuit breaker and the stale-cache fallback rather than an automatic retry loop.
 
 **Data Caching:**
 - Powerwall data cached for 30s TTL
@@ -378,8 +387,9 @@ When Powerwall is unavailable:
 
 **Important:** PowerNight uses the Python `schedule` library, NOT traditional cron:
 - Tasks execute once daily at specified time (HH:MM format)
-- Background thread checks every 1 second
-- Execution tracked in `CronJob` table (last_execution, execution_count)
+- Background thread checks every 20 seconds (`planner.py`, `_check_interval = 20.0`)
+- Each due task runs in its own background thread, so execution never blocks the check loop
+- Execution tracked in the `Task` table (last_execution, execution_count), with a per-run row in `TaskExecution`
 - Tasks loaded from database on startup ("bootstrapping")
 
 **Why Not Cron:**
@@ -425,10 +435,13 @@ def create_app(config: Config, testing=False,
 ### Database Session Management
 
 ```python
-# Thread-safe session context
+# Services manage their own thread-safe session context internally
+task_service = TaskService()
+tasks = task_service.list_tasks(enabled_only=True)
+
+# Or open a session context directly when needed
 with get_db_session_context() as session:
-    schedule_service = ScheduleService(session)
-    schedules = schedule_service.get_all_schedules()
+    ...
 ```
 
 ## Testing Architecture
@@ -462,13 +475,16 @@ tests/
 main() [src/powernight/main.py]
 ├─ setup_logging()
 ├─ if CLI args → cli()
-└─ else → PowerNightApp()
-   ├─ load_config() [ConfigManager.load_config()]
-   ├─ init_database() [migration.py auto-migration]
-   ├─ create_powerwall_connector() [PowerwallConnector]
-   ├─ create_flask_app() [create_app() factory]
-   ├─ start_planner() [Planner.start(), bootstraps from DB]
-   └─ app.run(host='0.0.0.0', port=8020)
+└─ else → PowerNightApp().run()  [src/powernight/app.py]
+   ├─ initialize()
+   │  ├─ load_config() [ConfigManager.load_config(), fail-fast]
+   │  ├─ apply configured log level
+   │  ├─ fail-closed auth check (refuse to boot if auth_enabled and no api_key/password)
+   │  ├─ db_migration.upgrade() [migration.py auto-migration]
+   │  └─ initialize_powerwall_connector() [+ connect attempt]
+   ├─ start_planner() [Planner.start(), bootstraps tasks from DB]
+   ├─ start_web_interface() [create_app() factory; Flask runs in a daemon thread]
+   └─ main-thread sleep loop until shutdown (Flask does NOT block the main thread)
 ```
 
 ## Configuration Structure
@@ -553,7 +569,7 @@ PowerNight uses a YAML-based configuration system with the following sections:
 ### Debugging Powerwall Connection Issues
 
 1. Check logs: `docker logs powernight` or application console
-2. Verify OAuth tokens: Check `data/` directory for `.teslapy/cache.json`
+2. Verify OAuth tokens: Check the data directory (`/data`) for `.pypowerwall.auth` and `.pypowerwall.site`
 3. Test connection: `powernight test-connection`
 4. Check circuit breaker state: Monitor `/api/v1/health` endpoint
 5. Enable debug mode: Set `POWERNIGHT_LOG_LEVEL=DEBUG`
@@ -610,9 +626,10 @@ PowerNight uses a YAML-based configuration system with the following sections:
 **Data Storage Structure:**
 ```
 Host: ./PowerNight-Data/          Container: /data/
-├── powernight.db                 SQLite database (schedules, config)
-├── .pypowerwall.auth             Tesla OAuth tokens (PKCE)
+├── powernight.db                 SQLite database (tasks, executions, presets)
+├── .pypowerwall.auth             Tesla OAuth tokens (plain JSON, mode 0o600)
 ├── .pypowerwall.site             Selected Powerwall site ID
+├── .flask_secret                 Persisted Flask session secret (mode 0o600)
 ├── logs/                         Application logs
 └── tokens/                       Token cache directory
 ```
@@ -675,16 +692,20 @@ class LogEntry:
 
 **Tesla OAuth 2.0:**
 - PKCE (Proof Key for Code Exchange) for enhanced security
-- Tokens stored encrypted in filesystem
+- Tokens stored as plain JSON in `.pypowerwall.auth` (teslapy cache format). They are NOT encrypted at rest: `pypowerwall`/`teslapy` read and rewrite this file directly, so encrypting it would break the Tesla cloud connection. It is protected with owner-only permissions instead (auth/site files `0o600`, data directory `0o700`)
 - Automatic token refresh before expiration
 
-**API Authentication:**
-- API key in `X-API-Key` header (configurable)
-- Optional authentication (can be disabled for development)
+**Web/API Authentication (secure by default):**
+- `web_interface.auth_enabled` defaults to `True`; startup refuses to boot if auth is enabled but no `api_key`/`password` is configured (fail closed)
+- Credentials accepted via `X-API-Key` header or `Authorization: Bearer <key>`
+- Sensitive endpoints require auth (`/api/v1/status`, tasks, `logs/executions`, all `/api/auth/tesla/*`, `site-details`, `tesla/info`, `POST config/timezone`); only `/health` and `/version` stay public
+- Security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Content-Security-Policy`) and rate limiting on auth/setup endpoints are applied in `web/middleware.py`
+- Flask `SECRET_KEY` comes from `FLASK_SECRET_KEY` or is persisted under the data path (`.flask_secret`, mode `0o600`) so sessions survive restarts
+- `docker-compose.yml` requires `POWERNIGHT_API_KEY` (compose refuses to start without it); see `.env.example`
 
 **Docker Security:**
 - Non-root user (`powernight:powernight`)
-- Read-only filesystem (except /data)
+- `no-new-privileges` enabled in `docker-compose.yml`; `/data` is the only writable volume
 - No unnecessary capabilities
 
 **Environment Variables:**
@@ -695,7 +716,7 @@ class LogEntry:
 ## Performance Characteristics
 
 **Task Scheduling:**
-- Check interval: 1 second
+- Check interval: 20 seconds
 - Execution: Once daily per task at specified time
 - Overhead: Minimal (background thread, <1% CPU)
 
@@ -720,31 +741,26 @@ class LogEntry:
 2. **SQLite Concurrency:** Single-writer limitation (adequate for use case)
 3. **No User Management:** Single-tenant application (one user per instance)
 4. **Time Zone:** Uses system timezone for scheduling (configure via environment or config)
-5. **Tesla API Rate Limits:** Respects Tesla's rate limits with caching and retry logic
+5. **Tesla API Rate Limits:** Respects Tesla's rate limits with caching, connector-side rate limiting, and a circuit breaker
 
 ## Monitoring and Observability
 
-**Health Check Endpoint:** `GET /health`
+**Health Check Endpoint:** `GET /health` (public; `GET /version` is also public)
 ```json
 {
-  "status": "healthy|degraded|unhealthy",
-  "timestamp": "2025-10-18T10:00:00Z",
-  "version": "2.0.0",
-  "checks": {
-    "configuration": true,
-    "powerwall": false,
-    "scheduler": true
-  }
+  "status": "healthy",
+  "timestamp": "2026-01-01T10:00:00Z",
+  "version": "2.0.0"
 }
 ```
+(`version` is read from `__version__`, currently `2.0.0`. `/health` returns `503` with `status: "unhealthy"` on error.)
 
-**Status Endpoint:** `GET /api/v1/status`
+**Status Endpoint:** `GET /api/v1/status` (requires auth)
 - Comprehensive system status
 - Powerwall connection state
 - Scheduler state (job count, next run)
 - Configuration state
 
-**Logs API:** `GET /api/logs`
-- Retrieve application logs
-- Filter by level, component, time range
-- Export capabilities
+**Execution Log API:** `GET /api/v1/logs/executions` (requires auth)
+- Returns task execution history (there is no `/api/logs` endpoint)
+- Filters: `limit`, `offset`, `status`, `task_name`, `execution_type`, `start_date`, `end_date`

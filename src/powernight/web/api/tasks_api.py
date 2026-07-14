@@ -426,6 +426,13 @@ def execute_task(task_id: str):
     try:
         # Get PowerwallConnector from Flask app
         powerwall_connector = getattr(current_app, 'powerwall_connector', None)
+        if powerwall_connector is None:
+            return jsonify({
+                'success': False,
+                'error': 'Service Unavailable',
+                'message': 'Powerwall connector is not available; complete Tesla authentication first',
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }), 503
         task_manager = get_task_manager(powerwall_connector)
         result = task_manager.execute_task_async(task_id)
 
