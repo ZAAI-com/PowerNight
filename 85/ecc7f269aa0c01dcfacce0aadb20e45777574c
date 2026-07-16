@@ -1,0 +1,19 @@
+.conductor/settings.toml
+  s_f9c3603c1cd56e::t_692cac6e28839b 1-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "85ecc7f269aa0c01dcfacce0aadb20e45777574c",
+  "prompts": {},
+  "sessions": {
+    "s_f9c3603c1cd56e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f60b4-d5dd-7693-9773-46e197e0db17",
+        "model": "unknown"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
