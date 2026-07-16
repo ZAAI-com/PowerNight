@@ -106,7 +106,7 @@ powernight status
 
 1. **Install & Run PowerNight Docker Container**
 
-   Authentication is **on by default**, so an API key is required or the container will refuse to start.
+   Authentication is optional on a trusted LAN. This example enables it; omit the `POWERNIGHT_API_KEY` line to run without a login.
    ```bash
    # Generate a strong API key first: openssl rand -hex 32
    docker run -d \
@@ -159,7 +159,7 @@ docker run -d \
 
 **⚠️ IMPORTANT**: Always use volume mounts (`-v ./PowerNight-Data:/data`) to persist OAuth tokens, database, and configuration. Without volumes, data is lost after container restart.
 
-**🔐 IMPORTANT**: Authentication is enabled by default, so `POWERNIGHT_API_KEY` must be set or the container will not start. Send the key with API requests as an `X-API-Key` header (or `Authorization: Bearer <key>`).
+**🔐 OPTIONAL**: A nonempty `POWERNIGHT_API_KEY` automatically enables authentication. Omit it for an open trusted-LAN deployment. When enabled, send the key as an `X-API-Key` header (or `Authorization: Bearer <key>`).
 
 ### GitHub CR (Container Registry)
 
@@ -169,7 +169,7 @@ Alternative registry hosted on GitHub Packages.
 # Pull from GHCR
 docker pull ghcr.io/zaai-com/powernight:latest
 
-# Run with volume mount (API key required; generate with: openssl rand -hex 32)
+# Run with volume mount (the API key is optional and enables authentication)
 docker run -d \
   --name PowerNight \
   -p 8020:8020 \
@@ -184,13 +184,13 @@ docker run -d \
 
 1. Download `docker-compose.yml` file
 
-2. Create a `.env` file next to it (see `.env.example`) with a strong API key:
+2. For a protected deployment, create a `.env` file next to it (see `.env.example`) with a strong API key:
 
 ```bash
 echo "POWERNIGHT_API_KEY=$(openssl rand -hex 32)" > .env
 ```
 
-   Compose refuses to start if `POWERNIGHT_API_KEY` is not set.
+   Skip this step on a trusted LAN to run without authentication.
 
 3. Start the application:
 
@@ -249,12 +249,12 @@ Access at [http://localhost:8020](http://localhost:8020)
 
 ## Security
 
-### Authentication On By Default
+### Optional Authentication
 
-**PowerNight ships secure by default and still expects a trusted local network**
+**PowerNight expects a trusted local network; enable authentication when other clients can reach it**
 
-- 🔐 **API key required**: Authentication is enabled by default (`web_interface.auth_enabled=true`). Set `POWERNIGHT_API_KEY` (generate with `openssl rand -hex 32`); the app refuses to start if auth is enabled but no key/password is configured, and `docker-compose` will not start without it.
-- 🔑 **Sending the key**: Include it as an `X-API-Key` header or `Authorization: Bearer <key>`. Only `/health` and `/version` are public; all other API endpoints require authentication.
+- 🔐 **Credential-driven protection**: No credential means open LAN access. Setting `POWERNIGHT_API_KEY` (generate with `openssl rand -hex 32`) automatically enables authentication.
+- 🔑 **Sending the key**: When enabled, include it as an `X-API-Key` header or `Authorization: Bearer <key>`. Only `/health` and `/version` are public.
 - 🏠 **Local Network Preferred**: Deploy within your home/private network behind a firewall
 - ❌ **Do NOT expose to internet**: Never expose port 8020 directly to the public internet
 - 🔐 **Defense in depth**: Use firewall rules, VPN, or reverse proxy in addition to the API key

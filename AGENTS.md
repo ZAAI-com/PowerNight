@@ -198,13 +198,11 @@ python -m powernight.main        # Full app with web interface
 
 ### Authentication
 
-The React app uses **Tesla authentication** via pypowerwall framework in cloud mode:
+PowerNight uses **Tesla authentication** via pypowerwall framework in cloud mode:
 - Tesla tokens stored in `.pypowerwall.auth` file (plain JSON, mode `0o600`; not encrypted, because pypowerwall reads/rewrites it directly)
-- Managed by `useAuth` hook for authentication state
 - Tesla login flow handled through Settings page
-- Authentication state managed by `useAuth` hook with loading states
 
-Separately, the PowerNight web API is protected by app-level auth that is **on by default** (`web_interface.auth_enabled=True`). Sensitive endpoints require an API key sent as `X-API-Key` or `Authorization: Bearer <key>`; only `/health` and `/version` are public. Startup fails closed if auth is enabled but no `api_key`/`password` is set.
+Separately, the `useAuth` hook manages optional app-level authentication for the PowerNight web API. With no credentials configured, authentication is off for trusted-LAN use. A nonempty API key or complete username/password pair automatically enables it. Sensitive endpoints then require an API key sent as `X-API-Key` or `Authorization: Bearer <key>`; only `/health` and `/version` are public. Explicitly enabling authentication without a usable credential fails closed at startup.
 
 **Authentication Flow:**
 1. User initiates Tesla login via Settings page
@@ -332,9 +330,9 @@ services:
     ports:
       - "8020:8020"
     environment:
-      - POWERNIGHT_AUTH_ENABLED=true
-      # Compose refuses to start if POWERNIGHT_API_KEY is unset (generate with: openssl rand -hex 32)
-      - POWERNIGHT_API_KEY=${POWERNIGHT_API_KEY:?POWERNIGHT_API_KEY must be set}
+      # Optional on trusted LANs; a nonempty key automatically enables auth
+      - POWERNIGHT_AUTH_ENABLED
+      - POWERNIGHT_API_KEY
       - TESLA_CLIENT_ID=${TESLA_CLIENT_ID:-ownerapi}
       - TESLA_EMAIL=${TESLA_EMAIL:-your-email@example.com}
       - POWERNIGHT_AUTOMATION_ENABLED=${AUTOMATION_ENABLED:-true}

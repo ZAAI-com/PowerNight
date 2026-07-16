@@ -67,13 +67,18 @@ class PowerNightApp:
             from .utils.logging import get_logger
             get_logger().apply_log_level(config.logging.level)
 
-            # Fail closed: if auth is enabled but no credential is configured,
-            # refuse to start rather than serve an unprotected API
+            # Fail closed only when authentication was explicitly enabled but
+            # no usable credential was configured. A credential automatically
+            # enables auth; no credential leaves trusted-LAN deployments open.
             web = config.web_interface
-            if web.enabled and web.auth_enabled and not web.api_key and not web.password:
+            has_api_key = bool(web.api_key and web.api_key.strip())
+            has_basic_auth = bool(web.username and web.username.strip()) and bool(
+                web.password and web.password.strip()
+            )
+            if web.enabled and web.auth_enabled and not (has_api_key or has_basic_auth):
                 self.logger.error(
-                    "web_interface.auth_enabled is true but no api_key or password is set. "
-                    "Set POWERNIGHT_API_KEY (or configure a password), or set "
+                    "web_interface.auth_enabled is true but no usable credential is set. "
+                    "Set POWERNIGHT_API_KEY (or configure both username and password), or set "
                     "web_interface.auth_enabled=false to run without authentication."
                 )
                 return False

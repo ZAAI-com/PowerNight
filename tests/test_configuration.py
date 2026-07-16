@@ -111,8 +111,8 @@ class TestPowerNightConfig:
         assert config_dict['logging']['level'] == "INFO"
         assert config_dict['monitoring']['enabled'] is True
 
-        # Round-trip keys added for the web config API (auth is on by default)
-        assert config_dict['web_interface']['auth_enabled'] is True
+        # Round-trip keys added for the web config API (auth is credential-driven)
+        assert config_dict['web_interface']['auth_enabled'] is False
         assert config_dict['web_interface']['cors_origins'] == ["*"]
         assert config_dict['logging']['file_enabled'] is True
 

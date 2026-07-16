@@ -22,8 +22,11 @@ services:
     # Environment variables - configure via .env file
     environment:
       # Security settings
-      - POWERNIGHT_AUTH_ENABLED=true
-      - POWERNIGHT_API_KEY=${POWERNIGHT_API_KEY:?POWERNIGHT_API_KEY must be set - generate one with: openssl rand -hex 32}
+      # Authentication is optional on trusted LANs. Providing a key
+      # automatically enables it; explicitly enabling auth without a usable
+      # credential makes PowerNight fail closed at startup.
+      - POWERNIGHT_AUTH_ENABLED
+      - POWERNIGHT_API_KEY
 
       # Tesla OAuth configuration
       - TESLA_CLIENT_ID=${TESLA_CLIENT_ID:-ownerapi}

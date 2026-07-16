@@ -133,7 +133,7 @@ class WebInterfaceSettings:
     host: str = "0.0.0.0"
     port: int = 8020
     debug: bool = False
-    auth_enabled: bool = True  # Secure by default: API requires a key/password
+    auth_enabled: bool = False  # Credentials automatically opt in to authentication
     auth_required: bool = False  # Keep for backward compatibility
     username: Optional[str] = None
     password: Optional[str] = None
@@ -142,9 +142,16 @@ class WebInterfaceSettings:
 
     def __post_init__(self):
         """Post-initialization processing."""
-        # Map auth_required to auth_enabled for backward compatibility
-        if self.auth_required and not self.auth_enabled:
-            self.auth_enabled = self.auth_required
+        # Keep the legacy auth_required flag working, and automatically protect
+        # deployments that configure either supported credential type. This
+        # lets trusted-LAN installs run without a key while preserving existing
+        # protected deployments after an upgrade.
+        has_api_key = bool(self.api_key and self.api_key.strip())
+        has_basic_auth = bool(self.username and self.username.strip()) and bool(
+            self.password and self.password.strip()
+        )
+        if self.auth_required or has_api_key or has_basic_auth:
+            self.auth_enabled = True
 
     def validate(self) -> List[str]:
         """Validate web interface settings."""
@@ -156,12 +163,11 @@ class WebInterfaceSettings:
         except ValidationError as e:
             errors.append(str(e))
 
-        # Validate authentication settings
-        if self.auth_required:
-            if not self.username:
-                errors.append("Username required when auth is enabled")
-            if not self.password:
-                errors.append("Password required when auth is enabled")
+        # Basic authentication is only usable when both fields are present.
+        has_username = bool(self.username and self.username.strip())
+        has_password = bool(self.password and self.password.strip())
+        if has_username != has_password:
+            errors.append("Both username and password are required for Basic authentication")
 
         return errors
 
@@ -358,7 +364,7 @@ class PowerNightConfig:
             host=web_data.get('host', '0.0.0.0'),
             port=web_data.get('port', 8020),
             debug=web_data.get('debug', False),
-            auth_enabled=web_data.get('auth_enabled', True),
+            auth_enabled=web_data.get('auth_enabled', False),
             auth_required=web_data.get('auth_required', False),
             username=web_data.get('username'),
             password=web_data.get('password'),

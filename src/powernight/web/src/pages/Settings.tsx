@@ -105,7 +105,7 @@ const Settings: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/setup/start', {
+      const response = await api.authenticatedFetch('/api/auth/setup/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -149,7 +149,7 @@ const Settings: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/setup/callback', {
+      const response = await api.authenticatedFetch('/api/auth/setup/callback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, callback_url: callbackUrl }),
@@ -180,7 +180,7 @@ const Settings: React.FC = () => {
     if (!sessionId) return;
 
     try {
-      const response = await fetch('/api/auth/setup/complete', {
+      const response = await api.authenticatedFetch('/api/auth/setup/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, site_id: siteId }),
@@ -201,7 +201,7 @@ const Settings: React.FC = () => {
   const fetchAuthInfo = async () => {
     setAuthInfoLoading(true);
     try {
-      const response = await fetch('/api/auth/tesla/info');
+      const response = await api.authenticatedFetch('/api/auth/tesla/info');
       const data = await response.json();
 
       if (data.success) {
@@ -222,7 +222,7 @@ const Settings: React.FC = () => {
   const fetchVersionInfo = async () => {
     setVersionLoading(true);
     try {
-      const response = await fetch('/api/v1/version-info.json');
+      const response = await api.authenticatedFetch('/api/v1/version-info.json');
 
       if (!response.ok) {
         console.error(`Failed to fetch version info: HTTP ${response.status} ${response.statusText}`);

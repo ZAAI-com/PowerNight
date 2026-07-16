@@ -106,12 +106,39 @@ describe('PowerNightAPI', () => {
   });
 
   describe('Authentication', () => {
+    it('should detect when authentication is required', async () => {
+      vi.mocked(fetch).mockResolvedValue({ status: 401 } as Response);
+
+      await expect(api.checkAuthRequired()).resolves.toBe(true);
+      expect(fetch).toHaveBeenCalledWith('/api/v1/auth/check', expect.any(Object));
+    });
+
+    it('should attach the API key to authenticated fetch requests', async () => {
+      api.setApiKey('valid-key');
+      vi.mocked(fetch).mockResolvedValue({ status: 200 } as Response);
+
+      await api.authenticatedFetch('/api/auth/site-details');
+
+      const init = vi.mocked(fetch).mock.calls[0][1];
+      expect(new Headers(init?.headers).get('X-API-Key')).toBe('valid-key');
+    });
+
+    it('should clear a rejected key from authenticated fetch requests', async () => {
+      api.setApiKey('invalid-key');
+      vi.mocked(fetch).mockResolvedValue({ status: 401 } as Response);
+
+      await api.authenticatedFetch('/api/auth/site-details');
+
+      expect(api.isAuthenticated()).toBe(false);
+    });
+
     it('should authenticate with valid API key', async () => {
       mockedAxios.get.mockResolvedValue({ data: { status: 'healthy' } });
 
       const result = await api.authenticate('valid-key');
       expect(result).toBe(true);
       expect(api.isAuthenticated()).toBe(true);
+      expect(mockedAxios.get).toHaveBeenCalledWith('/auth/check');
     });
 
     it('should fail authentication with invalid API key', async () => {

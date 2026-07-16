@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { formatDate } from '../utils/helpers';
+import api from '../utils/api';
 
 interface SiteDetails {
   [key: string]: unknown;
@@ -29,7 +30,7 @@ const Dashboard: React.FC = () => {
     setSiteDetailsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/auth/site-details');
+      const response = await api.authenticatedFetch('/api/auth/site-details');
       const data = await response.json();
 
       if (!isMountedRef.current) return;

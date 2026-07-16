@@ -97,7 +97,7 @@ class PowerNightAPI {
   async checkAuthRequired(): Promise<boolean> {
     try {
       // Try to access a protected endpoint without authentication
-      const response = await fetch('/api/v1/health', {
+      const response = await fetch('/api/v1/auth/check', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -109,6 +109,27 @@ class PowerNightAPI {
     } catch {
       // If there's an error, assume auth is required for safety
       return true;
+    }
+  }
+
+  async authenticatedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers);
+    if (this.apiKey) {
+      headers.set('X-API-Key', this.apiKey);
+    }
+
+    try {
+      const response = await fetch(input, { ...init, headers });
+      if (response.status === 401) {
+        this.clearApiKey();
+        window.dispatchEvent(new CustomEvent('powernight:auth-required'));
+      }
+      return response;
+    } catch (error) {
+      window.dispatchEvent(new CustomEvent('powernight:connection-error', {
+        detail: error,
+      }));
+      throw error;
     }
   }
 
@@ -313,7 +334,7 @@ class PowerNightAPI {
     this.apiKey = apiKey;
     
     try {
-      await this.getHealth();
+      await this.client.get('/auth/check');
       this.setApiKey(apiKey);
       return true;
     } catch (error) {

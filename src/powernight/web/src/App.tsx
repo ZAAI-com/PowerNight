@@ -15,7 +15,7 @@ const Planner = React.lazy(() => import('./pages/Planner'));
 const History = React.lazy(() => import('./pages/History'));
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, error, login, clearError } = useAuth();
 
   // Show loading spinner while checking authentication
   if (isLoading) {
@@ -28,7 +28,7 @@ const AppContent: React.FC = () => {
 
   // Show login page if not authenticated
   if (!isAuthenticated) {
-    return <Login />;
+    return <Login error={error} onLogin={login} onClearError={clearError} />;
   }
 
   // Show main app if authenticated

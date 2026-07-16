@@ -16,10 +16,9 @@ web_interface:
   host: 0.0.0.0
   port: 8020
   debug: false
-  # Authentication is ON by default. Set an api_key (or provide
-  # POWERNIGHT_API_KEY) to protect the API, or set auth_enabled: false to run
-  # on a trusted local network without authentication.
-  auth_enabled: true
+  # Authentication is optional for trusted local networks. Supplying an
+  # api_key (or POWERNIGHT_API_KEY) automatically enables it.
+  auth_enabled: false
   api_key: ""
 
 logging:

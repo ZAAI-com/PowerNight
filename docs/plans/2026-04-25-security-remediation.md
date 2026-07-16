@@ -1,14 +1,14 @@
 # PowerNight Security Remediation Plan
 
-## Status: IMPLEMENTED (with corrections)
+## Status: IMPLEMENTED, THEN SUPERSEDED (with corrections)
 
-This plan has shipped. The hardened, fail-closed default deployment is in place:
+This plan shipped, but its auth-on-by-default deployment policy was superseded in July 2026. Authentication is now credential-driven: no credential means open trusted-LAN access, while a configured API key or complete Basic-auth pair automatically enables protection. Explicitly enabling authentication without credentials still fails closed.
 
-- **Auth on by default** (`schema.py` `WebInterfaceSettings.auth_enabled=True`) with a startup fail-closed check that refuses to boot if auth is enabled and no `api_key`/`password` is set (`app.py`).
+- **Auth is optional by default** (`schema.py` `WebInterfaceSettings.auth_enabled=False`), with credentials automatically opting in and an explicit misconfigured opt-in still failing closed (`app.py`).
 - **Sensitive endpoints require auth** via `@require_auth` (`/api/v1/status`, all `tasks/*`, `logs/executions`, all `/api/auth/tesla/*`, `site-details`, `tesla/info`, `POST /api/v1/config/timezone`); `/health` and `/version` remain public. OAuth setup endpoints are gated by an internal `_setup_allowed()` (loopback bootstrap or authenticated).
 - **Flask `SECRET_KEY`** is set from `FLASK_SECRET_KEY` or persisted to `<data>/.flask_secret` (mode `0o600`).
 - **Security headers + rate limiting + restricted CORS** are applied in `web/middleware.py`; HSTS is conditional on HTTPS.
-- **docker-compose requires `POWERNIGHT_API_KEY`** (compose refuses to start without it) and a `.env.example` was added.
+- **docker-compose accepts an optional `POWERNIGHT_API_KEY`**; setting one automatically enables authentication.
 
 Corrections found while implementing (the plan's assumptions did not all hold):
 

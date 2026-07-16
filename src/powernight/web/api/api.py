@@ -701,7 +701,15 @@ def get_metrics():
 
 
 
+@api_blueprint.route('/auth/check', methods=['GET'])
+@require_auth
+def check_authentication():
+    """Validate web API authentication without depending on system health."""
+    return jsonify({'success': True}), 200
+
+
 @api_blueprint.route('/health', methods=['GET'])
+@require_auth
 @performance_monitor('api.health.check')
 def health_check():
     """

@@ -479,7 +479,7 @@ main() [src/powernight/main.py]
    ├─ initialize()
    │  ├─ load_config() [ConfigManager.load_config(), fail-fast]
    │  ├─ apply configured log level
-   │  ├─ fail-closed auth check (refuse to boot if auth_enabled and no api_key/password)
+   │  ├─ fail-closed auth check (if explicitly enabled, require an API key or complete Basic credentials)
    │  ├─ db_migration.upgrade() [migration.py auto-migration]
    │  └─ initialize_powerwall_connector() [+ connect attempt]
    ├─ start_planner() [Planner.start(), bootstraps tasks from DB]
@@ -511,6 +511,7 @@ PowerNight uses a YAML-based configuration system with the following sections:
 - `host` (str) - Host to bind to (default: 0.0.0.0)
 - `port` (int) - Port to listen on (default: 8020)
 - `debug` (bool) - Flask debug mode
+- `auth_enabled` (bool) - Explicitly require authentication; defaults to false, while configured credentials automatically enable it
 - `auth_required` (bool) - Require authentication (backward compatibility)
 - `username` (str) - Basic auth username
 - `password` (str) - Basic auth password
@@ -695,13 +696,14 @@ class LogEntry:
 - Tokens stored as plain JSON in `.pypowerwall.auth` (teslapy cache format). They are NOT encrypted at rest: `pypowerwall`/`teslapy` read and rewrite this file directly, so encrypting it would break the Tesla cloud connection. It is protected with owner-only permissions instead (auth/site files `0o600`, data directory `0o700`)
 - Automatic token refresh before expiration
 
-**Web/API Authentication (secure by default):**
-- `web_interface.auth_enabled` defaults to `True`; startup refuses to boot if auth is enabled but no `api_key`/`password` is configured (fail closed)
+**Web/API Authentication (optional for trusted LANs):**
+- `web_interface.auth_enabled` defaults to `False`; a nonempty API key or complete username/password pair automatically enables authentication
+- Explicitly enabling authentication without a usable credential still refuses startup (fail closed)
 - Credentials accepted via `X-API-Key` header or `Authorization: Bearer <key>`
-- Sensitive endpoints require auth (`/api/v1/status`, tasks, `logs/executions`, all `/api/auth/tesla/*`, `site-details`, `tesla/info`, `POST config/timezone`); only `/health` and `/version` stay public
+- When authentication is enabled, sensitive endpoints require it (`/api/v1/status`, tasks, `logs/executions`, all `/api/auth/tesla/*`, `site-details`, `tesla/info`, `POST config/timezone`); only `/health` and `/version` stay public
 - Security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Content-Security-Policy`) and rate limiting on auth/setup endpoints are applied in `web/middleware.py`
 - Flask `SECRET_KEY` comes from `FLASK_SECRET_KEY` or is persisted under the data path (`.flask_secret`, mode `0o600`) so sessions survive restarts
-- `docker-compose.yml` requires `POWERNIGHT_API_KEY` (compose refuses to start without it); see `.env.example`
+- `docker-compose.yml` accepts an optional `POWERNIGHT_API_KEY`; omit it for a trusted-LAN deployment or set it to enable protection automatically
 
 **Docker Security:**
 - Non-root user (`powernight:powernight`)

@@ -2,10 +2,10 @@
 
 ## ⚠️ **IMPORTANT: Security Assumptions**
 
-PowerNight ships **secure by default** and is still intended for **trusted local networks**:
+PowerNight is intended for **trusted local networks** and supports optional API authentication:
 
-- 🔐 **Authentication On By Default**: `web_interface.auth_enabled` defaults to `true`. Set `POWERNIGHT_API_KEY` (generate with `openssl rand -hex 32`); startup fails closed if auth is enabled but no API key/password is configured, and `docker-compose` refuses to start without `POWERNIGHT_API_KEY`.
-- 🔑 **Sending Credentials**: Use an `X-API-Key` header or `Authorization: Bearer <key>`. Only `/health` and `/version` are public; all other endpoints require auth.
+- 🔐 **Credential-Driven Authentication**: With no configured credential, authentication is off. A nonempty `POWERNIGHT_API_KEY` or complete username/password pair automatically enables it. Explicitly enabling auth without usable credentials fails closed.
+- 🔑 **Sending Credentials**: When authentication is enabled, use an `X-API-Key` header or `Authorization: Bearer <key>`. Only `/health` and `/version` are public.
 - 🛡️ **Hardening Applied**: Security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Content-Security-Policy`) and rate limiting on auth/setup endpoints are applied in `web/middleware.py`. The Flask session secret is set from `FLASK_SECRET_KEY` or persisted under the data path.
 - ✅ **Intended Use**: Deploy within your home/private network behind a firewall
 - ❌ **NOT for Public Internet**: Do not expose PowerNight directly to the internet, even with the API key set
@@ -17,7 +17,7 @@ PowerNight ships **secure by default** and is still intended for **trusted local
 
 ### Deployment Security Best Practices
 
-1. **Set a strong API key**: `POWERNIGHT_API_KEY` gated behind `openssl rand -hex 32`
+1. **Protect Shared Networks**: Set `POWERNIGHT_API_KEY` using `openssl rand -hex 32` when guests, IoT devices, VPN peers, or other untrusted clients can reach PowerNight
 2. **Local Network Only**: Only accessible from your trusted home/office network
 3. **Firewall Protection**: Use router/firewall rules to block external access to port 8020
 4. **VPN for Remote Access**: Use VPN (WireGuard, OpenVPN) for secure remote access
