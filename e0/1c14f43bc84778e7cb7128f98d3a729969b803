@@ -1,0 +1,20 @@
+tests/unit/test_planner_threading.py
+  s_d37515abf542f8::t_ccbb3ef4cc6eee 75-146
+  s_d37515abf542f8::t_79cf09dcd8d6b2 74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "e01c14f43bc84778e7cb7128f98d3a729969b803",
+  "prompts": {},
+  "sessions": {
+    "s_d37515abf542f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "da81eaad-8507-4d49-bb7a-530a1aebae6a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
