@@ -1,0 +1,81 @@
+CLAUDE.md
+  s_f9c3603c1cd56e::t_c528ea00ab9ae8 482,514,699-701,703,706
+docs/SECURITY.md
+  s_f9c3603c1cd56e::t_c528ea00ab9ae8 5,7-8,20
+docs/README.md
+  s_f9c3603c1cd56e::t_c528ea00ab9ae8 109,162,172,187,193,252,254,256-257
+src/powernight/web/test/e2e/login.spec.ts
+  s_f9c3603c1cd56e::t_c8a2319087ac5f 4-21,23-25
+  s_f9c3603c1cd56e::t_878514d973b341 30
+  s_f9c3603c1cd56e::t_3284fec761b20d 31
+src/powernight/app.py
+  s_f9c3603c1cd56e::t_20f6cd1f1f2568 70-72,78,80-81
+  s_f9c3603c1cd56e::t_716829299a9698 74-77
+src/powernight/web/src/pages/Login.tsx
+  s_f9c3603c1cd56e::t_4eeaafcfbb285d 5-12,15,17-18,21,24,53,57,59-60,63-65,67,69-71,107,110,118,125
+src/powernight/web/api/api.py
+  s_f9c3603c1cd56e::t_cef3343b67879e 704-710
+  s_f9c3603c1cd56e::t_96a696e72d8087 712
+AGENTS.md
+  s_f9c3603c1cd56e::t_c528ea00ab9ae8 201,205,333
+  s_f9c3603c1cd56e::t_338ece6336d817 334-335
+docs/plans/2026-04-25-security-remediation.md
+  s_f9c3603c1cd56e::t_c528ea00ab9ae8 3,5,7,11
+src/powernight/web/playwright.config.ts
+  s_f9c3603c1cd56e::t_0814b4d5188716 2-5,72
+src/powernight/web/src/utils/api.ts
+  s_f9c3603c1cd56e::t_4eeaafcfbb285d 115-135
+  s_f9c3603c1cd56e::t_cef3343b67879e 100,337
+src/powernight/web/test/pages/Dashboard.test.tsx
+  s_f9c3603c1cd56e::t_713d6c43ddc91a 1-36
+docs/FAQ.md
+  s_f9c3603c1cd56e::t_c528ea00ab9ae8 96
+src/powernight/web/test/utils/api.test.ts
+  s_f9c3603c1cd56e::t_5c274f5cf0c9a7 109-134,141
+src/powernight/web/test/pages/Settings.test.tsx
+  s_f9c3603c1cd56e::t_12540c90320929 11
+  s_f9c3603c1cd56e::t_8047b4a972f41b 1-10,12-71
+src/powernight/web/src/pages/Settings.tsx
+  s_f9c3603c1cd56e::t_4eeaafcfbb285d 108,152,183,204,225
+.env.example
+  s_f9c3603c1cd56e::t_338ece6336d817 7,11
+  s_f9c3603c1cd56e::t_20f6cd1f1f2568 5,8-10
+  s_f9c3603c1cd56e::t_99b6c88d1869ec 4
+src/powernight/web/src/App.tsx
+  s_f9c3603c1cd56e::t_4eeaafcfbb285d 18,31
+src/powernight/web/src/pages/Dashboard.tsx
+  s_f9c3603c1cd56e::t_4eeaafcfbb285d 3,33
+config/config.yaml
+  s_f9c3603c1cd56e::t_20f6cd1f1f2568 19-21
+tests/unit/test_auth_enforcement.py
+  s_f9c3603c1cd56e::t_96a696e72d8087 51-79,86-87,89,94
+  s_f9c3603c1cd56e::t_3ed1ca6d336df3 4-6,83,85,90,153-189
+  s_f9c3603c1cd56e::t_cef3343b67879e 84,88,93,105
+  s_f9c3603c1cd56e::t_7bdf0090b2dda1 152
+src/powernight/core/config/schema.py
+  s_f9c3603c1cd56e::t_20f6cd1f1f2568 136,145-148,153-154,166,170,367
+  s_f9c3603c1cd56e::t_716829299a9698 149-152,167-169
+docker-compose.yml
+  s_f9c3603c1cd56e::t_20f6cd1f1f2568 25-27,80
+  s_f9c3603c1cd56e::t_338ece6336d817 28-29
+tests/test_configuration.py
+  s_f9c3603c1cd56e::t_3ed1ca6d336df3 114-115
+src/powernight/web/test/pages/Login.test.tsx
+  s_f9c3603c1cd56e::t_5c274f5cf0c9a7 1-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "1b4199021f9ade1e869c74f457a4adde98f05487",
+  "prompts": {},
+  "sessions": {
+    "s_f9c3603c1cd56e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f60b4-d5dd-7693-9773-46e197e0db17",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
