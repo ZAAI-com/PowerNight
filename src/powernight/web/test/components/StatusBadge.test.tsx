@@ -7,7 +7,9 @@ describe('StatusBadge', () => {
     
     const badge = screen.getByText('HEALTHY');
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass('bg-green-100', 'text-green-800');
+    // The background/dark-text classes live on the outer badge span; the inner
+    // text span (returned by getByText) only carries the lighter text color.
+    expect(badge.parentElement).toHaveClass('bg-green-100', 'text-green-800');
   });
 
   it('renders error status correctly', () => {
@@ -15,7 +17,7 @@ describe('StatusBadge', () => {
     
     const badge = screen.getByText('ERROR');
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass('bg-red-100', 'text-red-800');
+    expect(badge.parentElement).toHaveClass('bg-red-100', 'text-red-800');
   });
 
   it('renders warning status correctly', () => {
@@ -23,7 +25,7 @@ describe('StatusBadge', () => {
     
     const badge = screen.getByText('WARNING');
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass('bg-yellow-100', 'text-yellow-800');
+    expect(badge.parentElement).toHaveClass('bg-yellow-100', 'text-yellow-800');
   });
 
   it('hides icon when showIcon is false', () => {

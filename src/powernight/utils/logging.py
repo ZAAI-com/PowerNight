@@ -214,6 +214,36 @@ class PowerNightLogger:
             logger.propagate = True  # Propagate to main logger
             self._loggers[component_name] = logger
 
+    def apply_log_level(self, level) -> None:
+        """
+        Apply a new minimum log level to all PowerNight loggers and handlers.
+
+        Called after configuration load so that config.logging.level (and the
+        POWERNIGHT_LOG_LEVEL override) actually takes effect at runtime.
+
+        Args:
+            level: LogLevel enum member or level name string (e.g. "DEBUG")
+        """
+        if isinstance(level, str):
+            try:
+                level = LogLevel(level.upper())
+            except ValueError:
+                self.main_logger.warning(
+                    f"Unknown log level '{level}', keeping {self.log_level.value}"
+                )
+                return
+
+        with self._lock:
+            self.log_level = level
+            py_level = self._log_level_to_python(level)
+            self.main_logger.setLevel(py_level)
+            for handler in self.main_logger.handlers:
+                handler.setLevel(py_level)
+            for component_logger in self._loggers.values():
+                component_logger.setLevel(py_level)
+
+        self.main_logger.info(f"Log level set to {level.value}")
+
     def _log_level_to_python(self, level: LogLevel) -> int:
         """Convert LogLevel enum to Python logging level."""
         mapping = {

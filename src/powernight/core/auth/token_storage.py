@@ -6,14 +6,10 @@ Provides storage for Tesla OAuth tokens in .pypowerwall.auth format.
 
 import os
 import json
-import base64
 import time
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from datetime import datetime, timezone
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from ...utils.logging import get_logger
 
@@ -40,8 +36,12 @@ class PyPowerwallAuthStorage:
         self.storage_path = Path(storage_path)
         self.logger = get_logger()
 
-        # Ensure storage directory exists
+        # Ensure storage directory exists, owner-only: it holds Tesla tokens
         self.storage_path.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(self.storage_path, 0o700)
+        except OSError:
+            pass
     
     def store_auth_data(self, email: str, tokens: Dict[str, Any], site: Dict[str, Any]) -> None:
         """
@@ -68,13 +68,17 @@ class PyPowerwallAuthStorage:
                 }
             }
 
-            # Store in pypowerwall auth file format (plain JSON, no encryption)
+            # Store in pypowerwall auth file format. This file MUST stay
+            # plain JSON: pypowerwall/teslapy read AND rewrite it directly
+            # (connector passes authpath=... in cloud mode), so encrypting it
+            # at rest would break the Tesla cloud connection. Protection is
+            # owner-only file and directory permissions instead.
             auth_file = self.storage_path / ".pypowerwall.auth"
             with open(auth_file, 'w') as f:
                 json.dump(cache_data, f, indent=2)
 
-            # Set restrictive permissions (0o640 as per teslapy)
-            os.chmod(auth_file, 0o640)
+            # Owner-only permissions: tokens grant full Powerwall control
+            os.chmod(auth_file, 0o600)
 
             # Store site ID in separate file
             site_file = self.storage_path / ".pypowerwall.site"
@@ -83,7 +87,7 @@ class PyPowerwallAuthStorage:
                 self.logger.warning("Site ID is None, not storing site file")
             else:
                 site_file.write_text(str(site_id))
-                os.chmod(site_file, 0o640)
+                os.chmod(site_file, 0o600)
 
             self.logger.info(f"pypowerwall auth data stored for {email} (teslapy format)")
 

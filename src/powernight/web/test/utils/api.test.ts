@@ -1,14 +1,35 @@
+import { vi, type Mocked } from 'vitest';
 import { api } from '../../src/utils/api';
 
-// Mock axios
-jest.mock('axios');
+// Mock axios. The `api` singleton is constructed at import time and calls
+// axios.create().interceptors.* in its constructor, so the mock must return a
+// client with an interceptors shape. create() returns the same object so that
+// `this.client === mockedAxios` and the per-test get/post stubs take effect.
+vi.mock('axios', () => {
+  const client = {
+    interceptors: {
+      request: { use: vi.fn() },
+      response: { use: vi.fn() },
+    },
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    create: vi.fn(),
+  };
+  client.create.mockReturnValue(client);
+  return { default: client };
+});
 import axios from 'axios';
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedAxios = axios as unknown as Mocked<typeof axios>;
 
 describe('PowerNightAPI', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     localStorage.clear();
+    // `api` is a module singleton; reset its in-memory key so state does not
+    // bleed between tests.
+    api.clearApiKey();
   });
 
   describe('API Key management', () => {
@@ -25,7 +46,7 @@ describe('PowerNightAPI', () => {
 
     it('should load API key from localStorage on initialization', () => {
       localStorage.setItem('powernight_api_key', 'stored-key');
-      const newApi = new (api.constructor as any)();
+      const newApi = new (api.constructor as new () => typeof api)();
       expect(newApi.isAuthenticated()).toBe(true);
     });
   });
@@ -85,30 +106,57 @@ describe('PowerNightAPI', () => {
   });
 
   describe('Authentication', () => {
+    it('should detect when authentication is required', async () => {
+      vi.mocked(fetch).mockResolvedValue({ status: 401 } as Response);
+
+      await expect(api.checkAuthRequired()).resolves.toBe(true);
+      expect(fetch).toHaveBeenCalledWith('/api/v1/auth/check', expect.any(Object));
+    });
+
+    it('should attach the API key to authenticated fetch requests', async () => {
+      api.setApiKey('valid-key');
+      vi.mocked(fetch).mockResolvedValue({ status: 200 } as Response);
+
+      await api.authenticatedFetch('/api/auth/site-details');
+
+      const init = vi.mocked(fetch).mock.calls[0][1];
+      expect(new Headers(init?.headers).get('X-API-Key')).toBe('valid-key');
+    });
+
+    it('should clear a rejected key from authenticated fetch requests', async () => {
+      api.setApiKey('invalid-key');
+      vi.mocked(fetch).mockResolvedValue({ status: 401 } as Response);
+
+      await api.authenticatedFetch('/api/auth/site-details');
+
+      expect(api.isAuthenticated()).toBe(false);
+    });
+
     it('should authenticate with valid API key', async () => {
       mockedAxios.get.mockResolvedValue({ data: { status: 'healthy' } });
 
       const result = await api.authenticate('valid-key');
       expect(result).toBe(true);
       expect(api.isAuthenticated()).toBe(true);
+      expect(mockedAxios.get).toHaveBeenCalledWith('/auth/check');
     });
 
     it('should fail authentication with invalid API key', async () => {
       mockedAxios.get.mockRejectedValue(new Error('Unauthorized'));
 
-      const result = await api.authenticate('invalid-key');
-      expect(result).toBe(false);
+      // authenticate() re-throws on failure; the useAuth hook catches it.
+      await expect(api.authenticate('invalid-key')).rejects.toThrow('Unauthorized');
       expect(api.isAuthenticated()).toBe(false);
     });
   });
 
   describe('Polling', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should start and stop polling', () => {

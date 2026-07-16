@@ -1,9 +1,29 @@
 from flask import Blueprint, jsonify, current_app, request
 from ...core.config import get_config, get_config_manager
+from ...core.config.schema import PowerNightConfig
 from typing import Any, Dict
+import copy
 import pytz
 
+from .auth import require_auth
+from .validation import validate_config_data
+
 config_blueprint = Blueprint('config_api', __name__, url_prefix='/api/v1/config')
+
+
+def _deep_merge(target: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of target with updates merged in recursively."""
+    merged = copy.deepcopy(target)
+
+    def _merge(dst: Dict[str, Any], src: Dict[str, Any]) -> None:
+        for key, value in src.items():
+            if isinstance(value, dict) and isinstance(dst.get(key), dict):
+                _merge(dst[key], value)
+            else:
+                dst[key] = value
+
+    _merge(merged, updates)
+    return merged
 
 def get_app_config() -> Dict[str, Any]:
     """
@@ -13,7 +33,12 @@ def get_app_config() -> Dict[str, Any]:
         Dictionary with app configuration
     """
     try:
-        config = get_config()
+        try:
+            config = get_config()
+        except Exception:
+            # The web layer should not depend on startup order: load the
+            # configuration on demand if the singleton has none yet
+            config = get_config_manager().load_config()
         return {
             'web': {
                 'host': config.web_interface.host,
@@ -32,7 +57,8 @@ def get_app_config() -> Dict[str, Any]:
             }
         }
     except Exception as e:
-        return {'error': f'Failed to load configuration: {e}'}
+        current_app.logger.error(f'Failed to load configuration: {e}')
+        return {'error': 'Failed to load configuration'}
 
 
 @config_blueprint.route('', methods=['GET'])
@@ -44,6 +70,36 @@ def get_config_api():
     if 'error' in app_config:
         return jsonify({'success': False, 'error': app_config['error']}), 500
     return jsonify({'success': True, 'data': app_config})
+
+
+@config_blueprint.route('', methods=['POST'])
+@require_auth
+def update_config_api():
+    """
+    API endpoint to update the application configuration.
+
+    Accepts a partial configuration object which is deep-merged into the
+    current configuration, validated, and saved via the core ConfigManager.
+    """
+    try:
+        updates = request.get_json(silent=True)
+        if not updates or not isinstance(updates, dict):
+            return jsonify({'success': False, 'error': 'Request body must be a JSON object'}), 400
+
+        errors = validate_config_data(updates)
+        if errors:
+            return jsonify({'success': False, 'error': 'Validation failed', 'details': errors}), 400
+
+        config_manager = get_config_manager()
+        current = config_manager.get_config().to_dict()
+        merged = _deep_merge(current, updates)
+        new_config = PowerNightConfig.from_dict(merged)
+        config_manager.save_config(new_config)
+
+        return jsonify({'success': True, 'message': 'Configuration updated successfully'})
+    except Exception as e:
+        current_app.logger.error(f"Failed to update configuration: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update configuration'}), 500
 
 
 @config_blueprint.route('/timezone', methods=['GET'])
@@ -78,10 +134,12 @@ def get_timezone_api():
             }
         })
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        current_app.logger.error(f'Unhandled error: {e}')
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 
 @config_blueprint.route('/timezone', methods=['POST'])
+@require_auth
 def update_timezone_api():
     """
     API endpoint to update the timezone configuration.
@@ -115,7 +173,8 @@ def update_timezone_api():
             'data': {'timezone': new_timezone}
         })
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        current_app.logger.error(f'Unhandled error: {e}')
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 
 @config_blueprint.route('/timezones', methods=['GET'])
@@ -174,4 +233,5 @@ def get_timezones_api():
             }
         })
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        current_app.logger.error(f'Unhandled error: {e}')
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500

@@ -22,8 +22,11 @@ services:
     # Environment variables - configure via .env file
     environment:
       # Security settings
-      - POWERNIGHT_AUTH_ENABLED=true
-      - POWERNIGHT_API_KEY=${POWERNIGHT_API_KEY:-your-secure-api-key-here}
+      # Authentication is optional on trusted LANs. Providing a key
+      # automatically enables it; explicitly enabling auth without a usable
+      # credential makes PowerNight fail closed at startup.
+      - POWERNIGHT_AUTH_ENABLED
+      - POWERNIGHT_API_KEY
 
       # Tesla OAuth configuration
       - TESLA_CLIENT_ID=${TESLA_CLIENT_ID:-ownerapi}
@@ -64,7 +67,7 @@ services:
     # Labels for container management
     labels:
       - "com.zaai.powernight.description=Schedule Tesla Powerwall Grid-Charging during the night"
-      - "com.zaai.powernight.version=1.0.0"
+      - "com.zaai.powernight.version=2.0.0"
 
 
 # Named volumes for data persistence

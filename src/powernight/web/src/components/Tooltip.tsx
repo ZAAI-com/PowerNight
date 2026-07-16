@@ -71,16 +71,38 @@ const Tooltip: React.FC<TooltipProps> = ({
       updatePosition();
       const handleScroll = () => updatePosition();
       const handleResize = () => updatePosition();
-      
+
       window.addEventListener('scroll', handleScroll);
       window.addEventListener('resize', handleResize);
-      
+
       return () => {
         window.removeEventListener('scroll', handleScroll);
         window.removeEventListener('resize', handleResize);
       };
     }
+    // updatePosition is stable for the effect's purpose; re-subscribing on every
+    // render is unnecessary.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible, position]);
+
+  // Dismiss tooltip when tapping outside (touch support)
+  useEffect(() => {
+    if (!isVisible) return;
+    const handleOutside = (e: MouseEvent | TouchEvent) => {
+      if (
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target as Node)
+      ) {
+        setIsVisible(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
+  }, [isVisible]);
 
   const handleMouseEnter = () => {
     setIsVisible(true);
@@ -90,17 +112,23 @@ const Tooltip: React.FC<TooltipProps> = ({
     setIsVisible(false);
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault();
+    setIsVisible((prev) => !prev);
+  };
+
   return (
     <>
       <div
         ref={triggerRef}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        onTouchStart={handleTouchStart}
         className="inline-block"
       >
         {children}
       </div>
-      
+
       {isVisible && (
         <div
           ref={tooltipRef}

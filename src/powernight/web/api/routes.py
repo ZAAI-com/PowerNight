@@ -8,6 +8,9 @@ Serves the React SPA for all non-API routes.
 from flask import Blueprint, jsonify, current_app, send_from_directory
 from datetime import datetime, timezone
 import os
+import sys
+
+from ... import __version__
 
 
 # Create main blueprint
@@ -35,7 +38,7 @@ def health_check():
         health_status = {
             'status': 'healthy',
             'timestamp': datetime.now(timezone.utc).isoformat(),
-            'version': '1.0.0',
+            'version': __version__,
         }
         return jsonify(health_status), 200
 
@@ -57,14 +60,8 @@ def version_info():
     """
     return jsonify({
         'application': 'PowerNight',
-        'version': '1.0.0',
-        'build_date': '2025-10-18',
-        'python_version': '3.13+',
-        'dependencies': {
-            'flask': 'Flask>=2.3.0',
-            'pypowerwall': 'pypowerwall>=0.10.5',
-            'schedule': 'schedule>=1.2.0'
-        },
+        'version': __version__,
+        'python_version': f"{sys.version_info.major}.{sys.version_info.minor}",
         'features': [
             'Tesla Powerwall automation',
             'Scheduled backup reserve changes',

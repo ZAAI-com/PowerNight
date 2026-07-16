@@ -4,15 +4,11 @@ PowerNight Configuration Schema
 Defines the configuration structure and validation rules for PowerNight.
 """
 
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import time, datetime
-import json
-import yaml
-from pathlib import Path
 
 from .validators import (
-    validate_hostname_or_ip,
     validate_percentage,
     validate_time_format,
     validate_timezone,
@@ -22,7 +18,6 @@ from .validators import (
     validate_log_level,
     validate_email_format,
     ValidationError,
-    IPAddressValidationError,
     PercentageValidationError,
     TimeFormatValidationError
 )
@@ -138,7 +133,7 @@ class WebInterfaceSettings:
     host: str = "0.0.0.0"
     port: int = 8020
     debug: bool = False
-    auth_enabled: bool = False
+    auth_enabled: bool = False  # Credentials automatically opt in to authentication
     auth_required: bool = False  # Keep for backward compatibility
     username: Optional[str] = None
     password: Optional[str] = None
@@ -147,9 +142,16 @@ class WebInterfaceSettings:
 
     def __post_init__(self):
         """Post-initialization processing."""
-        # Map auth_required to auth_enabled for backward compatibility
-        if self.auth_required and not self.auth_enabled:
-            self.auth_enabled = self.auth_required
+        # Keep the legacy auth_required flag working, and automatically protect
+        # deployments that configure either supported credential type. This
+        # lets trusted-LAN installs run without a key while preserving existing
+        # protected deployments after an upgrade.
+        has_api_key = bool(self.api_key and self.api_key.strip())
+        has_basic_auth = bool(self.username and self.username.strip()) and bool(
+            self.password and self.password.strip()
+        )
+        if self.auth_required or has_api_key or has_basic_auth:
+            self.auth_enabled = True
 
     def validate(self) -> List[str]:
         """Validate web interface settings."""
@@ -161,12 +163,11 @@ class WebInterfaceSettings:
         except ValidationError as e:
             errors.append(str(e))
 
-        # Validate authentication settings
-        if self.auth_required:
-            if not self.username:
-                errors.append("Username required when auth is enabled")
-            if not self.password:
-                errors.append("Password required when auth is enabled")
+        # Basic authentication is only usable when both fields are present.
+        has_username = bool(self.username and self.username.strip())
+        has_password = bool(self.password and self.password.strip())
+        if has_username != has_password:
+            errors.append("Both username and password are required for Basic authentication")
 
         return errors
 
@@ -267,79 +268,6 @@ class PowerNightConfig:
         """Check if configuration is valid."""
         return len(self.validate()) == 0
 
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'PowerNightConfig':
-        """Create PowerNightConfig from dictionary."""
-        # Extract powerwall settings
-        powerwall_data = data.get('powerwall', {})
-        powerwall = PowerwallSettings(
-            tesla_email=powerwall_data.get('tesla_email', 'user@example.com'),
-            powerwall_id=powerwall_data.get('powerwall_id'),
-            timeout=powerwall_data.get('timeout', 30.0),
-            retry_attempts=powerwall_data.get('retry_attempts', 3),
-            verify_ssl=powerwall_data.get('verify_ssl', True)
-        )
-        
-        # Extract automation settings
-        automation_data = data.get('automation', {})
-        schedule_entries = []
-        for entry_data in automation_data.get('schedule', []):
-            schedule_entries.append(ScheduleEntry(
-                time=entry_data.get('time', '00:00'),
-                percentage=entry_data.get('percentage', 0.0),
-                enabled=entry_data.get('enabled', False),
-                description=entry_data.get('description', '')
-            ))
-        automation = AutomationSettings(
-            enabled=automation_data.get('enabled', False),
-            schedule=schedule_entries,
-            timezone=automation_data.get('timezone', 'UTC'),
-            check_interval=automation_data.get('check_interval', 60.0)
-        )
-        
-        # Extract web interface settings
-        web_data = data.get('web_interface', {})
-        web_interface = WebInterfaceSettings(
-            enabled=web_data.get('enabled', True),
-            host=web_data.get('host', '0.0.0.0'),
-            port=web_data.get('port', 8020),
-            debug=web_data.get('debug', False),
-            auth_required=web_data.get('auth_required', False),
-            username=web_data.get('username'),
-            password=web_data.get('password'),
-            api_key=web_data.get('api_key')
-        )
-        
-        # Extract logging settings
-        logging_data = data.get('logging', {})
-        logging = LoggingSettings(
-            level=logging_data.get('level', 'INFO'),
-            file_path=logging_data.get('file_path', 'logs/powernight.log'),
-            max_file_size=logging_data.get('max_file_size', '10MB'),
-            backup_count=logging_data.get('backup_count', 5),
-            console_output=logging_data.get('console_output', True),
-            format=logging_data.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        )
-        
-        # Extract monitoring settings
-        monitoring_data = data.get('monitoring', {})
-        monitoring = MonitoringSettings(
-            enabled=monitoring_data.get('enabled', False),
-            health_check_interval=monitoring_data.get('health_check_interval', 300.0),
-            circuit_breaker_enabled=monitoring_data.get('circuit_breaker_enabled', False),
-            circuit_breaker_failure_threshold=monitoring_data.get('circuit_breaker_failure_threshold', 5),
-            circuit_breaker_recovery_timeout=monitoring_data.get('circuit_breaker_recovery_timeout', 60.0),
-            data_cache_ttl=monitoring_data.get('data_cache_ttl', 30.0)
-        )
-        
-        return cls(
-            powerwall=powerwall,
-            automation=automation,
-            web_interface=web_interface,
-            logging=logging,
-            monitoring=monitoring
-        )
-
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
         return {
@@ -369,14 +297,17 @@ class PowerNightConfig:
                 'host': self.web_interface.host,
                 'port': self.web_interface.port,
                 'debug': self.web_interface.debug,
+                'auth_enabled': self.web_interface.auth_enabled,
                 'auth_required': self.web_interface.auth_required,
                 'username': self.web_interface.username,
                 'password': self.web_interface.password,
-                'api_key': self.web_interface.api_key
+                'api_key': self.web_interface.api_key,
+                'cors_origins': self.web_interface.cors_origins
             },
             'logging': {
                 'level': self.logging.level,
                 'file_path': self.logging.file_path,
+                'file_enabled': self.logging.file_enabled,
                 'max_file_size': self.logging.max_file_size,
                 'backup_count': self.logging.backup_count,
                 'console_output': self.logging.console_output,
@@ -406,7 +337,13 @@ class PowerNightConfig:
 
         automation_data = data.get('automation', {})
         schedule_entries = []
-        for entry_data in automation_data.get('schedule', []):
+        for i, entry_data in enumerate(automation_data.get('schedule', [])):
+            missing = [key for key in ('time', 'percentage') if key not in entry_data]
+            if missing:
+                raise ValueError(
+                    f"Schedule entry {i} is missing required key(s): {', '.join(missing)}. "
+                    f"Each entry needs 'time' (HH:MM) and 'percentage' (0-100)."
+                )
             schedule_entries.append(ScheduleEntry(
                 time=entry_data['time'],
                 percentage=entry_data['percentage'],
@@ -427,16 +364,19 @@ class PowerNightConfig:
             host=web_data.get('host', '0.0.0.0'),
             port=web_data.get('port', 8020),
             debug=web_data.get('debug', False),
+            auth_enabled=web_data.get('auth_enabled', False),
             auth_required=web_data.get('auth_required', False),
             username=web_data.get('username'),
             password=web_data.get('password'),
-            api_key=web_data.get('api_key')
+            api_key=web_data.get('api_key'),
+            cors_origins=web_data.get('cors_origins', ["*"])
         )
 
         logging_data = data.get('logging', {})
         logging_settings = LoggingSettings(
             level=logging_data.get('level', 'INFO'),
             file_path=logging_data.get('file_path', 'logs/powernight.log'),
+            file_enabled=logging_data.get('file_enabled', True),
             max_file_size=logging_data.get('max_file_size', '10MB'),
             backup_count=logging_data.get('backup_count', 5),
             console_output=logging_data.get('console_output', True),
@@ -463,17 +403,23 @@ class PowerNightConfig:
 
 
 def create_default_config() -> PowerNightConfig:
-    """Create a default configuration with example values."""
+    """Create a default configuration with example values.
+
+    Automation ships disabled: a generated example config must never be able
+    to command a real Powerwall until the user reviews and enables it.
+    """
     default_schedule = [
         ScheduleEntry(
             time="00:01",
             percentage=40.0,
-            description="Set reserve to 40% at start of night"
+            enabled=False,
+            description="Example: set reserve to 40% at start of night"
         ),
         ScheduleEntry(
             time="04:58",
             percentage=0.0,
-            description="Set reserve to 0% before sunrise"
+            enabled=False,
+            description="Example: set reserve to 0% before sunrise"
         )
     ]
 
@@ -485,7 +431,7 @@ def create_default_config() -> PowerNightConfig:
             verify_ssl=True
         ),
         automation=AutomationSettings(
-            enabled=True,
+            enabled=False,
             schedule=default_schedule,
             timezone="Europe/Berlin",
             check_interval=60.0
@@ -506,52 +452,6 @@ def create_default_config() -> PowerNightConfig:
             enabled=True,
             health_check_interval=300.0,
             circuit_breaker_enabled=True,
-            circuit_breaker_failure_threshold=5,
-            circuit_breaker_recovery_timeout=60.0,
-            data_cache_ttl=30.0
-        )
-    )
-
-
-def create_dummy_config() -> PowerNightConfig:
-    """Create a dummy/demo configuration for when Powerwall is not accessible.
-
-    This configuration uses placeholder values to allow the application
-    to start without a real Powerwall connection.
-    Useful for testing, development, and initial Docker container setup.
-    """
-    demo_schedule = []
-
-    return PowerNightConfig(
-        powerwall=PowerwallSettings(
-            tesla_email="demo@example.com",
-            powerwall_id="TG0123456789AB",
-            timeout=10.0,  # Shorter timeout for dummy mode
-            retry_attempts=1,  # Fewer retries in dummy mode
-            verify_ssl=False  # Relaxed SSL for demo
-        ),
-        automation=AutomationSettings(
-            enabled=False,  # Automation disabled in dummy mode
-            schedule=demo_schedule,
-            timezone="Europe/Berlin",  # Use Berlin timezone for demo
-            check_interval=60.0
-        ),
-        web_interface=WebInterfaceSettings(
-            enabled=True,  # Web interface still available
-            host="0.0.0.0",
-            port=8020,
-            debug=True,  # Debug mode enabled for demo
-            auth_required=False  # No auth required for demo
-        ),
-        logging=LoggingSettings(
-            level="INFO",
-            file_path="logs/powernight.log",
-            console_output=True
-        ),
-        monitoring=MonitoringSettings(
-            enabled=False,  # Monitoring disabled in dummy mode
-            health_check_interval=300.0,
-            circuit_breaker_enabled=False,  # No circuit breaker needed
             circuit_breaker_failure_threshold=5,
             circuit_breaker_recovery_timeout=60.0,
             data_cache_ttl=30.0

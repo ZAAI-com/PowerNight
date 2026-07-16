@@ -1,10 +1,14 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TaskExecutionLog, TaskExecutionLogsResponse } from '../types';
 import { api } from '../utils/api';
 import LogsTable from '../components/LogsTable';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorBoundary from '../components/ErrorBoundary';
 
+type StatusFilter = 'all' | 'success' | 'error';
+
+const LIMIT = 100;
+const TASK_NAME_DEBOUNCE_MS = 300;
 
 const History: React.FC = () => {
   // Task execution logs state
@@ -14,43 +18,48 @@ const History: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
 
-  // Use ref for offset to avoid re-render loops
-  const offsetRef = useRef(0);
-  const limit = 100;
+  // Filter state (both filters are supported server-side by
+  // GET /api/v1/logs/executions: status and task_name)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [taskNameFilter, setTaskNameFilter] = useState('');
 
-  const loadLogs = useCallback(async (resetOffset = false) => {
+  // Ignore responses from superseded requests (e.g. while typing in the
+  // task name filter) so a slow response cannot clobber newer results.
+  const requestIdRef = useRef(0);
+
+  const loadLogs = async (resetOffset = false) => {
+    const requestId = ++requestIdRef.current;
+
     try {
       setIsLoading(true);
       setError(null);
 
-      const currentOffset = resetOffset ? 0 : offsetRef.current;
-      const filterParams: any = {
-        limit,
-        offset: currentOffset
-      };
+      // Derive the offset from the already-loaded logs at request time
+      const currentOffset = resetOffset ? 0 : logs.length;
+      const trimmedTaskName = taskNameFilter.trim();
 
-
-      console.log('[History] Fetching logs with params:', filterParams);
-
-      const response: TaskExecutionLogsResponse = await api.getTaskExecutionLogs(filterParams);
-
-      console.log('[History] Received response:', {
-        logsCount: response.logs?.length || 0,
-        total: response.total,
-        hasMore: response.has_more
+      const response: TaskExecutionLogsResponse = await api.getTaskExecutionLogs({
+        limit: LIMIT,
+        offset: currentOffset,
+        ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+        ...(trimmedTaskName ? { task_name: trimmedTaskName } : {}),
       });
 
+      if (requestId !== requestIdRef.current) return;
+
+      const newLogs = Array.isArray(response.logs) ? response.logs : [];
+
       if (resetOffset) {
-        setLogs(response.logs || []);
-        offsetRef.current = 0;
+        setLogs(newLogs);
       } else {
-        setLogs(prev => [...prev, ...(response.logs || [])]);
-        offsetRef.current = currentOffset + (response.logs?.length || 0);
+        setLogs(prev => [...prev, ...newLogs]);
       }
 
       setTotal(response.total || 0);
       setHasMore(response.has_more || false);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+
       console.error('[History] Error loading history:', err);
       setError(err instanceof Error ? err.message : 'Failed to load history');
       // Set empty state on error
@@ -58,9 +67,11 @@ const History: React.FC = () => {
       setTotal(0);
       setHasMore(false);
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, []);
+  };
 
   const handleLoadMore = () => {
     if (!isLoading && hasMore) {
@@ -68,11 +79,15 @@ const History: React.FC = () => {
     }
   };
 
+  // Initial load and reload when filters change (task name is debounced)
   useEffect(() => {
-    console.log('[History] Component mounted, loading initial logs...');
-    loadLogs(true);
+    const timeoutId = setTimeout(() => {
+      loadLogs(true);
+    }, taskNameFilter ? TASK_NAME_DEBOUNCE_MS : 0);
+
+    return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [statusFilter, taskNameFilter]);
 
   return (
     <ErrorBoundary>
@@ -84,6 +99,51 @@ const History: React.FC = () => {
               <p className="mt-2 text-gray-600">
                 View and manage task execution history
               </p>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="mb-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+              <div className="flex flex-wrap gap-4 items-end">
+                <div>
+                  <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    id="status-filter"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All</option>
+                    <option value="success">Success</option>
+                    <option value="error">Error</option>
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <label htmlFor="task-name-filter" className="block text-sm font-medium text-gray-700 mb-1">
+                    Task Name
+                  </label>
+                  <input
+                    type="text"
+                    id="task-name-filter"
+                    value={taskNameFilter}
+                    onChange={(e) => setTaskNameFilter(e.target.value)}
+                    placeholder="Filter by task name..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                {(statusFilter !== 'all' || taskNameFilter) && (
+                  <button
+                    onClick={() => {
+                      setStatusFilter('all');
+                      setTaskNameFilter('');
+                    }}
+                    className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Results Summary */}

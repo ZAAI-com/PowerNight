@@ -43,17 +43,6 @@ export interface BackupReserveData {
   error?: string;
 }
 
-export interface ScheduleEntry {
-  id: string;
-  name: string;
-  time: string;
-  backup_reserve_percentage: number;
-  enabled: boolean;
-  description?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
 export type CommandType = 'mode' | 'reserve' | 'current' | 'gridcharging' | 'gridexport';
 
 export interface Task {
@@ -61,7 +50,7 @@ export interface Task {
   name: string;
   time: string;
   command: CommandType;
-  command_params: Record<string, any>;
+  command_params: Record<string, unknown>;
   enabled: boolean;
   last_execution?: string;
   last_status?: 'success' | 'error' | 'pending';
@@ -86,11 +75,23 @@ export interface ParamDefinition {
   unit?: string;
 }
 
+export interface TaskPreset {
+  id: string;
+  name: string;
+  command: CommandType;
+  command_params: Record<string, unknown>;
+  default_time?: string;
+  is_builtin: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface TaskFormData {
   name: string;
   time: string;
   command: CommandType;
-  command_params: Record<string, any>;
+  command_params: Record<string, unknown>;
   enabled: boolean;
 }
 
@@ -100,7 +101,7 @@ export interface TaskExecution {
   status: 'pending' | 'running' | 'success' | 'error';
   started_at: string;
   completed_at?: string;
-  result?: any;
+  result?: unknown;
   error_message?: string;
   created_at?: string;
   updated_at?: string;
@@ -112,8 +113,8 @@ export interface TaskExecutionLog {
   task_name: string;
   execution_type: 'scheduled' | 'manual';
   command: string;
-  command_params: Record<string, any>;
-  api_response: any;
+  command_params: Record<string, unknown>;
+  api_response: unknown;
   status: 'pending' | 'running' | 'success' | 'error';
   started_at: string;
   completed_at?: string;
@@ -142,12 +143,12 @@ export interface LogEntry {
   session_id?: string;
   request_id?: string;
   error_details?: string;
-  metadata?: Record<string, any>;
-  api_response?: Record<string, any>;
+  metadata?: Record<string, unknown>;
+  api_response?: Record<string, unknown>;
   response_size_bytes?: number;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -186,46 +187,11 @@ export interface Metrics {
   last_updated: string;
 }
 
-export interface NotificationConfig {
-  enabled: boolean;
-  email?: {
-    smtp_server: string;
-    smtp_port: number;
-    username: string;
-    password: string;
-    from_email: string;
-    to_emails: string[];
-  };
-  webhook?: {
-    url: string;
-    headers: Record<string, string>;
-  };
-}
-
-export interface ActivityEntry {
-  id: string;
-  timestamp: string;
-  action: string;
-  details: string;
-  status: 'success' | 'error' | 'warning';
-  user?: string;
-}
-
 // Form types
 export interface ReserveFormData {
   percentage: number;
   reason: string;
 }
-
-export interface ScheduleFormData {
-  name: string;
-  time: string;
-  action: 'set_reserve' | 'enable_automation' | 'disable_automation';
-  percentage?: number;
-  reason?: string;
-  enabled: boolean;
-}
-
 
 // UI State types
 export interface LoadingState {
@@ -251,7 +217,7 @@ export interface FilterState {
 // Event types
 export interface PowerNightEvent {
   type: 'status-update' | 'auth-required' | 'connection-error' | 'api-error';
-  detail?: any;
+  detail?: unknown;
 }
 
 export interface StatusUpdateEvent extends PowerNightEvent {

@@ -70,13 +70,23 @@ class ConfigBackupManager:
             backup_dir = self.get_backup_dir(config_path)
             backup_dir.mkdir(parents=True, exist_ok=True)
 
-            # Create timestamped backup filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Create timestamped backup filename; microseconds plus a
+            # collision counter so rapid consecutive saves never overwrite
+            # an earlier backup
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             backup_name = f"{config_path.stem}_{timestamp}{config_path.suffix}"
             backup_path = backup_dir / backup_name
+            counter = 1
+            while backup_path.exists():
+                backup_name = f"{config_path.stem}_{timestamp}_{counter}{config_path.suffix}"
+                backup_path = backup_dir / backup_name
+                counter += 1
 
             # Copy the configuration file
             shutil.copy2(config_path, backup_path)
+
+            # Backups can contain credentials; keep them owner-only
+            os.chmod(backup_path, 0o600)
 
             self.logger.info(f"Created configuration backup: {backup_path}")
 
@@ -307,11 +317,13 @@ class ConfigRecoveryManager:
         if self._try_restore_from_valid_backup(config_path):
             return config_path
 
-        # Strategy 3: Create a new default configuration
-        if self._try_create_default_config(config_path):
-            return config_path
-
-        self.logger.error("All recovery strategies failed")
+        # No fabricated defaults: recovery only ever restores verified backups.
+        # Overwriting the user's config with example values could silently
+        # enable automation against a real Powerwall.
+        self.logger.error(
+            "Configuration recovery failed: no valid backup available. "
+            f"Fix or restore {config_path} manually (see 'powernight-cli validate-config')."
+        )
         return None
 
     def _try_restore_from_backup(self, config_path: Path) -> bool:
@@ -358,24 +370,3 @@ class ConfigRecoveryManager:
 
         return False
 
-    def _try_create_default_config(self, config_path: Path) -> bool:
-        """Try to create a new default configuration."""
-        try:
-            from .manager import ConfigManager
-
-            self.logger.info("Creating new default configuration")
-
-            manager = ConfigManager()
-            manager.create_default_config_file(config_path)
-
-            # Verify the created config
-            if self.backup_manager.verify_backup(config_path):
-                self.logger.info("Successfully created default configuration")
-                return True
-            else:
-                self.logger.error("Created default configuration failed validation")
-
-        except Exception as e:
-            self.logger.error(f"Failed to create default configuration: {e}")
-
-        return False

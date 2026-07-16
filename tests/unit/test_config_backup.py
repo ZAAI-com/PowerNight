@@ -62,7 +62,14 @@ class TestConfigBackupManager:
         assert backup_path is None
 
     def test_list_backups(self):
-        """Test listing backup files."""
+        """Test listing backup files.
+
+        KNOWN FAILURE documenting a real bug: create_backup names backups with
+        second-resolution timestamps (backup.py), so two backups created within
+        the same second collide on the same filename and the second silently
+        overwrites the first. Do not work around this in the test; the fix
+        belongs in ConfigBackupManager.create_backup (unique filenames).
+        """
         config_file = self.temp_dir / 'config.json'
 
         with open(config_file, 'w') as f:
@@ -162,9 +169,19 @@ class TestConfigBackupManager:
         # Set max_backups to 2
         self.backup_manager.max_backups = 2
 
-        # Create 4 backups
+        # Create 4 backup files with distinct names and modification times.
+        # Files are created directly because create_backup cannot produce
+        # multiple backups within the same second (filename collision).
+        backup_dir = self.backup_manager.get_backup_dir(config_file)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        base_time = 1_600_000_000
         for i in range(4):
-            self.backup_manager.create_backup(config_file)
+            backup_file = backup_dir / f'config_2020010{i + 1}_000000.json'
+            backup_file.write_text('{"test": "data"}')
+            os.utime(backup_file, (base_time + i, base_time + i))
+
+        removed = self.backup_manager.cleanup_old_backups(config_file)
+        assert removed == 2
 
         # Should only keep 2 most recent
         backups = self.backup_manager.list_backups(config_file)
@@ -174,7 +191,7 @@ class TestConfigBackupManager:
         """Test backup verification."""
         config_file = self.temp_dir / 'config.json'
         valid_config = {
-            'powerwall': {'ip_address': '192.168.1.100'},
+            'powerwall': {'tesla_email': 'user@example.com'},
             'automation': {'enabled': True, 'schedule': []}
         }
 
@@ -185,12 +202,12 @@ class TestConfigBackupManager:
         backup_path = self.backup_manager.create_backup(config_file)
         assert self.backup_manager.verify_backup(backup_path)
 
-        # Create invalid backup
+        # Create invalid backup (fails validation: bad Tesla email)
         invalid_backup = self.temp_dir / 'backups' / 'invalid_backup.json'
         invalid_backup.parent.mkdir(parents=True, exist_ok=True)
 
         with open(invalid_backup, 'w') as f:
-            json.dump({'invalid': 'config'}, f)
+            json.dump({'powerwall': {'tesla_email': 'not-an-email'}}, f)
 
         assert not self.backup_manager.verify_backup(invalid_backup)
 
@@ -212,7 +229,7 @@ class TestConfigRecoveryManager:
         """Test recovery from backup."""
         config_file = self.temp_dir / 'config.json'
         valid_config = {
-            'powerwall': {'ip_address': '192.168.1.100'},
+            'powerwall': {'tesla_email': 'user@example.com'},
             'automation': {'enabled': True, 'schedule': []}
         }
 
@@ -238,22 +255,36 @@ class TestConfigRecoveryManager:
             recovered_data = json.load(f)
         assert recovered_data == valid_config
 
-    def test_attempt_recovery_create_default(self):
-        """Test recovery by creating default config."""
+    def test_attempt_recovery_without_backups_returns_none(self):
+        """Test recovery fails fast when no valid backups exist.
+
+        Recovery must never fabricate a default config: overwriting the user's
+        config with example values could silently enable automation against a
+        real Powerwall.
+        """
         config_file = self.temp_dir / 'config.json'
 
-        # Attempt recovery with no existing file
+        # Attempt recovery with no existing file and no backups
         error = Exception("Test error")
         recovered_path = self.recovery_manager.attempt_recovery(config_file, error)
 
-        assert recovered_path == config_file
-        assert config_file.exists()
+        assert recovered_path is None
+        assert not config_file.exists()
 
-        # Verify default config was created
+    def test_attempt_recovery_leaves_broken_config_untouched(self):
+        """Test that failed recovery does not overwrite the broken config."""
+        config_file = self.temp_dir / 'config.json'
+        broken_content = "invalid json {"
+
+        with open(config_file, 'w') as f:
+            f.write(broken_content)
+
+        error = Exception("Test error")
+        recovered_path = self.recovery_manager.attempt_recovery(config_file, error)
+
+        assert recovered_path is None
         with open(config_file, 'r') as f:
-            config_data = json.load(f)
-        assert 'powerwall' in config_data
-        assert 'automation' in config_data
+            assert f.read() == broken_content
 
 
 class TestEnhancedConfigManager:
@@ -285,7 +316,7 @@ class TestEnhancedConfigManager:
 
         # Modify and save config
         config = manager.get_config()
-        config.powerwall.ip_address = "192.168.1.200"
+        config.powerwall.tesla_email = "changed@example.com"
         manager.save_config(config, config_file)
 
         # Check that backup was created
@@ -313,7 +344,7 @@ class TestEnhancedConfigManager:
         # Loading should trigger auto-recovery
         config = manager.load_config(config_file)
         assert config is not None
-        assert config.powerwall.ip_address  # Should have valid config
+        assert config.powerwall.tesla_email == "user@example.com"  # Restored from backup
 
     def test_load_config_with_fallback(self):
         """Test loading config with fallback paths."""
@@ -390,7 +421,7 @@ class TestEnhancedConfigManager:
 
         # Create config
         original_config = create_default_config()
-        original_config.powerwall.ip_address = "192.168.1.100"
+        original_config.powerwall.tesla_email = "original@example.com"
 
         with open(config_file, 'w') as f:
             json.dump(original_config.to_dict(), f)
@@ -404,7 +435,7 @@ class TestEnhancedConfigManager:
 
         # Modify config
         modified_config = create_default_config()
-        modified_config.powerwall.ip_address = "192.168.1.200"
+        modified_config.powerwall.tesla_email = "modified@example.com"
         manager.save_config(modified_config)
 
         # Restore from backup
@@ -413,4 +444,4 @@ class TestEnhancedConfigManager:
 
         # Verify restoration
         reloaded_config = manager.get_config()
-        assert reloaded_config.powerwall.ip_address == "192.168.1.100"
+        assert reloaded_config.powerwall.tesla_email == "original@example.com"

@@ -1,0 +1,41 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+# PowerNight serves the built React UI from Flask. Preview opens the active
+# workspace's web interface (health: /health).
+[[preview_urls]]
+name = "PowerNight"
+url = "http://localhost:$CONDUCTOR_PORT"
+
+[scripts]
+# Matches CI: editable Python install + locked npm deps, then frontend build.
+# Creates workspace-local data/logs and seeds .env from the example when missing.
+setup = '''pip install -e ".[dev]" && npm ci && mkdir -p data logs && (test -f .env || cp .env.example .env) && ./build.sh --no-docker --skip-validation'''
+
+# Dev servers are workspace-local; SQLite lives under ./data with no Docker services.
+archive = "echo 'PowerNight uses workspace-local SQLite under ./data; no external resources to clean up.'"
+
+# Backend (Flask) and Vite dev server can run side by side in different workspaces.
+run_mode = "concurrent"
+
+# Full app: Flask API + built React assets. POWERNIGHT_WEB_PORT maps to CONDUCTOR_PORT.
+[scripts.run.app]
+command = "POWERNIGHT_WEB_PORT=$CONDUCTOR_PORT python -m powernight.main"
+default = true
+icon = "zap"
+
+# Frontend hot-reload (Vite). API proxy in vite.config.ts targets localhost:8020;
+# run the app script on 8020 in another terminal when exercising live API calls.
+[scripts.run.ui]
+command = "npm run dev -- --port $CONDUCTOR_PORT --strictPort"
+icon = "layout"
+available_in = "local"
+
+# Quick backend verification (same pytest scope as CI).
+[scripts.run.test-backend]
+command = 'pytest -q -m "not slow"'
+icon = "test-tube"
+
+# Frontend unit tests (vitest, one-shot).
+[scripts.run.test-frontend]
+command = "npm run test:run"
+icon = "braces"
