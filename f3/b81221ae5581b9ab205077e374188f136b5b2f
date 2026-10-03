@@ -1,0 +1,33 @@
+src/powernight/web/api/config_api.py
+  s_a3ac63a1949422::t_8df550237a5ad9 65
+src/powernight/web/api/auth_api.py
+  s_a3ac63a1949422::t_8df550237a5ad9 457-458,460,558-559,561
+src/powernight/web/src/pages/Dashboard.tsx
+  s_a3ac63a1949422::t_8df550237a5ad9 43
+tests/unit/test_auth_enforcement.py
+  s_a3ac63a1949422::t_a18eb12ad7ec65 10,99,128-203
+  s_a3ac63a1949422::t_290f988a81aa47 204-205
+src/powernight/web/test/utils/api.test.ts
+  s_a3ac63a1949422::t_fc094d931525af 35-38,131,138-161
+src/powernight/web/test/pages/Dashboard.test.tsx
+  s_a3ac63a1949422::t_fc094d931525af 2,36-51
+  s_a3ac63a1949422::t_96431bad42d81a 52
+src/powernight/web/test/e2e/tesla-setup.spec.ts
+  s_a3ac63a1949422::t_fc094d931525af 1-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f3b81221ae5581b9ab205077e374188f136b5b2f",
+  "prompts": {},
+  "sessions": {
+    "s_a3ac63a1949422": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ff1e-3caf-7d81-a74b-1937e8115551",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
