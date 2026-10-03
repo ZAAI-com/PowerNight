@@ -5,21 +5,43 @@ Creates and configures the Flask application with blueprints and error handling.
 """
 
 import os
-import time
-from typing import Optional, Dict, Any
+from typing import Optional
 
-from flask import request
 from flask import Flask
 
 from ..core.config import PowerNightConfig as Config
 from ..core.powerwall import PowerwallConnector
 from .api.routes import main_blueprint
 from .api import api_blueprint
-from .api.auth_api import auth_blueprint, init_auth_api
+from .api.auth_api import init_auth_api
 from .api.config_api import config_blueprint
 from .api.logs_api import logs_blueprint
 from .api.tasks_api import tasks_blueprint
 from .middleware import configure_middleware
+
+
+def _load_or_create_secret() -> str:
+    """Load the persisted Flask secret, generating it on first run."""
+    import secrets
+
+    data_path = os.environ.get('POWERNIGHT_DATA_PATH', 'data')
+    secret_file = os.path.join(data_path, '.flask_secret')
+    try:
+        if os.path.exists(secret_file):
+            with open(secret_file) as f:
+                value = f.read().strip()
+            if value:
+                return value
+        value = secrets.token_hex(32)
+        os.makedirs(data_path, exist_ok=True)
+        with open(secret_file, 'w') as f:
+            f.write(value)
+        os.chmod(secret_file, 0o600)
+        return value
+    except OSError:
+        # Fall back to an ephemeral secret rather than refusing to start;
+        # sessions will not survive restarts in this case
+        return secrets.token_hex(32)
 
 
 def create_app(
@@ -56,12 +78,36 @@ def create_app(
 
     # Store shared components on the app object
     app.powerwall_connector = powerwall_connector
+    app.testing = testing
+
+    # Session/signing secret: env var wins; otherwise persist a generated
+    # secret under the data path so sessions survive restarts
+    app.secret_key = os.environ.get('FLASK_SECRET_KEY') or _load_or_create_secret()
 
     # Load configuration
     app.config.from_object(config)
 
     # Configure middleware
     configure_middleware(app)
+
+    # Authentication failures must be 401s on every blueprint, not 500s
+    from .api.errors import AuthenticationError, AuthorizationError
+
+    @app.errorhandler(AuthenticationError)
+    def handle_authentication_error(error):
+        return {
+            'success': False,
+            'error': 'Authentication required',
+            'message': str(error)
+        }, 401
+
+    @app.errorhandler(AuthorizationError)
+    def handle_authorization_error(error):
+        return {
+            'success': False,
+            'error': 'Forbidden',
+            'message': str(error)
+        }, 403
 
     # Register blueprints
     # Main blueprint for serving React SPA (must be last for catch-all route)

@@ -39,7 +39,10 @@ def mock_config_data():
         "web_interface": {
             "enabled": True,
             "host": "0.0.0.0",
-            "port": 8080
+            "port": 8080,
+            # Endpoint-logic tests run with auth disabled; a dedicated test
+            # (test_auth_enforcement) exercises the auth-on path.
+            "auth_enabled": False
         },
         "logging": {
             "level": "INFO",
@@ -68,6 +71,38 @@ def mock_powerwall_connector():
     """Provide a mock Powerwall connector."""
     from unittest.mock import MagicMock
     return MagicMock()
+
+
+@pytest.fixture
+def app_config(mock_config_data):
+    """Provide a validated PowerNightConfig for tests."""
+    from powernight.core.config.schema import PowerNightConfig
+    return PowerNightConfig.from_dict(mock_config_data)
+
+
+@pytest.fixture
+def app(app_config, mock_powerwall_connector, temp_dir, monkeypatch):
+    """Provide a Flask app built through the real factory in testing mode."""
+    from powernight.web.app import create_app
+
+    # Point static serving at an existing temp dir so SPA routes don't 500
+    static_dir = temp_dir / "dist"
+    static_dir.mkdir(exist_ok=True)
+    (static_dir / "index.html").write_text("<html><body>PowerNight test</body></html>")
+    monkeypatch.setenv("POWERNIGHT_STATIC_PATH", str(static_dir))
+
+    flask_app = create_app(
+        app_config,
+        testing=True,
+        powerwall_connector=mock_powerwall_connector,
+    )
+    return flask_app
+
+
+@pytest.fixture
+def client(app):
+    """Provide a Flask test client."""
+    return app.test_client()
 
 
 @pytest.fixture

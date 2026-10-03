@@ -47,10 +47,6 @@ check_requirements() {
         exit 1
     fi
 
-    if ! command -v jq &> /dev/null; then
-        log_warning "jq is not installed. Will use basic parsing (install jq for better results)"
-    fi
-
     log_success "All requirements satisfied"
 }
 
@@ -141,23 +137,17 @@ get_backend_dependencies() {
         return
     fi
 
-    # Extract key dependencies with versions
-    # This is a simplified parser - ideally use a TOML parser
-    DEPS=$(cat <<'EOF'
-{
-  "flask": ">=2.3.0",
-  "pypowerwall": ">=0.10.5",
-  "schedule": ">=1.2.0",
-  "pyyaml": ">=6.0.1",
-  "sqlalchemy": "Implicit (via Flask-SQLAlchemy)",
-  "requests": ">=2.31.0",
-  "structlog": ">=23.1.0",
-  "tenacity": ">=8.2.0"
-}
-EOF
-)
+    python3 - <<'PY'
+import json
+import re
+import tomllib
+from pathlib import Path
 
-    echo "$DEPS"
+dependencies = tomllib.loads(Path("pyproject.toml").read_text())["project"]["dependencies"]
+print(json.dumps({name.lower(): version for name, version in (
+    re.split(r"(?=[<>=!~])", dep, maxsplit=1) for dep in dependencies
+)}))
+PY
 }
 
 # Extract frontend dependencies from package.json
@@ -169,38 +159,15 @@ get_frontend_dependencies() {
         return
     fi
 
-    if command -v jq &> /dev/null; then
-        # Use jq for proper JSON parsing
-        DEPS=$(jq -r '{
-            react: .dependencies.react,
-            "react-dom": .dependencies["react-dom"],
-            "react-router-dom": .dependencies["react-router-dom"],
-            axios: .dependencies.axios,
-            "date-fns": .dependencies["date-fns"],
-            vite: .devDependencies.vite,
-            typescript: .devDependencies.typescript,
-            tailwindcss: .devDependencies.tailwindcss,
-            "@vitejs/plugin-react": .devDependencies["@vitejs/plugin-react"]
-        }' package.json)
-    else
-        # Fallback: Basic parsing without jq
-        DEPS=$(cat <<'EOF'
-{
-  "react": "^18.2.0",
-  "react-dom": "^18.2.0",
-  "react-router-dom": "^6.20.1",
-  "axios": "^1.6.2",
-  "date-fns": "^2.30.0",
-  "vite": "^7.1.9",
-  "typescript": "^5.2.2",
-  "tailwindcss": "^4.1.14",
-  "@vitejs/plugin-react": "^4.2.1"
-}
-EOF
-)
-    fi
+    python3 - <<'PY'
+import json
+from pathlib import Path
 
-    echo "$DEPS"
+package = json.loads(Path("package.json").read_text())
+dependencies = package["dependencies"]
+tools = ("vite", "typescript", "tailwindcss", "@vitejs/plugin-react")
+print(json.dumps({**dependencies, **{name: package["devDependencies"][name] for name in tools}}))
+PY
 }
 
 # Generate version-info.json

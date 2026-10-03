@@ -13,7 +13,7 @@ Features:
 - Comprehensive logging and metrics
 """
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __author__ = "PowerNight Team"
 __email__ = "powernight@zaai.com"
 __description__ = "Tesla Powerwall Backup Reserve Automation"

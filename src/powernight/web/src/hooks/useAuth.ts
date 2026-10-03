@@ -49,11 +49,18 @@ export function useAuth() {
 
   // Check authentication requirements on mount
   useEffect(() => {
+    // Ignore stale results: if the component unmounts (or the effect
+    // re-runs) before the request resolves, a slow response must not
+    // clobber auth state set elsewhere (e.g. by a faster login()).
+    let cancelled = false;
+
     const checkAuthRequirements = async () => {
       try {
         const authRequired = await api.checkAuthRequired();
+        if (cancelled) return;
+
         const hasApiKey = api.isAuthenticated();
-        
+
         if (!authRequired) {
           // Authentication is disabled, we're always "authenticated"
           setAuthState({
@@ -74,7 +81,9 @@ export function useAuth() {
             error: 'Authentication required'
           });
         }
-      } catch (error) {
+      } catch {
+        if (cancelled) return;
+
         // If we can't check auth requirements, assume auth is required
         setAuthState({
           isAuthenticated: false,
@@ -85,6 +94,10 @@ export function useAuth() {
     };
 
     checkAuthRequirements();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Listen for auth events

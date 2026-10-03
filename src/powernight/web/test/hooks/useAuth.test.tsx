@@ -1,30 +1,36 @@
-import { renderHook, act } from '@testing-library/react';
+import { vi, type Mocked } from 'vitest';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAuth } from '../../src/hooks/useAuth';
 import { api } from '../../src/utils/api';
 
 // Mock the API
-jest.mock('../../src/utils/api', () => ({
+vi.mock('../../src/utils/api', () => ({
   api: {
-    isAuthenticated: jest.fn(),
-    authenticate: jest.fn(),
-    logout: jest.fn(),
+    isAuthenticated: vi.fn(),
+    authenticate: vi.fn(),
+    logout: vi.fn(),
+    checkAuthRequired: vi.fn(),
   },
 }));
 
-const mockApi = api as jest.Mocked<typeof api>;
+const mockApi = api as Mocked<typeof api>;
 
 describe('useAuth', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockApi.isAuthenticated.mockReturnValue(false);
+    // Default: auth is required and no API key present -> unauthenticated.
+    mockApi.checkAuthRequired.mockResolvedValue(true);
   });
 
-  it('should initialize with unauthenticated state', () => {
+  it('should initialize to unauthenticated when auth is required and no key is set', async () => {
     const { result } = renderHook(() => useAuth());
 
+    // The mount effect resolves checkAuthRequired asynchronously; wait for it.
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
     expect(result.current.isAuthenticated).toBe(false);
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.error).toBeUndefined();
+    expect(result.current.error).toBe('Authentication required');
   });
 
   it('should handle successful login', async () => {

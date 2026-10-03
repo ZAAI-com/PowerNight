@@ -3,7 +3,6 @@ powerwall:
   powerwall_id: ""
   timeout: 10.0
   retry_attempts: 3
-  cloud_mode_enabled: true
   verify_ssl: true
 
 automation:
@@ -17,7 +16,10 @@ web_interface:
   host: 0.0.0.0
   port: 8020
   debug: false
-  auth_required: false
+  # Authentication is optional for trusted local networks. Supplying an
+  # api_key (or POWERNIGHT_API_KEY) automatically enables it.
+  auth_enabled: false
+  api_key: ""
 
 logging:
   level: INFO

@@ -5,6 +5,7 @@ Provides database connection, session management, and configuration.
 """
 
 import os
+import threading
 from typing import Optional, Generator
 from contextlib import contextmanager
 from sqlalchemy import create_engine, text
@@ -13,8 +14,7 @@ from sqlalchemy.pool import StaticPool
 from sqlalchemy.exc import SQLAlchemyError
 
 from .models import Base
-from .exceptions import DatabaseConnectionError, DatabaseError
-from ..config.manager import get_config
+from .exceptions import DatabaseConnectionError
 
 
 class DatabaseManager:
@@ -33,16 +33,21 @@ class DatabaseManager:
         self._initialized = False
     
     def _get_database_url(self) -> str:
-        """Get database URL from configuration."""
+        """Get database URL from the data-path environment setting."""
         try:
-            config = get_config()
             # Use environment variable for data path, fallback to default structure
             data_path = os.environ.get('POWERNIGHT_DATA_PATH', os.path.join(os.getcwd(), 'data'))
             db_path = os.path.join(data_path, 'powernight.db')
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
             return f"sqlite:///{db_path}"
-        except Exception as e:
-            # Fallback to in-memory SQLite for development
+        except OSError as e:
+            # Fall back to in-memory SQLite so the app can still start, but be
+            # loud about it: nothing will be persisted.
+            import logging
+            logging.getLogger(__name__).error(
+                f"Data directory is not writable ({e}); using in-memory database. "
+                "Nothing will be persisted across restarts."
+            )
             return "sqlite:///:memory:"
     
     def initialize(self) -> None:
@@ -124,14 +129,18 @@ class DatabaseManager:
 
 # Global database manager instance
 _db_manager: Optional[DatabaseManager] = None
+_db_manager_lock = threading.Lock()
 
 
 def get_database_manager() -> DatabaseManager:
-    """Get the global database manager instance."""
+    """Get the global database manager instance (thread-safe)."""
     global _db_manager
     if _db_manager is None:
-        _db_manager = DatabaseManager()
-        _db_manager.initialize()
+        with _db_manager_lock:
+            if _db_manager is None:
+                manager = DatabaseManager()
+                manager.initialize()
+                _db_manager = manager
     return _db_manager
 
 

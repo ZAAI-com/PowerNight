@@ -1,5 +1,5 @@
 import { format, parseISO, isValid } from 'date-fns';
-import { formatDateTime } from './dateTimeFormatter';
+import { formatDateTime, formatRelativeTime as formatRelativeTimeImpl } from './dateTimeFormatter';
 
 // Date formatting utilities
 export const formatDate = (date: string | Date, formatString: string = 'yyyy-MM-dd HH:mm:ss'): string => {
@@ -36,9 +36,8 @@ export const formatTime24 = (date: string | Date): string => {
 };
 
 export const formatRelativeTime = (date: string | Date): string => {
-  // Use the new centralized formatter
-  const { formatRelativeTime: newFormatRelativeTime } = require('./dateTimeFormatter');
-  return newFormatRelativeTime(date);
+  // Delegates to the centralized formatter.
+  return formatRelativeTimeImpl(date);
 };
 
 // Log level utilities
@@ -240,7 +239,7 @@ export const storage = {
 };
 
 // Debounce utility
-export const debounce = <T extends (...args: any[]) => any>(
+export const debounce = <T extends (...args: never[]) => unknown>(
   func: T,
   wait: number
 ): ((...args: Parameters<T>) => void) => {
@@ -253,7 +252,7 @@ export const debounce = <T extends (...args: any[]) => any>(
 };
 
 // Throttle utility
-export const throttle = <T extends (...args: any[]) => any>(
+export const throttle = <T extends (...args: never[]) => unknown>(
   func: T,
   limit: number
 ): ((...args: Parameters<T>) => void) => {

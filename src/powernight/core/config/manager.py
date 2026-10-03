@@ -12,9 +12,8 @@ import threading
 from typing import Optional, Dict, Any, List, Union
 from pathlib import Path
 
-from .schema import PowerNightConfig, create_default_config, create_dummy_config
-from .exceptions import ConfigurationError, ValidationError
-from ..powerwall.exceptions import PowerwallValidationError
+from .schema import PowerNightConfig, create_default_config
+from .exceptions import ConfigurationError
 
 
 class ConfigManager:
@@ -178,6 +177,12 @@ class ConfigManager:
                 else:
                     with open(config_path, 'w') as f:
                         json.dump(config_dict, f, indent=2)
+
+                # Keep the in-memory singleton in sync: everything that calls
+                # get_config() (auth checks, scheduler, API reads) must see
+                # the saved settings without a restart
+                self._config = config
+                self._config_path = config_path
 
                 self.logger.info(f"Configuration saved to {config_path}")
 
@@ -354,6 +359,9 @@ class ConfigManager:
             'POWERNIGHT_WEB_PORT': ('web_interface', 'port'),
             'POWERNIGHT_WEB_HOST': ('web_interface', 'host'),
             'POWERNIGHT_WEB_DEBUG': ('web_interface', 'debug'),
+            'POWERNIGHT_AUTH_ENABLED': ('web_interface', 'auth_enabled'),
+            'POWERNIGHT_API_KEY': ('web_interface', 'api_key'),
+            'TESLA_EMAIL': ('powerwall', 'tesla_email'),
             'POWERNIGHT_POWERWALL_EMAIL': ('powerwall', 'tesla_email'),
             'POWERNIGHT_POWERWALL_TIMEOUT': ('powerwall', 'timeout'),
             'POWERNIGHT_AUTOMATION_ENABLED': ('automation', 'enabled'),
@@ -375,7 +383,7 @@ class ConfigManager:
                         config_data[section][key] = int(value)
                     elif key in ['timeout', 'check_interval', 'health_check_interval', 'circuit_breaker_recovery_timeout', 'data_cache_ttl']:
                         config_data[section][key] = float(value)
-                    elif key in ['enabled', 'debug', 'verify_ssl', 'auth_required', 'console_output', 'circuit_breaker_enabled']:
+                    elif key in ['enabled', 'debug', 'verify_ssl', 'auth_enabled', 'auth_required', 'console_output', 'circuit_breaker_enabled']:
                         config_data[section][key] = value.lower() in ('true', '1', 'yes', 'on')
                     else:
                         config_data[section][key] = value
@@ -511,98 +519,6 @@ class ConfigManager:
         # All paths failed
         error_msg = "Failed to load configuration from any path:\n" + "\n".join(f"  - {error}" for error in errors)
         raise ConfigurationError(error_msg)
-
-    def _test_powerwall_connectivity(self, config: PowerNightConfig) -> bool:
-        """
-        Test if Powerwall is accessible with the given configuration.
-
-        Args:
-            config: Configuration to test
-
-        Returns:
-            True if Powerwall is accessible, False otherwise
-        """
-        try:
-            from ..powerwall import PowerwallConnector
-            connector = PowerwallConnector(
-                email=config.powerwall.tesla_email,
-                powerwall_id=config.powerwall.powerwall_id
-            )
-            connector.test_connection()
-            return True
-        except Exception as e:
-            self.logger.warning(f"Powerwall connectivity test failed: {e}")
-            return False
-
-    def load_config_with_powerwall_fallback(self, config_path: Optional[Union[str, Path]] = None,
-                                          dummy_config_path: Optional[Union[str, Path]] = None) -> PowerNightConfig:
-        """
-        Load configuration with automatic fallback to dummy config if Powerwall is not accessible.
-
-        This method first tries to load the normal configuration. If that succeeds, it tests
-        Powerwall connectivity. If the Powerwall is not accessible, it creates and loads
-        a dummy configuration instead.
-
-        Args:
-            config_path: Path to primary configuration file
-            dummy_config_path: Path to save dummy configuration if needed
-
-        Returns:
-            PowerNightConfig object (either real or dummy)
-
-        Raises:
-            ConfigurationError: If configuration cannot be loaded at all
-        """
-        try:
-            # First try to load normal configuration
-            config = self.load_config(config_path)
-            self.logger.info("Primary configuration loaded successfully")
-
-            # Test Powerwall connectivity
-            if self._test_powerwall_connectivity(config):
-                self.logger.info("Powerwall connectivity confirmed")
-                return config
-            else:
-                self.logger.warning("Powerwall not accessible, falling back to dummy configuration")
-
-        except ConfigurationError as e:
-            self.logger.warning(f"Failed to load primary configuration: {e}")
-            self.logger.info("Falling back to dummy configuration")
-
-        # Create or load dummy configuration
-        try:
-            if dummy_config_path is None:
-                # Generate a default dummy config path based on primary config path
-                if config_path:
-                    primary_path = Path(config_path)
-                    dummy_config_path = primary_path.parent / "dummy-config.yaml"
-                else:
-                    dummy_config_path = Path("./config/dummy-config.yaml")
-
-            dummy_config_path = Path(dummy_config_path)
-
-            # Check if dummy config already exists
-            if dummy_config_path.exists():
-                self.logger.info(f"Loading existing dummy configuration from {dummy_config_path}")
-                return self.load_config(dummy_config_path)
-
-            # Create new dummy configuration
-            self.logger.info(f"Creating new dummy configuration at {dummy_config_path}")
-            dummy_config = create_dummy_config()
-
-            # Ensure directory exists
-            dummy_config_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Save dummy config
-            self.save_config(dummy_config, dummy_config_path)
-
-            # Load and return the dummy config
-            return self.load_config(dummy_config_path)
-
-        except Exception as e:
-            error_msg = f"Failed to create or load dummy configuration: {e}"
-            self.logger.error(error_msg)
-            raise ConfigurationError(error_msg)
 
     def get_config_status(self) -> Dict[str, Any]:
         """

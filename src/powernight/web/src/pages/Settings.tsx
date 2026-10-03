@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatDateTimeWithTimezone } from '../utils/dateTimeFormatter';
 import { useTimezone } from '../contexts/TimezoneContext';
+import { useToast } from '../contexts/ToastContext';
 import api from '../utils/api';
 import { getAllCommonTimezones } from '../utils/timezones';
 
@@ -25,6 +26,10 @@ interface AuthInfo {
   access_token_masked?: string;
   refresh_token_masked?: string;
   message?: string;
+  connected?: boolean;
+  connection_status?: 'connected' | 'disconnected' | 'unknown';
+  last_connection_attempt?: string | null;
+  connection_error?: string | null;
 }
 
 interface VersionInfo {
@@ -51,6 +56,7 @@ type FlowStep = 'initial' | 'awaiting_login' | 'awaiting_callback' | 'selecting_
 const Settings: React.FC = () => {
   // Get timezone context
   const { timezoneInfo, currentTime, isLoading: timezoneLoading, refreshTimezone } = useTimezone();
+  const { showToast } = useToast();
 
   // OAuth Flow State
   const [currentStep, setCurrentStep] = useState<FlowStep>('initial');
@@ -62,6 +68,7 @@ const Settings: React.FC = () => {
   // Auth Info State
   const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
   const [authInfoLoading, setAuthInfoLoading] = useState(false);
+  const [connectionTesting, setConnectionTesting] = useState(false);
 
   // Version Info State
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
@@ -69,9 +76,8 @@ const Settings: React.FC = () => {
 
   // Timezone State
   const [availableTimezones, setAvailableTimezones] = useState<TimezoneOption[]>(getAllCommonTimezones()); // Initialize with local timezones
-  const [selectedTimezone, setSelectedTimezone] = useState<string>('Europe/Berlin'); // Default to Berlin
+  const [selectedTimezone, setSelectedTimezone] = useState<string>('Europe/Berlin'); // Pre-load placeholder only; replaced by the configured timezone on mount
   const [timezoneSaving, setTimezoneSaving] = useState(false);
-  const [timezoneSuccess, setTimezoneSuccess] = useState<string | null>(null);
   const [isEditingTimezone, setIsEditingTimezone] = useState(false);
 
   // UI State
@@ -104,7 +110,7 @@ const Settings: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/setup/start', {
+      const response = await api.authenticatedFetch('/api/auth/setup/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -117,11 +123,14 @@ const Settings: React.FC = () => {
         setCurrentStep('awaiting_login');
 
         // Open Tesla auth in NEW browser tab
-        window.open(data.auth_url, '_blank');
+        const authWindow = window.open(data.auth_url, '_blank');
+        if (!authWindow) {
+          setError('The Tesla authorization popup was blocked by your browser. Please allow popups for this site and try again.');
+        }
       } else {
         setError(data.error || 'Failed to start authentication');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to connect to server');
     } finally {
       setIsLoading(false);
@@ -145,7 +154,7 @@ const Settings: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/setup/callback', {
+      const response = await api.authenticatedFetch('/api/auth/setup/callback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, callback_url: callbackUrl }),
@@ -165,7 +174,7 @@ const Settings: React.FC = () => {
       } else {
         setError(data.error || 'Failed to verify callback URL');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to connect to server');
     } finally {
       setIsLoading(false);
@@ -176,7 +185,7 @@ const Settings: React.FC = () => {
     if (!sessionId) return;
 
     try {
-      const response = await fetch('/api/auth/setup/complete', {
+      const response = await api.authenticatedFetch('/api/auth/setup/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, site_id: siteId }),
@@ -186,10 +195,15 @@ const Settings: React.FC = () => {
 
       if (data.success) {
         setCurrentStep('complete');
+        await fetchAuthInfo();
+      } else if (data.credentials_saved) {
+        setCurrentStep('complete');
+        await fetchAuthInfo();
+        setError(data.connection_error || data.message || 'Tesla credentials were saved, but the live connection failed.');
       } else {
         setError(data.error || 'Failed to complete setup');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to complete setup');
     }
   };
@@ -197,7 +211,7 @@ const Settings: React.FC = () => {
   const fetchAuthInfo = async () => {
     setAuthInfoLoading(true);
     try {
-      const response = await fetch('/api/auth/tesla/info');
+      const response = await api.authenticatedFetch('/api/auth/tesla/info');
       const data = await response.json();
 
       if (data.success) {
@@ -218,7 +232,7 @@ const Settings: React.FC = () => {
   const fetchVersionInfo = async () => {
     setVersionLoading(true);
     try {
-      const response = await fetch('/api/v1/version-info.json');
+      const response = await api.authenticatedFetch('/api/v1/version-info.json');
 
       if (!response.ok) {
         console.error(`Failed to fetch version info: HTTP ${response.status} ${response.statusText}`);
@@ -237,6 +251,30 @@ const Settings: React.FC = () => {
       });
     } finally {
       setVersionLoading(false);
+    }
+  };
+
+  const testTeslaConnection = async () => {
+    setConnectionTesting(true);
+    setError(null);
+    try {
+      const response = await api.authenticatedFetch('/api/auth/tesla/test-connection', {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (data.success) {
+        setAuthInfo((current) => current ? { ...current, ...data.data } : current);
+        showToast('Tesla cloud connection successful', 'success');
+      } else {
+        setAuthInfo((current) => current ? { ...current, ...data.data, connected: false } : current);
+        setError(data.error || 'Tesla cloud connection failed');
+        showToast(data.error || 'Tesla cloud connection failed', 'error');
+      }
+    } catch {
+      setError('Failed to test Tesla cloud connection');
+      showToast('Failed to test Tesla cloud connection', 'error');
+    } finally {
+      setConnectionTesting(false);
     }
   };
 
@@ -262,38 +300,44 @@ const Settings: React.FC = () => {
 
   const handleSaveAndReloadTimezone = async () => {
     setTimezoneSaving(true);
-    setTimezoneSuccess(null);
     setError(null);
 
     try {
       // Save timezone
       await api.updateTimezone(selectedTimezone);
-      
+
       // Reload all tasks with new timezone
       const reloadResult = await api.reloadAllTasks();
-      setTimezoneSuccess(reloadResult.message);
+      showToast(reloadResult.message || 'Timezone saved and tasks reloaded', 'success');
 
       // Refresh timezone info
       refreshTimezone();
-      
+
       // Exit edit mode
       setIsEditingTimezone(false);
-      
-      // Clear success message after 5 seconds
-      setTimeout(() => {
-        setTimezoneSuccess(null);
-      }, 5000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save timezone');
+      showToast(err instanceof Error ? err.message : 'Failed to save timezone', 'error');
     } finally {
       setTimezoneSaving(false);
     }
   };
 
-  // Load auth info, version info, and available timezones on component mount
+  const fetchCurrentTimezone = async () => {
+    try {
+      const data = await api.getTimezone();
+      setSelectedTimezone(data.timezone);
+    } catch (err) {
+      console.error('Failed to fetch current timezone:', err);
+      // Keep the pre-load placeholder; the timezoneInfo effect below will
+      // correct it once the context loads.
+    }
+  };
+
+  // Load auth info, version info, timezone, and available timezones on component mount
   useEffect(() => {
     fetchAuthInfo();
     fetchVersionInfo();
+    fetchCurrentTimezone();
     fetchAvailableTimezones();
   }, []);
 
@@ -327,19 +371,19 @@ const Settings: React.FC = () => {
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                     Tesla Account Email
                   </label>
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <input
                       type="email"
                       id="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="your-email@example.com"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
                       onClick={handleConnect}
                       disabled={isLoading}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoading ? 'Connecting...' : 'Connect'}
                     </button>
@@ -360,19 +404,19 @@ const Settings: React.FC = () => {
                   <label htmlFor="callbackUrl" className="block text-sm font-medium text-gray-700 mb-2">
                     URL of the Tesla Not-Found Page
                   </label>
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <input
                       type="text"
                       id="callbackUrl"
                       value={callbackUrl}
                       onChange={(e) => setCallbackUrl(e.target.value)}
                       placeholder="https://auth.tesla.com/void/callback?code=abc123&state=xyz789"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
                       onClick={handleVerify}
                       disabled={isLoading}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoading ? 'Verifying...' : 'Verify'}
                     </button>
@@ -383,9 +427,17 @@ const Settings: React.FC = () => {
 
             {(currentStep === 'selecting_site' || currentStep === 'complete') && (
               <div className="space-y-4">
-                <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                  <p className="text-green-800 font-medium">✅ Tesla Account connected</p>
-                  <p className="text-green-700 text-sm mt-1">Email: {email}</p>
+                <div className={`p-4 border rounded-md ${
+                  authInfo?.connected
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-yellow-50 border-yellow-200'
+                }`}>
+                  <p className={`font-medium ${authInfo?.connected ? 'text-green-800' : 'text-yellow-800'}`}>
+                    {authInfo?.connected ? '✅ Tesla cloud connected' : '⚠️ Tesla credentials stored; live connection unavailable'}
+                  </p>
+                  <p className={`text-sm mt-1 ${authInfo?.connected ? 'text-green-700' : 'text-yellow-700'}`}>
+                    Email: {email}
+                  </p>
                 </div>
               </div>
             )}
@@ -455,9 +507,9 @@ const Settings: React.FC = () => {
                 </div>
               ) : authInfo.authenticated ? (
                 <div className="space-y-4">
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                    <p className="text-green-800 font-medium">✅ PyPowerwall authentication file found</p>
-                    <p className="text-green-700 text-sm mt-1">Authentication data is available and ready to use</p>
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                    <p className="text-blue-800 font-medium">Tesla credentials stored</p>
+                    <p className="text-blue-700 text-sm mt-1">Token validity and live Tesla cloud connectivity are shown separately below.</p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -518,6 +570,40 @@ const Settings: React.FC = () => {
                   </div>
 
                   <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-3">Live Connection</h3>
+                    <dl className="space-y-2">
+                      <div>
+                        <dt className="text-sm font-medium text-gray-500">Status</dt>
+                        <dd className="text-sm">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            authInfo.connected
+                              ? 'bg-green-100 text-green-800'
+                              : authInfo.connection_status === 'disconnected'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {authInfo.connected ? 'Connected' : authInfo.connection_status === 'disconnected' ? 'Disconnected' : 'Unknown'}
+                          </span>
+                        </dd>
+                      </div>
+                      {authInfo.last_connection_attempt && (
+                        <div>
+                          <dt className="text-sm font-medium text-gray-500">Last Attempt</dt>
+                          <dd className="text-sm text-gray-900 font-mono">
+                            {formatDateTimeWithTimezone(authInfo.last_connection_attempt, timezoneInfo?.timezone)}
+                          </dd>
+                        </div>
+                      )}
+                      {authInfo.connection_error && (
+                        <div>
+                          <dt className="text-sm font-medium text-gray-500">Connection Error</dt>
+                          <dd className="text-sm text-red-700">{authInfo.connection_error}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  </div>
+
+                  <div>
                     <h3 className="text-lg font-medium text-gray-900 mb-3">Token Information</h3>
                     <dl className="space-y-2">
                       <div>
@@ -561,9 +647,19 @@ const Settings: React.FC = () => {
                     </dl>
                   </div>
 
-                  <div className="pt-4 border-t border-gray-200">
+                  <div className="pt-4 border-t border-gray-200 flex flex-wrap gap-3">
+                    <button
+                      onClick={testTeslaConnection}
+                      disabled={connectionTesting}
+                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {connectionTesting
+                        ? 'Testing Connection...'
+                        : authInfo.connected ? 'Test Connection' : 'Retry Connection'}
+                    </button>
                     <button
                       onClick={fetchAuthInfo}
+                      disabled={authInfoLoading}
                       className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
                     >
                       Refresh Auth Info
@@ -598,13 +694,13 @@ const Settings: React.FC = () => {
                   <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 mb-2">
                     Timezone
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <select
                       id="timezone"
                       value={selectedTimezone}
                       onChange={(e) => handleTimezoneChange(e.target.value)}
                       disabled={!isEditingTimezone}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100"
                     >
                       {availableTimezones.length === 0 && (
                         <option value="Europe/Berlin">Europe/Berlin (Germany)</option>
@@ -618,7 +714,7 @@ const Settings: React.FC = () => {
                     <button
                       onClick={isEditingTimezone ? handleSaveAndReloadTimezone : handleEditTimezone}
                       disabled={timezoneSaving}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
                       {timezoneSaving ? 'Saving...' : (isEditingTimezone ? 'Save' : 'Edit')}
                     </button>
@@ -641,11 +737,6 @@ const Settings: React.FC = () => {
                   </p>
                 </div>
 
-                {timezoneSuccess && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                    <p className="text-green-800 text-sm">✅ {timezoneSuccess}</p>
-                  </div>
-                )}
               </div>
             )}
           </div>

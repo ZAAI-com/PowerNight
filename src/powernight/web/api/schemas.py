@@ -23,7 +23,6 @@ BACKUP_RESERVE_SCHEMA = {
             "type": "number",
             "minimum": 0,
             "maximum": 100,
-            "multipleOf": 0.1,
             "description": "Backup reserve percentage (0-100)"
         },
         "reason": {

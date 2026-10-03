@@ -13,7 +13,6 @@ from .schema import (
     LoggingSettings,
     MonitoringSettings,
     ScheduleEntry,
-    create_dummy_config,
     create_default_config
 )
 from .exceptions import ConfigurationError
@@ -30,7 +29,6 @@ __all__ = [
     'LoggingSettings',
     'MonitoringSettings',
     'ScheduleEntry',
-    'create_dummy_config',
     'create_default_config',
     'ConfigurationError'
 ]

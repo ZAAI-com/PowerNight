@@ -1,445 +1,242 @@
 """
 Integration tests for PowerNight application.
-Tests end-to-end functionality, API integration, and system behavior.
+
+Tests end-to-end behavior of the kept API surface (status, backup-reserve,
+config, health) together with the SPA-serving web layer. Uses the shared
+`app`/`client` fixtures from tests/conftest.py.
 """
 
-import pytest
 import json
 import time
-from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone
 
-from powernight.web import create_app
-from powernight.core.config import PowerNightConfig, PowerwallSettings, AutomationSettings, WebInterfaceSettings, LoggingSettings, MonitoringSettings
+import pytest
+import yaml
+from unittest.mock import Mock, patch
 
 
-@pytest.fixture
-def app():
-    """Create test Flask application."""
-    app = create_app()
-    app.config['TESTING'] = True
-    return app
+@pytest.fixture(autouse=True)
+def config_manager(config_file, monkeypatch):
+    """Point the core ConfigManager singleton at a temp config file."""
+    import powernight.core.config.manager as manager_module
+    from powernight.core.config.manager import ConfigManager
 
+    for var in (
+        "TESLA_EMAIL",
+        "TESLA_CLIENT_ID",
+        "AUTOMATION_ENABLED",
+        "POWERNIGHT_WEB_HOST",
+        "POWERNIGHT_WEB_PORT",
+        "POWERNIGHT_LOG_LEVEL",
+    ):
+        monkeypatch.delenv(var, raising=False)
 
-@pytest.fixture
-def client(app):
-    """Create test client."""
-    return app.test_client()
-
-
-@pytest.fixture
-def mock_config():
-    """Create mock configuration."""
-    return PowerNightConfig(
-        powerwall=PowerwallSettings(
-            email="test@example.com",
-            password="test123",
-            verify_ssl=False
-        ),
-        automation=AutomationSettings(
-            enabled=True,
-        ),
-        web_interface=WebInterfaceSettings(
-            host="0.0.0.0",
-            port=5001,
-            debug=False
-        ),
-        logging=LoggingSettings(
-            level="INFO",
-            file_path="logs/powernight.log"
-        ),
-        monitoring=MonitoringSettings(
-            enabled=True,
-            health_check_interval=300.0
-        )
-    )
+    previous = ConfigManager._instance
+    ConfigManager._instance = None
+    # Reset the cached global too so get_config_manager() sees the new instance
+    monkeypatch.setattr(manager_module, '_config_manager', None)
+    manager = manager_module.get_config_manager()
+    manager.load_config(config_file)
+    yield manager
+    ConfigManager._instance = previous
 
 
 class TestWebInterfaceIntegration:
     """Test web interface integration."""
-    
+
     def test_web_interface_routes(self, client):
-        """Test all web interface routes are accessible."""
+        """All web interface routes are accessible."""
         routes = [
             '/',
             '/dashboard',
             '/scheduling',
             '/logs',
-            '/version'
+            '/version',
+            '/health',
         ]
-        
+
         for route in routes:
             response = client.get(route)
-            assert response.status_code in [200, 302]  # 302 for redirects
-    
-    def test_web_interface_static_files(self, client):
-        """Test static files are served correctly."""
-        static_files = [
-            '/static/css/app.css',
-            '/static/css/dashboard.css',
-            '/static/css/scheduling.css',
-            '/static/js/api.js',
-            '/static/js/selector.js',
-            '/static/js/dashboard-page.js',
-            '/static/js/scheduling-page.js',
-            '/static/js/logs-page.js',
-            '/static/js/validation.js',
-            '/static/js/ui.js'
-        ]
-        
-        for file_path in static_files:
-            response = client.get(file_path)
             assert response.status_code == 200
-            assert response.content_type.startswith('text/') or response.content_type.startswith('application/')
-    
-    def test_web_interface_templates(self, client):
-        """Test templates render correctly."""
-        with patch('powernight.web.api.get_config') as mock_get_config:
-            mock_config = PowerNightConfig(
-                powerwall=PowerwallSettings(ip_address="10.0.0.30"),
-                automation=AutomationSettings(enabled=True),
-                web_interface=WebInterfaceSettings(host="0.0.0.0", port=5001),
-                logging=LoggingSettings(level="INFO"),
-                monitoring=MonitoringSettings(enabled=True)
-            )
-            mock_get_config.return_value = mock_config
-            
-            # Test dashboard template
-            response = client.get('/dashboard')
+
+    def test_spa_served_for_client_side_routes(self, client):
+        """React Router routes get index.html so client routing can happen."""
+        for route in ('/dashboard', '/scheduling', '/logs'):
+            response = client.get(route)
             assert response.status_code == 200
-            assert b'PowerNight Dashboard' in response.data
-            
-            # Test scheduling template
-            response = client.get('/scheduling')
-            assert response.status_code == 200
-            assert b'PowerNight Scheduling' in response.data
-            
-            
-            # Test logs template
-            response = client.get('/logs')
-            assert response.status_code == 200
-            assert b'PowerNight Logs' in response.data
+            assert b'PowerNight test' in response.data
 
 
 class TestAPIWebIntegration:
     """Test API and web interface integration."""
-    
-    def test_api_web_consistency(self, client, mock_config):
-        """Test API responses are consistent with web interface expectations."""
-        with patch('powernight.web.api.get_config', return_value=mock_config):
-            headers = {
-                'X-Powerwall-Profile': 'demo',
-            }
-            
-            # Test that API responses contain expected fields for web interface
-            response = client.get('/api/v1/status', headers=headers)
-            assert response.status_code == 200
-            data = response.get_json()
-            
-            # Check required fields for web interface
-            assert 'data' in data
-            assert 'powerwall' in data['data']
-            assert 'backup_reserve_percentage' in data['data']['powerwall']
-            assert 'connected' in data['data']['powerwall']
-            assert 'status' in data['data']['powerwall']
-    
-    def test_api_headers_handling(self, client, mock_config):
-        """Test API correctly handles profile headers."""
-        with patch('powernight.web.api.get_config', return_value=mock_config):
-            # Test with demo profile
-            headers = {
-                'X-Powerwall-Profile': 'demo',
-                'X-Powerwall-Email': 'demo@example.com'
-            }
-            
-            response = client.get('/api/v1/backup-reserve', headers=headers)
-            assert response.status_code == 200
-            data = response.get_json()
-            assert data['data']['demo_mode'] is True
-            
-            # Test with Gruber EG profile
-            headers = {
-                'X-Powerwall-Profile': 'gruber-eg',
-                'X-Powerwall-Email': 'gruber@example.com'
-            }
-            
-            response = client.get('/api/v1/backup-reserve', headers=headers)
-            assert response.status_code == 200
-            data = response.get_json()
-            assert data['data']['demo_mode'] is False
-            assert data['data']['powerwall_name'] == 'Gruber EG'
 
+    def test_api_status_shape_for_frontend(self, client, mock_planner):
+        """Status responses contain the fields the dashboard expects."""
+        with patch('powernight.web.api.api.get_powerwall_connector') as mock_connector, \
+             patch('powernight.web.api.api.get_planner', return_value=mock_planner):
+            mock_powerwall = Mock()
+            mock_powerwall.is_connected.return_value = False
+            mock_connector.return_value = mock_powerwall
 
-class TestProfileSwitchingIntegration:
-    """Test profile switching integration."""
-    
-    def test_profile_switching_consistency(self, client, mock_config):
-        """Test profile switching maintains consistency across all endpoints."""
-        with patch('powernight.web.api.get_config', return_value=mock_config):
-            # Test demo profile
-            demo_headers = {
-                'X-Powerwall-Profile': 'demo',
-            }
-            
-            # Test Gruber EG profile
-            gruber_headers = {
-                'X-Powerwall-Profile': 'gruber-eg',
-            }
-            
-            endpoints = [
-                '/api/v1/status',
-                '/api/v1/backup-reserve',
-                '/api/v1/schedules',
-                '/api/v1/activity',
-                '/api/v1/automation/status'
-            ]
-            
-            for endpoint in endpoints:
-                # Test demo profile
-                response = client.get(endpoint, headers=demo_headers)
-                assert response.status_code == 200
-                demo_data = response.get_json()
-                
-                # Test Gruber EG profile
-                response = client.get(endpoint, headers=gruber_headers)
-                assert response.status_code == 200
-                gruber_data = response.get_json()
-                
-                # Verify different profiles return different data
-                if 'powerwall_name' in demo_data:
-                    assert demo_data['powerwall_name'] == 'Demo Powerwall'
-                if 'powerwall_name' in gruber_data:
-                    assert gruber_data['powerwall_name'] == 'Gruber EG'
-    
-    def test_profile_switching_schedules(self, client, mock_config):
-        """Test profile switching affects schedules correctly."""
-        with patch('powernight.web.api.get_config', return_value=mock_config):
-            # Test demo profile schedules
-            demo_headers = {
-                'X-Powerwall-Profile': 'demo',
-            }
-            
-            response = client.get('/api/v1/schedules', headers=demo_headers)
-            assert response.status_code == 200
-            demo_data = response.get_json()
-            
-            # Test Gruber EG profile schedules
-            gruber_headers = {
-                'X-Powerwall-Profile': 'gruber-eg',
-            }
-            
-            response = client.get('/api/v1/schedules', headers=gruber_headers)
-            assert response.status_code == 200
-            gruber_data = response.get_json()
-            
-            # Verify different profiles have different schedules
-            demo_schedules = demo_data['data']
-            gruber_schedules = gruber_data['data']
-            
-            # Both should have schedules but with different names
-            assert len(demo_schedules) > 0
-            assert len(gruber_schedules) > 0
-            
-            # Check for profile-specific schedule names
-            demo_names = [s['name'] for s in demo_schedules]
-            gruber_names = [s['name'] for s in gruber_schedules]
-            
-            assert any('Demo' in name for name in demo_names)
-            assert any('Gruber' in name for name in gruber_names)
+            response = client.get('/api/v1/status',
+                                  headers={'X-Powerwall-Profile': 'demo'})
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert 'data' in data
+        assert 'powerwall' in data['data']
+        assert 'backup_reserve_percentage' in data['data']['powerwall']
+        assert 'connected' in data['data']['powerwall']
+        assert 'scheduler' in data['data']
+        assert 'configuration' in data['data']
+
+    def test_api_headers_handling(self, client):
+        """API correctly handles profile headers."""
+        response = client.get('/api/v1/backup-reserve', headers={
+            'X-Powerwall-Profile': 'demo',
+            'X-Powerwall-Email': 'demo@example.com',
+        })
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['data']['demo_mode'] is True
+
+        response = client.get('/api/v1/backup-reserve', headers={
+            'X-Powerwall-Profile': 'gruber-eg',
+            'X-Powerwall-Email': 'gruber@example.com',
+        })
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['data']['demo_mode'] is False
+        assert data['data']['powerwall_name'] == 'Gruber EG'
 
 
 class TestConfigurationIntegration:
-    """Test configuration integration."""
-    
+    """Test configuration integration through the consolidated config API."""
+
     def test_configuration_loading(self, client):
-        """Test configuration is loaded correctly."""
-        with patch('powernight.web.api.get_config') as mock_get_config:
-            mock_config = PowerNightConfig(
-                powerwall=PowerwallSettings(ip_address="10.0.0.30"),
-                automation=AutomationSettings(enabled=True),
-                web_interface=WebInterfaceSettings(host="0.0.0.0", port=5001),
-                logging=LoggingSettings(level="INFO"),
-                monitoring=MonitoringSettings(enabled=True)
-            )
-            mock_get_config.return_value = mock_config
-            
-            response = client.get('/api/v1/status')
-            assert response.status_code == 200
-            mock_get_config.assert_called()
-    
-    def test_configuration_validation(self, client, mock_config):
-        """Test configuration validation works correctly."""
-        with patch('powernight.web.api.get_config', return_value=mock_config):
-            headers = {'Content-Type': 'application/json'}
-            
-            # Test valid configuration update
-            valid_config = {
-                'powerwall': {
-                    'ip_address': '192.168.1.100',
-                    'email': 'test@example.com',
-                    'password': 'newpassword'
-                }
-            }
-            
-            response = client.put('/api/v1/config', headers=headers, data=json.dumps(valid_config))
-            assert response.status_code == 200
-            
-            # Test invalid configuration update
-            invalid_config = {
-                'powerwall': {
-                    'ip_address': 'invalid-ip',
-                    'email': 'invalid-email'
-                }
-            }
-            
-            response = client.put('/api/v1/config', headers=headers, data=json.dumps(invalid_config))
-            assert response.status_code == 400
+        response = client.get('/api/v1/config')
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['success'] is True
+        assert data['data']['powerwall']['configured'] is True
+
+    def test_configuration_update_round_trip(self, client, config_file):
+        headers = {'Content-Type': 'application/json'}
+
+        # Valid partial update is merged and persisted
+        valid_update = {'automation': {'check_interval': 120.0}}
+        response = client.post('/api/v1/config', headers=headers,
+                               data=json.dumps(valid_update))
+        assert response.status_code == 200
+
+        with open(config_file) as f:
+            saved = yaml.safe_load(f)
+        assert saved['automation']['check_interval'] == 120.0
+        assert saved['powerwall']['tesla_email'] == 'test@example.com'
+
+        # Invalid update is rejected with 400
+        invalid_update = {'powerwall': {'tesla_email': 'invalid-email'}}
+        response = client.post('/api/v1/config', headers=headers,
+                               data=json.dumps(invalid_update))
+        assert response.status_code == 400
 
 
 class TestErrorHandlingIntegration:
     """Test error handling integration."""
-    
+
     def test_error_handling_consistency(self, client):
-        """Test error handling is consistent across the application."""
-        # Test 404 errors
+        # Unknown non-API routes are served by the SPA catch-all
         response = client.get('/nonexistent-route')
-        assert response.status_code == 404
-        
-        # Test 405 errors (method not allowed)
+        assert response.status_code == 200
+
+        # Method not allowed
         response = client.post('/api/v1/status')
         assert response.status_code == 405
-        
-        # Test 400 errors (bad request)
-        response = client.post('/api/v1/schedules', 
-                             headers={'Content-Type': 'application/json'},
-                             data='invalid json')
-        assert response.status_code == 400
-    
-    def test_error_response_format(self, client):
-        """Test error responses have consistent format."""
+
+        # Unknown API routes return JSON 404
         response = client.get('/api/v1/nonexistent')
         assert response.status_code == 404
-        
         data = response.get_json()
-        assert 'error' in data
-        assert 'message' in data
-    
-    def test_graceful_degradation(self, client, mock_config):
-        """Test application degrades gracefully when components fail."""
-        with patch('powernight.web.api.get_config', return_value=mock_config):
-            # Test with missing profile headers (should fallback to defaults)
-            response = client.get('/api/v1/backup-reserve')
-            assert response.status_code == 200
-            
-            # Test with invalid profile headers
-            headers = {
+        assert data['error'] == 'Not found'
+
+    def test_graceful_degradation(self, client):
+        """Application degrades gracefully with missing or unknown headers."""
+        # Missing profile headers fall back to demo defaults
+        response = client.get('/api/v1/backup-reserve')
+        assert response.status_code == 200
+
+        # Unknown profile headers hit the real connector path; a failing
+        # connector yields a 502 instead of a crash
+        with patch('powernight.web.api.api.get_powerwall_connector',
+                   side_effect=Exception('no connector')):
+            response = client.get('/api/v1/backup-reserve', headers={
                 'X-Powerwall-Profile': 'invalid-profile',
-                'X-Powerwall-IP': 'invalid-ip'
-            }
-            response = client.get('/api/v1/backup-reserve', headers=headers)
-            assert response.status_code == 200
+            })
+        assert response.status_code == 502
+        data = response.get_json()
+        assert data['success'] is False
 
 
 class TestPerformanceIntegration:
     """Test performance integration."""
-    
-    def test_response_times(self, client, mock_config):
-        """Test API response times are reasonable."""
-        with patch('powernight.web.api.get_config', return_value=mock_config):
-            headers = {
-                'X-Powerwall-Profile': 'demo',
-            }
-            
-            endpoints = [
-                '/api/v1/status',
-                '/api/v1/backup-reserve',
-                '/api/v1/schedules',
-                '/api/v1/activity'
-            ]
-            
-            for endpoint in endpoints:
-                start_time = time.time()
-                response = client.get(endpoint, headers=headers)
-                end_time = time.time()
-                
-                assert response.status_code == 200
-                assert (end_time - start_time) < 1.0  # Should respond within 1 second
-    
-    def test_concurrent_requests(self, client, mock_config):
-        """Test application handles concurrent requests."""
+
+    def test_response_times(self, client):
+        headers = {'X-Powerwall-Profile': 'demo'}
+
+        for endpoint in ('/api/v1/backup-reserve', '/health', '/version'):
+            start_time = time.time()
+            response = client.get(endpoint, headers=headers)
+            end_time = time.time()
+
+            assert response.status_code == 200
+            assert (end_time - start_time) < 1.0
+
+    def test_concurrent_requests(self, client):
         import threading
         import queue
-        
-        with patch('powernight.web.api.get_config', return_value=mock_config):
-            headers = {
-                'X-Powerwall-Profile': 'demo',
-            }
-            
-            results = queue.Queue()
-            
-            def make_request():
-                response = client.get('/api/v1/status', headers=headers)
-                results.put(response.status_code)
-            
-            # Create multiple threads
-            threads = []
-            for _ in range(5):
-                thread = threading.Thread(target=make_request)
-                threads.append(thread)
-                thread.start()
-            
-            # Wait for all threads to complete
-            for thread in threads:
-                thread.join()
-            
-            # Check all requests succeeded
-            while not results.empty():
-                status_code = results.get()
-                assert status_code == 200
+
+        headers = {'X-Powerwall-Profile': 'demo'}
+        results = queue.Queue()
+
+        def make_request():
+            response = client.get('/api/v1/backup-reserve', headers=headers)
+            results.put(response.status_code)
+
+        threads = [threading.Thread(target=make_request) for _ in range(5)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        while not results.empty():
+            assert results.get() == 200
 
 
 class TestDataConsistencyIntegration:
     """Test data consistency across the application."""
-    
-    def test_data_consistency_across_profiles(self, client, mock_config):
-        """Test data is consistent across different profiles."""
-        with patch('powernight.web.api.get_config', return_value=mock_config):
-            profiles = [
-                {'profile': 'demo', 'ip': '10.0.0.30', 'expected_name': 'Demo Powerwall'},
-                {'profile': 'gruber-eg', 'ip': '10.0.0.30', 'expected_name': 'Gruber EG'}
-            ]
-            
-            for profile_info in profiles:
-                headers = {
-                    'X-Powerwall-Profile': profile_info['profile'],
-                    'X-Powerwall-IP': profile_info['ip']
-                }
-                
-                # Test backup reserve consistency
-                response = client.get('/api/v1/backup-reserve', headers=headers)
-                assert response.status_code == 200
-                data = response.get_json()
-                assert data['data']['powerwall_name'] == profile_info['expected_name']
-                
-                # Test schedules consistency
-                response = client.get('/api/v1/schedules', headers=headers)
-                assert response.status_code == 200
-                data = response.get_json()
-                assert data['powerwall_name'] == profile_info['expected_name']
-    
-    def test_timestamp_consistency(self, client, mock_config):
-        """Test timestamps are consistent and recent."""
-        with patch('powernight.web.api.get_config', return_value=mock_config):
-            headers = {
-                'X-Powerwall-Profile': 'demo',
-            }
-            
+
+    def test_data_consistency_across_profiles(self, client):
+        profiles = [
+            {'profile': 'demo', 'expected_name': 'Demo Powerwall'},
+            {'profile': 'gruber-eg', 'expected_name': 'Gruber EG'},
+        ]
+
+        for profile_info in profiles:
+            headers = {'X-Powerwall-Profile': profile_info['profile']}
+
             response = client.get('/api/v1/backup-reserve', headers=headers)
             assert response.status_code == 200
             data = response.get_json()
-            
-            if 'timestamp' in data:
-                timestamp = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
-                now = datetime.now(timezone.utc)
-                time_diff = (now - timestamp).total_seconds()
-                assert time_diff < 10  # Timestamp should be within last 10 seconds
+            assert data['data']['powerwall_name'] == profile_info['expected_name']
+
+    def test_timestamp_consistency(self, client):
+        response = client.get('/api/v1/backup-reserve',
+                              headers={'X-Powerwall-Profile': 'demo'})
+        assert response.status_code == 200
+        data = response.get_json()
+
+        timestamp_str = data['data']['timestamp']
+        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+        now = datetime.now(timezone.utc)
+        assert (now - timestamp).total_seconds() < 10

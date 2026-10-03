@@ -8,7 +8,7 @@ import click
 import logging
 from typing import Optional
 
-from powernight.core.config import ConfigManager, create_dummy_config
+from powernight.core.config import ConfigManager
 from powernight.core.powerwall import PowerwallConnector
 
 
@@ -141,64 +141,5 @@ def validate_config(ctx: click.Context, verbose: bool) -> None:
         ctx.exit(1)
 
 
-@cli.command()
-@click.option("--email", prompt="Tesla account email", help="Tesla account email")
-@click.option("--powerwall-id", help="Specific Powerwall ID (optional)")
-@click.pass_context
-def configure(ctx: click.Context, email: str, powerwall_id: str) -> None:
-    """Configure Powerwall connection settings."""
-    config_manager = ConfigManager()
-
-    try:
-        config = config_manager.load_config(ctx.obj["config_path"])
-        config.powerwall.host = host
-        config.powerwall.password = password
-        config_manager.save_config(config)
-        click.echo("✓ Configuration saved successfully")
-    except Exception as e:
-        click.echo(f"✗ Configuration failed: {e}", err=True)
-
-
-@cli.command()
-@click.option("--output", "-o", default="config/dummy-config.yaml", help="Output path for dummy config")
-@click.option("--force", "-f", is_flag=True, help="Overwrite existing file")
-def create_dummy_config(output: str, force: bool) -> None:
-    """Create a dummy configuration for testing/development when Powerwall is not available."""
-    import os
-    from pathlib import Path
-    import yaml
-
-    output_path_obj = Path(output)
-
-    # Check if file exists
-    if output_path_obj.exists() and not force:
-        if not click.confirm(f"File '{output}' already exists. Overwrite?"):
-            return
-
-    try:
-        # Create dummy config directly
-        dummy_config = create_dummy_config()
-
-        # Ensure parent directory exists
-        output_path_obj.parent.mkdir(parents=True, exist_ok=True)
-
-        # Save to file using yaml directly
-        config_dict = dummy_config.to_dict()
-        with open(output_path_obj, 'w') as f:
-            yaml.dump(config_dict, f, default_flow_style=False, indent=2, sort_keys=False)
-
-        click.echo(f"✓ Dummy configuration created at '{output}'")
-        click.echo("  This configuration enables dry-run mode and disables automation")
-        click.echo("  The web interface will be available for testing purposes")
-
-    except Exception as e:
-        click.echo(f"✗ Failed to create dummy configuration: {e}", err=True)
-
-
-def main() -> None:
-    """CLI entry point."""
-    cli()
-
-
 if __name__ == "__main__":
-    main()
+    cli()

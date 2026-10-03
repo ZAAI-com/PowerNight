@@ -58,13 +58,15 @@ class CronCommand:
             command_type: Type of command (mode, reserve, current, gridcharging, gridexport)
             params: Optional parameters for the command
         """
-        self.command_type = command_type
         self.params = params or {}
         self.logger = logging.getLogger(__name__)
-        
-        # Validate command type
+
+        # Validate and normalize the command type: accept either a string
+        # ("reserve") or a CommandType member, and store the enum so callers
+        # can rely on .command_type.value
         try:
             self.command_enum = CommandType(command_type)
+            self.command_type = self.command_enum
         except ValueError:
             raise PowerwallValidationError(
                 "command_type",

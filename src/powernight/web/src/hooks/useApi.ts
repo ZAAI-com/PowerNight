@@ -4,7 +4,7 @@ import { LoadingState } from '../types';
 
 export interface UseApiOptions {
   immediate?: boolean;
-  onSuccess?: (data: any) => void;
+  onSuccess?: (data: unknown) => void;
   onError?: (error: Error) => void;
 }
 

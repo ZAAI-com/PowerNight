@@ -6,55 +6,34 @@ Tesla Powerwall connection and communication management.
 
 import time
 import json
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+import threading
+import re
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pypowerwall
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-    RetryError
+from pypowerwall.cloud.exceptions import (
+    PyPowerwallCloudInvalidPayload,
+    PyPowerwallCloudNoTeslaAuthFile,
+    PyPowerwallCloudNotImplemented,
+    PyPowerwallCloudTeslaNotConnected,
 )
-
 from ...utils.logging import get_logger
 
 from .exceptions import (
     PowerwallConnectionError,
     PowerwallAuthenticationError,
-    PowerwallTimeoutError,
     PowerwallAPIError,
     PowerwallUnavailableError,
-    PowerwallValidationError,
-    PowerwallRateLimitError
+    PowerwallValidationError
 )
 from .data import PowerwallDataParser, PowerwallDataCache, PowerwallSystemInfo
 from .reserve import (
     ReserveValidator,
     ReserveHistory,
-    ReserveChangeRequest,
     ReserveChangeResult
-)
-
-# Use TYPE_CHECKING to avoid circular import with scheduler module
-if TYPE_CHECKING:
-    from ..scheduler.circuit_breaker import (
-        CircuitBreaker,
-        CircuitBreakerConfig,
-        CircuitBreakerOpenException
-    )
-    from ..scheduler.degradation import (
-        ServiceDegradationManager,
-        DegradationConfig,
-        ServiceState,
-        DegradationLevel
-    )
-from .recovery import (
-    HealthMonitor,
-    ErrorRecoveryManager
 )
 
 
@@ -92,6 +71,11 @@ class PowerwallConnectorInterface(ABC):
         pass
 
     @abstractmethod
+    def ensure_connected(self) -> bool:
+        """Return an existing healthy connection or establish a new one."""
+        pass
+
+    @abstractmethod
     def disconnect(self) -> None:
         """Disconnect from Powerwall."""
         pass
@@ -122,6 +106,29 @@ class PowerwallConnectorInterface(ABC):
         pass
 
 
+class CloudConnectionConfig:
+    """Configuration for cloud-based Powerwall connection."""
+
+    def __init__(self, email: str, powerwall_id: Optional[str] = None, **kwargs):
+        """
+        Initialize cloud connection configuration.
+
+        Args:
+            email: Tesla account email
+            powerwall_id: Specific Powerwall ID to connect to (optional)
+            **kwargs: Additional configuration options
+        """
+        self.email = email
+        self.powerwall_id = powerwall_id
+        self.host = "cloud"  # Cloud connection doesn't use a specific host
+        self.password = None  # Cloud connection uses OAuth, not password
+        self.timeout = kwargs.get('timeout', 30.0)
+        self.retry_attempts = kwargs.get('retry_attempts', 3)
+        self.rate_limit_delay = kwargs.get('rate_limit_delay', 1.0)
+        self.cache_ttl = kwargs.get('cache_ttl', 30.0)
+        self.history_size = kwargs.get('history_size', 1000)
+
+
 class PowerwallConnector(PowerwallConnectorInterface):
     """
     Tesla Powerwall connector using pypowerwall library in cloud mode.
@@ -139,7 +146,6 @@ class PowerwallConnector(PowerwallConnectorInterface):
             powerwall_id: Specific Powerwall ID to connect to (optional)
             **kwargs: Additional configuration options
         """
-        from .cloud_connector import CloudConnectionConfig
         from ..auth.tesla_oauth import TeslaOAuthManager
         
         self.config = CloudConnectionConfig(email=email, powerwall_id=powerwall_id, **kwargs)
@@ -150,6 +156,10 @@ class PowerwallConnector(PowerwallConnectorInterface):
         self._oauth_manager = TeslaOAuthManager(storage_path=storage_path)
         self._powerwall: Optional[pypowerwall.Powerwall] = None
         self._connected = False
+        self._connection_lock = threading.RLock()
+        self._last_connection_attempt: Optional[str] = None
+        self._last_connection_error: Optional[str] = None
+        self._last_connection_error_code: Optional[str] = None
         self._last_status: Optional[PowerwallStatus] = None
         self._last_rate_limit = 0.0
 
@@ -184,7 +194,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
                     vitals = self._powerwall.vitals()
                     return vitals is not None
                 return False
-            except:
+            except Exception:
                 return False
 
         self._circuit_breaker.set_health_check(health_check)
@@ -216,10 +226,6 @@ class PowerwallConnector(PowerwallConnectorInterface):
             )
 
         self._degradation_manager.add_state_change_callback(on_degradation_state_change)
-
-        # Initialize health monitoring and recovery
-        self._health_monitor = HealthMonitor(check_interval=kwargs.get('health_check_interval', 60.0))
-        self._recovery_manager = ErrorRecoveryManager()
 
         # Validate configuration
         self._validate_config()
@@ -373,6 +379,108 @@ class PowerwallConnector(PowerwallConnectorInterface):
 
         self._last_rate_limit = time.time()
 
+    @staticmethod
+    def _safe_connection_failure(error: Exception) -> tuple[str, str]:
+        """Return a stable error category and token-free user-facing message."""
+        from ..scheduler.circuit_breaker import CircuitBreakerOpenException
+
+        message = str(error).lower()
+        if isinstance(
+            error,
+            (PowerwallAuthenticationError, PyPowerwallCloudNoTeslaAuthFile),
+        ) or any(
+            marker in message for marker in ('authentication', 'access token', '401', '403')
+        ):
+            return (
+                'authentication',
+                'Tesla authentication failed. Reconnect your Tesla account in Settings.'
+            )
+        if isinstance(error, CircuitBreakerOpenException):
+            return (
+                'circuit_breaker',
+                'Tesla cloud connection is temporarily paused after repeated failures. Try again shortly.'
+            )
+        if 'no response' in message:
+            return (
+                'no_response',
+                'Tesla cloud did not return Powerwall data. Check authentication and network access.'
+            )
+        if isinstance(error, (
+            PyPowerwallCloudTeslaNotConnected,
+            PyPowerwallCloudNotImplemented,
+            PyPowerwallCloudInvalidPayload,
+        )):
+            return (
+                'pypowerwall',
+                'Tesla cloud returned an unusable response. Check the container logs and try again.'
+            )
+        return (
+            'connection',
+            'Tesla cloud is unreachable. Check container networking and try again.'
+        )
+
+    @staticmethod
+    def _safe_log_detail(error: Exception) -> str:
+        """Keep diagnostics useful while removing bearer and OAuth token values."""
+        detail = f'{type(error).__name__}: {error}'
+        detail = re.sub(
+            r'(?i)(authorization\s*[:=]\s*)(?:bearer\s+)?[A-Za-z0-9._~+/=-]+',
+            r'\1***REDACTED***',
+            detail,
+        )
+        detail = re.sub(
+            r'(?i)(access_token|refresh_token|id_token)(["\'\s:=]+)([^,\s"\'&}]+)',
+            r'\1\2***REDACTED***',
+            detail,
+        )
+        detail = re.sub(r'(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+', r'\1***REDACTED***', detail)
+        detail = re.sub(r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', '***REDACTED***', detail)
+        return detail
+
+    def _record_connection_failure(self, error: Exception) -> None:
+        self._connected = False
+        code, message = self._safe_connection_failure(error)
+        self._last_connection_error_code = code
+        self._last_connection_error = message
+
+    def _record_connection_success(self) -> None:
+        self._connected = True
+        self._last_connection_error_code = None
+        self._last_connection_error = None
+
+    def reload_credentials(self) -> Dict[str, Any]:
+        """Reload the current Tesla identity and selected site from /data."""
+        auth_data = self._oauth_manager.auth_storage.load_auth_data()
+        if not auth_data:
+            raise PowerwallAuthenticationError('No Tesla authentication data available')
+
+        email = auth_data.get('email')
+        if not email:
+            raise PowerwallAuthenticationError('Tesla authentication data has no account email')
+
+        site = auth_data.get('site') or {}
+        site_id = site.get('id')
+        self.config.email = email
+        self.config.powerwall_id = str(site_id) if site_id is not None else None
+        return auth_data
+
+    def get_connection_status(self) -> Dict[str, Any]:
+        """Return cached connection state without performing a network request."""
+        with self._connection_lock:
+            if self._connected:
+                status = 'connected'
+            elif self._last_connection_attempt is None:
+                status = 'unknown'
+            else:
+                status = 'disconnected'
+            return {
+                'connected': self._connected,
+                'connection_status': status,
+                'last_connection_attempt': self._last_connection_attempt,
+                'connection_error': self._last_connection_error,
+                'connection_error_code': self._last_connection_error_code,
+            }
+
     def connect(self) -> bool:
         """
         Establish connection to Powerwall via cloud with circuit breaker protection.
@@ -385,14 +493,21 @@ class PowerwallConnector(PowerwallConnectorInterface):
             PowerwallAuthenticationError: If authentication fails
             CircuitBreakerOpenException: If circuit breaker is open
         """
-        # Late import to avoid circular dependency
         from ..scheduler.circuit_breaker import CircuitBreakerOpenException
+
         def _connect_operation():
             start_time = time.time()
 
+            auth_data = self.reload_credentials()
+            selected_site = (auth_data.get('site') or {}).get('id')
+            try:
+                selected_site = int(selected_site) if selected_site is not None else None
+            except (TypeError, ValueError):
+                selected_site = None
+
             self.logger.log_powerwall_operation(
                 "cloud_connect_attempt", True,
-                metadata={'email': self.config.email, 'powerwall_id': self.config.powerwall_id}
+                metadata={'powerwall_id': self.config.powerwall_id}
             )
 
             # Handle rate limiting
@@ -409,15 +524,20 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 cloudmode=True,
                 authmode="token",
                 authpath=str(self._oauth_manager.auth_storage.storage_path) + "/",
-                timeout=self.config.timeout
+                timeout=self.config.timeout,
+                siteid=selected_site,
+                failover=False,
             )
 
             # Test connection by getting basic info
             vitals = self._powerwall.vitals()
             if not vitals:
-                raise PowerwallConnectionError("No response from Powerwall via cloud")
+                raise PowerwallConnectionError(
+                    self.config.email,
+                    "No response from Powerwall via cloud"
+                )
 
-            self._connected = True
+            self._record_connection_success()
             duration_ms = (time.time() - start_time) * 1000
 
             # Log full vitals response
@@ -431,74 +551,108 @@ class PowerwallConnector(PowerwallConnectorInterface):
             )
             return True
 
-        try:
-            # Execute connection through circuit breaker
-            return self._circuit_breaker.call(_connect_operation)
-
-        except Exception as circuit_error:
-            # Late import to avoid circular dependency
-            from ..scheduler.circuit_breaker import CircuitBreakerOpenException
-
-            if isinstance(circuit_error, CircuitBreakerOpenException):
-                self._connected = False
+        with self._connection_lock:
+            self._last_connection_attempt = datetime.now(timezone.utc).isoformat()
+            try:
+                return self._circuit_breaker.call(_connect_operation)
+            except CircuitBreakerOpenException as error:
+                self._record_connection_failure(error)
                 self.logger.log_powerwall_operation(
                     "connect_circuit_open", False,
                     metadata={'host': self.config.host}
                 )
-                raise circuit_error
-            else:
-                raise circuit_error
-
-        except pypowerwall.PyPowerwallError as e:
-            self._connected = False
-
-            if "authentication" in str(e).lower():
+                raise
+            except PowerwallAuthenticationError as error:
+                self._record_connection_failure(error)
                 self.logger.log_powerwall_operation(
                     "connect_auth_failed", False,
-                    error_details=str(e),
+                    error_details=self._safe_log_detail(error),
                     metadata={'host': self.config.host}
                 )
-                raise PowerwallAuthenticationError(f"Authentication failed: {e}")
-            else:
+                raise
+            except PowerwallConnectionError as error:
+                self._record_connection_failure(error)
                 self.logger.log_powerwall_operation(
                     "connect_failed", False,
-                    error_details=str(e),
+                    error_details=self._safe_log_detail(error),
                     metadata={'host': self.config.host}
                 )
-                raise PowerwallConnectionError(self.config.host, f"Connection failed: {e}")
+                raise
+            except (
+                PyPowerwallCloudNoTeslaAuthFile,
+                PyPowerwallCloudTeslaNotConnected,
+                PyPowerwallCloudNotImplemented,
+                PyPowerwallCloudInvalidPayload,
+            ) as error:
+                self._record_connection_failure(error)
+                self.logger.log_powerwall_operation(
+                    "connect_failed", False,
+                    error_details=self._safe_log_detail(error),
+                    metadata={'host': self.config.host}
+                )
+                if "authentication" in str(error).lower():
+                    raise PowerwallAuthenticationError(
+                        f"Authentication failed: {type(error).__name__}"
+                    ) from error
+                raise PowerwallConnectionError(
+                    self.config.email,
+                    f"Connection failed: {type(error).__name__}"
+                ) from error
+            except Exception as error:
+                wrapped = PowerwallConnectionError(
+                    self.config.email,
+                    f"Unexpected connection error: {type(error).__name__}"
+                )
+                self._record_connection_failure(error)
+                self.logger.log_powerwall_operation(
+                    "connect_failed", False,
+                    error_details=self._safe_log_detail(error),
+                    metadata={'host': self.config.host}
+                )
+                raise wrapped from error
 
-        except Exception as e:
-            self._connected = False
-            raise PowerwallConnectionError(self.config.host, f"Unexpected error: {e}")
+    def ensure_connected(self) -> bool:
+        """Probe the live session and reconnect once when it is unavailable."""
+        with self._connection_lock:
+            if self.is_connected():
+                return True
+            return self.connect()
 
     def disconnect(self) -> None:
         """Disconnect from Powerwall."""
-        if self._powerwall:
-            self.logger.info("Disconnecting from Powerwall")
+        with self._connection_lock:
+            if self._powerwall:
+                self.logger.info("Disconnecting from Powerwall")
             self._powerwall = None
             self._connected = False
 
     def is_connected(self) -> bool:
         """Check if connected to Powerwall."""
-        # Can't test connection without powerwall object
-        if not self._powerwall:
-            self._connected = False
-            return False
-
-        try:
-            # Always test connection with a simple API call (don't trust cached state)
-            # This allows automatic recovery from transient failures
-            self._handle_rate_limit()
-            vitals = self._powerwall.vitals()
-            if vitals is not None:
-                self._connected = True  # Update state on success
-                return True
-            else:
+        with self._connection_lock:
+            # Can't test connection without powerwall object
+            if not self._powerwall:
                 self._connected = False
                 return False
-        except Exception:
-            self._connected = False
-            return False
+
+            try:
+                # Always test connection with a simple API call (don't trust cached state)
+                # This allows automatic recovery from transient failures
+                self._handle_rate_limit()
+                vitals = self._powerwall.vitals()
+                if vitals is not None:
+                    self._record_connection_success()
+                    return True
+                else:
+                    self._record_connection_failure(
+                        PowerwallConnectionError(
+                            self.config.email,
+                            'No response from Powerwall via cloud'
+                        )
+                    )
+                    return False
+            except Exception as error:
+                self._record_connection_failure(error)
+                return False
 
     def test_connection(self) -> bool:
         """
@@ -510,18 +664,8 @@ class PowerwallConnector(PowerwallConnectorInterface):
         Raises:
             PowerwallUnavailableError: If Powerwall is unavailable
         """
-        if not self.is_connected():
-            try:
-                self.connect()
-            except Exception as e:
-                raise PowerwallUnavailableError(self.config.host, f"Connection test failed: {e}")
-
         try:
-            # Test with a simple API call
-            self._handle_rate_limit()
-            vitals = self._powerwall.vitals()
-            return vitals is not None
-
+            return self.ensure_connected()
         except Exception as e:
             self.logger.error(f"Connection test failed: {e}")
             raise PowerwallUnavailableError(self.config.host, f"Connection test failed: {e}")
@@ -541,8 +685,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
 
         def _primary_operation():
             """Primary operation to get backup reserve."""
-            if not self.is_connected():
-                self.connect()
+            self.ensure_connected()
 
             self._handle_rate_limit()
 
@@ -565,46 +708,26 @@ class PowerwallConnector(PowerwallConnectorInterface):
             return self._circuit_breaker.call(_get_reserve_api_call)
 
         def _fallback_operation():
-            """Fallback operation using cached data or emergency values."""
-            # Try degradation manager cache first
-            cached_data = self._degradation_manager.get_cached_data(cache_key)
-            if cached_data is not None:
-                self.logger.log_powerwall_operation(
-                    "get_reserve_fallback_cache", True,
-                    metadata={
-                        'host': self.config.host,
-                        'value': cached_data,
-                        'source': 'degradation_cache'
-                    }
-                )
-                return cached_data
+            """Fallback using cached data when the Powerwall is unreachable."""
+            # Fresh cache first, then stale cache: stale data beats no data
+            # for a read-only value
+            cached = self._data_cache.get(cache_key)
+            source = 'cache'
+            if cached is None:
+                cached = self._data_cache.get_stale(cache_key)
+                source = 'stale_cache'
 
-            # Try local data cache
-            local_cached = self._data_cache.get(cache_key)
-            if local_cached is not None:
+            if cached is not None:
                 self.logger.log_powerwall_operation(
-                    "get_reserve_fallback_local", True,
+                    "get_reserve_fallback", True,
                     metadata={
                         'host': self.config.host,
-                        'value': local_cached,
-                        'source': 'local_cache'
+                        'value': cached,
+                        'source': source,
+                        'stale': source == 'stale_cache'
                     }
                 )
-                return local_cached
-
-            # Use emergency fallback data
-            emergency_data = self._degradation_manager.get_emergency_fallback_data('backup_reserve_percentage')
-            if emergency_data:
-                percentage = emergency_data['value']
-                self.logger.log_powerwall_operation(
-                    "get_reserve_emergency_fallback", True,
-                    metadata={
-                        'host': self.config.host,
-                        'value': percentage,
-                        'source': 'emergency_config'
-                    }
-                )
-                return percentage
+                return cached
 
             raise PowerwallUnavailableError(
                 self.config.host,
@@ -623,26 +746,16 @@ class PowerwallConnector(PowerwallConnectorInterface):
             self._data_cache.set(cache_key, result)
             return result
 
-        except Exception as circuit_error:
-            # Late import to avoid circular dependency
-            from ..scheduler.circuit_breaker import CircuitBreakerOpenException
-
-            if isinstance(circuit_error, CircuitBreakerOpenException):
-                self.logger.log_powerwall_operation(
-                    "get_reserve_circuit_open", False,
-                    metadata={'host': self.config.host}
-                )
-                # Try fallback even when circuit breaker is open
-                return _fallback_operation()
-            else:
-                raise circuit_error
-
         except Exception as e:
-            # Final fallback attempt
-            try:
-                return _fallback_operation()
-            except:
-                raise PowerwallUnavailableError(self.config.host, f"Failed to get backup reserve: {e}")
+            self.logger.log_powerwall_operation(
+                "get_reserve_failed", False,
+                metadata={'host': self.config.host, 'error': str(e)}
+            )
+            if isinstance(e, PowerwallUnavailableError):
+                raise
+            raise PowerwallUnavailableError(
+                self.config.host, f"Failed to get backup reserve: {e}"
+            )
 
     def set_backup_reserve_percentage(self, percentage: float, reason: Optional[str] = None) -> ReserveChangeResult:
         """
@@ -669,8 +782,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         self._reserve_validator.validate_percentage(percentage)
 
         # Ensure connected
-        if not self.is_connected():
-            self.connect()
+        self.ensure_connected()
 
         def _set_reserve_operation():
             self._handle_rate_limit()
@@ -771,8 +883,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
 
         def _primary_operation():
             """Primary operation to get Powerwall status."""
-            if not self.is_connected():
-                self.connect()
+            self.ensure_connected()
 
             self._handle_rate_limit()
 
@@ -814,55 +925,28 @@ class PowerwallConnector(PowerwallConnectorInterface):
             return self._circuit_breaker.call(_get_status_api_call)
 
         def _fallback_operation():
-            """Fallback operation using cached status or emergency values."""
-            # Try degradation manager cache first
-            cached_status = self._degradation_manager.get_cached_data(cache_key)
+            """Fallback using cached or last-known status when unreachable."""
+            # Fresh cache, then stale cache, then last known in-memory status
+            cached_status = self._data_cache.get(cache_key)
+            source = 'cache'
+            if cached_status is None:
+                cached_status = self._data_cache.get_stale(cache_key)
+                source = 'stale_cache'
+            if cached_status is None and self._last_status:
+                cached_status = self._last_status
+                source = 'last_status'
+
             if cached_status is not None:
-                # Update last_updated timestamp to indicate cached data
-                cached_status.last_updated = time.time()
                 self.logger.log_powerwall_operation(
-                    "get_status_fallback_cache", True,
+                    "get_status_fallback", True,
                     metadata={
                         'host': self.config.host,
-                        'source': 'degradation_cache',
+                        'source': source,
+                        'stale': source != 'cache',
                         'backup_reserve': cached_status.backup_reserve_percentage
                     }
                 )
                 return cached_status
-
-            # Try to use last known status
-            if self._last_status:
-                # Age the status but return it as fallback
-                self._last_status.last_updated = time.time()
-                self.logger.log_powerwall_operation(
-                    "get_status_fallback_last", True,
-                    metadata={
-                        'host': self.config.host,
-                        'source': 'last_status',
-                        'backup_reserve': self._last_status.backup_reserve_percentage
-                    }
-                )
-                return self._last_status
-
-            # Use emergency fallback data
-            emergency_data = self._degradation_manager.get_emergency_fallback_data('powerwall_status')
-            if emergency_data:
-                status = PowerwallStatus(
-                    backup_reserve_percentage=emergency_data['backup_reserve_percentage'],
-                    battery_level=emergency_data['battery_level'],
-                    is_charging=emergency_data['is_charging'],
-                    is_grid_connected=emergency_data['is_grid_connected'],
-                    last_updated=emergency_data['last_updated']
-                )
-                self.logger.log_powerwall_operation(
-                    "get_status_emergency_fallback", True,
-                    metadata={
-                        'host': self.config.host,
-                        'source': 'emergency_config',
-                        'backup_reserve': status.backup_reserve_percentage
-                    }
-                )
-                return status
 
             raise PowerwallUnavailableError(
                 self.config.host,
@@ -877,30 +961,21 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 cache_key=cache_key
             )
 
-            # Update last known status
+            # Update caches for future fallbacks
             self._last_status = result
+            self._data_cache.set(cache_key, result)
             return result
 
-        except Exception as circuit_error:
-            # Late import to avoid circular dependency
-            from ..scheduler.circuit_breaker import CircuitBreakerOpenException
-
-            if isinstance(circuit_error, CircuitBreakerOpenException):
-                self.logger.log_powerwall_operation(
-                    "get_status_circuit_open", False,
-                    metadata={'host': self.config.host}
-                )
-                # Try fallback even when circuit breaker is open
-                return _fallback_operation()
-            else:
-                raise circuit_error
-
         except Exception as e:
-            # Final fallback attempt
-            try:
-                return _fallback_operation()
-            except:
-                raise PowerwallUnavailableError(self.config.host, f"Failed to get status: {e}")
+            self.logger.log_powerwall_operation(
+                "get_status_failed", False,
+                metadata={'host': self.config.host, 'error': str(e)}
+            )
+            if isinstance(e, PowerwallUnavailableError):
+                raise
+            raise PowerwallUnavailableError(
+                self.config.host, f"Failed to get status: {e}"
+            )
 
     def get_last_status(self) -> Optional[PowerwallStatus]:
         """Get the last cached status."""
@@ -923,8 +998,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         if cached_info is not None:
             return cached_info
 
-        if not self.is_connected():
-            self.connect()
+        self.ensure_connected()
 
         try:
             self._handle_rate_limit()
@@ -991,96 +1065,6 @@ class PowerwallConnector(PowerwallConnectorInterface):
 
         return self._reserve_validator.suggest_optimal_percentage(time_of_day, battery_level)
 
-    def get_health_status(self) -> Dict[str, Any]:
-        """Get comprehensive health status including circuit breaker and degradation state."""
-        try:
-            health_check = self._health_monitor.check_health(self)
-        except:
-            health_check = {'overall_health': 'unknown', 'timestamp': datetime.now()}
-
-        circuit_metrics = self._circuit_breaker.get_metrics()
-        degradation_status = self._degradation_manager.get_status()
-
-        try:
-            recovery_stats = self._recovery_manager.get_recovery_stats()
-        except:
-            recovery_stats = {}
-
-        # Determine overall system health based on all components
-        overall_health = 'healthy'
-        if (circuit_metrics['current_state'] == 'open' or
-            degradation_status['current_state'] in ['offline', 'degraded']):
-            overall_health = 'degraded'
-        elif degradation_status['current_state'] == 'recovery':
-            overall_health = 'recovering'
-
-        return {
-            'overall_health': overall_health,
-            'health_check': health_check,
-            'circuit_breaker': {
-                'state': circuit_metrics['current_state'],
-                'failure_count': circuit_metrics['failure_count'],
-                'success_count': circuit_metrics['success_count'],
-                'total_calls': circuit_metrics['total_calls'],
-                'failure_rate': circuit_metrics['overall_failure_rate'],
-                'recent_failure_rate': circuit_metrics['recent_failure_rate'],
-                'time_since_last_failure': circuit_metrics['time_since_last_failure']
-            },
-            'degradation': {
-                'service_state': degradation_status['current_state'],
-                'degradation_level': degradation_status['degradation_level'],
-                'time_in_state_seconds': degradation_status['time_in_state_seconds'],
-                'recovery_attempts': degradation_status['recovery_attempts'],
-                'cache_stats': degradation_status['cache_stats']
-            },
-            'recovery_stats': recovery_stats,
-            'last_health_check': health_check['timestamp'].isoformat() if 'timestamp' in health_check else datetime.now().isoformat(),
-            'host': self.config.host,
-            'connected': self.is_connected()
-        }
-
-    def get_health_summary(self, hours: int = 24) -> Dict[str, Any]:
-        """Get health summary for the last N hours."""
-        return self._health_monitor.get_health_summary(hours)
-
-    def reset_circuit_breaker(self) -> None:
-        """Manually reset the circuit breaker."""
-        self._circuit_breaker.reset()
-        self.logger.log_powerwall_operation(
-            "circuit_breaker_reset", True,
-            metadata={'host': self.config.host}
-        )
-
-    def force_health_check(self) -> Dict[str, Any]:
-        """Force an immediate health check."""
-        return self._health_monitor.check_health(self)
-
-    def attempt_recovery(self) -> bool:
-        """Attempt to recover from degraded service state."""
-        recovery_attempted = self._degradation_manager.attempt_recovery()
-
-        self.logger.log_powerwall_operation(
-            "recovery_attempt", recovery_attempted,
-            metadata={
-                'host': self.config.host,
-                'current_state': self._degradation_manager.current_state.value
-            }
-        )
-
-        return recovery_attempted
-
-    def get_degradation_status(self) -> Dict[str, Any]:
-        """Get detailed degradation service status."""
-        return self._degradation_manager.get_status()
-
-    def clear_degradation_cache(self) -> None:
-        """Clear degradation cache to force fresh data retrieval."""
-        self._degradation_manager.clear_cache()
-        self.logger.log_powerwall_operation(
-            "degradation_cache_cleared", True,
-            metadata={'host': self.config.host}
-        )
-
     # PyPowerwall Command Wrappers for Task Planner
 
     def set_mode(self, mode: str) -> bool:
@@ -1096,8 +1080,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         Raises:
             PowerwallAPIError: If API call fails
         """
-        if not self.is_connected():
-            self.connect()
+        self.ensure_connected()
 
         self._handle_rate_limit()
 
@@ -1137,8 +1120,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         Raises:
             PowerwallAPIError: If API call fails
         """
-        if not self.is_connected():
-            self.connect()
+        self.ensure_connected()
 
         self._handle_rate_limit()
 
@@ -1178,8 +1160,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         Raises:
             PowerwallAPIError: If API call fails
         """
-        if not self.is_connected():
-            self.connect()
+        self.ensure_connected()
 
         self._handle_rate_limit()
 
@@ -1216,8 +1197,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         Raises:
             PowerwallAPIError: If API call fails
         """
-        if not self.is_connected():
-            self.connect()
+        self.ensure_connected()
 
         self._handle_rate_limit()
 
