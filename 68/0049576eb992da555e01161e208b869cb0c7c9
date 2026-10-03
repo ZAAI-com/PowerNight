@@ -1,0 +1,65 @@
+tests/unit/test_planner_threading.py
+  s_30393b5f08c87d::t_d2d66747c94e9d 88,92,99,114,117-119,122,138-141,144
+src/powernight/core/auth/tesla_oauth.py
+  s_30393b5f08c87d::t_65e8ab43edf678 16
+  s_30393b5f08c87d::t_37372919942c96 321,402,407-409,458,460-462,464
+  s_30393b5f08c87d::t_307e4e86722edb 444-446
+tests/unit/test_powerwall_connection_recovery.py
+  s_30393b5f08c87d::t_31f8c7ced46725 1-149
+src/powernight/web/src/pages/Settings.tsx
+  s_30393b5f08c87d::t_fa8acf47d3060d 29-32,71,198-202,257-277
+  s_30393b5f08c87d::t_05be9a0f68514a 430-440,510-512,572-605,650-659,662
+  s_30393b5f08c87d::t_5d80d977ca3dcf 278-280
+src/powernight/web/test/pages/Settings.test.tsx
+  s_30393b5f08c87d::t_f46827451a01e0 93
+  s_30393b5f08c87d::t_c91aa3e3c24299 109,145
+  s_30393b5f08c87d::t_e8a1dc11a75598 2,71-92,94-108,110-144,146-147
+src/powernight/web/src/types/index.ts
+  s_30393b5f08c87d::t_117f853ed90308 11-14
+tests/unit/test_tesla_oauth.py
+  s_30393b5f08c87d::t_0cf43b19fea9f1 366-367,385-403
+  s_30393b5f08c87d::t_294e5a226da6c8 404-405
+src/powernight/core/powerwall/connector.py
+  s_30393b5f08c87d::t_ddc778a7755c76 569,577
+  s_30393b5f08c87d::t_8484f1dddca422 9,14,159-162,382-387,392-406,416-419,435,439-468,483,497,501-506,527-529,535-538,540,554-559,564-566,572-574,580,587-589,591-594,596-598,600-605,607-608,610-612,614-619,651,668,1237
+  s_30393b5f08c87d::t_7d6c1bde3c85ab 688,785,886,1001,1083,1123,1163,1200
+  s_30393b5f08c87d::t_28c2e857b576e6 427-432
+  s_30393b5f08c87d::t_0b3357f737e53f 10,17-22,388-391,407-415,420-426,433-434,436-438,510,581-586,590,606,609
+  s_30393b5f08c87d::t_f9c6835dd6b8fd 469-482,623-625,631-633,636-650,652-654
+  s_30393b5f08c87d::t_08732ad28644bc 595,599
+  s_30393b5f08c87d::t_496da0f42b9194 74-77
+  s_30393b5f08c87d::t_0db97aadee5df2 73
+  s_30393b5f08c87d::t_90762683bd5daa 507
+  s_30393b5f08c87d::t_9d33c74fe0b579 655
+tests/unit/test_auth_connection_api.py
+  s_30393b5f08c87d::t_b72eefa257104b 3,8-15,18,42,53,66,77,96,109,129
+  s_30393b5f08c87d::t_980692808c9421 1-2,4-7,16-17,19-41,43-52,54-65,67-76,78-95,97-108,110-128,130-137
+src/powernight/web/api/auth_api.py
+  s_30393b5f08c87d::t_6199176efadf6b 34-74
+  s_30393b5f08c87d::t_65e8ab43edf678 7
+  s_30393b5f08c87d::t_6cc4e6da95c1f1 116,123-124,149
+  s_30393b5f08c87d::t_f24c97d247bca9 361-383,389-390
+  s_30393b5f08c87d::t_307e4e86722edb 488-490,657-659
+  s_30393b5f08c87d::t_d630fa6458e1de 575,578-580,583-584,587-599,603,606-608,611-612,615
+  s_30393b5f08c87d::t_06685c194115b5 75-76
+src/powernight/core/planner/task_executor.py
+  s_30393b5f08c87d::t_08732ad28644bc 194-196,198
+  s_30393b5f08c87d::t_7f525faa03ebe8 201,205
+  s_30393b5f08c87d::t_1da2fba88cf47c 191-193,197,199-200,202-204
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "680049576eb992da555e01161e208b869cb0c7c9",
+  "prompts": {},
+  "sessions": {
+    "s_30393b5f08c87d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f60b3-45a9-7bc0-8934-e2ee748a7285",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
