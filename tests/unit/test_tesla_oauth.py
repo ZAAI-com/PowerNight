@@ -16,8 +16,6 @@ import time
 import urllib.parse
 from unittest.mock import Mock, patch
 
-import pytest
-
 from powernight.core.auth.tesla_oauth import TeslaOAuthManager
 from powernight.core.auth.token_storage import PyPowerwallAuthStorage
 
@@ -365,6 +363,8 @@ class TestTeslaOAuthManagerTokens:
         reloaded = manager.auth_storage.load_auth_data()
         assert reloaded["access_token"] == "refreshed-access-token"
         assert reloaded["refresh_token"] == "refreshed-refresh-token"
+        assert reloaded["site"] == {"id": 123456}
+        assert (tmp_path / ".pypowerwall.site").read_text().strip() == "123456"
         assert manager.auth_storage.is_token_expired(reloaded) is False
 
     def test_refresh_access_token_http_failure_returns_false(self, tmp_path):
@@ -380,6 +380,27 @@ class TestTeslaOAuthManagerTokens:
             return_value=error_response,
         ):
             assert manager.refresh_access_token() is False
+
+
+class TestTeslaOAuthManagerCompletion:
+    def test_complete_setup_only_persists_credentials(self, tmp_path):
+        manager = TeslaOAuthManager(storage_path=str(tmp_path))
+        manager._active_sessions['session-1'] = {
+            'email': EMAIL,
+            'access_token': 'access-token',
+            'refresh_token': 'refresh-token',
+            'expires_at': time.time() + 3600,
+            'sites': [make_site(24680)],
+            'step': 'selecting_site',
+        }
+
+        with patch('pypowerwall.Powerwall') as powerwall_class:
+            result = manager.complete_setup('session-1', '24680')
+
+        assert result['success'] is True
+        assert result['credentials_saved'] is True
+        assert manager.auth_storage.load_auth_data()['site'] == {'id': 24680}
+        powerwall_class.assert_not_called()
 
 
 class TestTeslaOAuthManagerStatus:

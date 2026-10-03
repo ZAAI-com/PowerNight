@@ -4,7 +4,6 @@ Tesla OAuth 2.0 authentication manager for pypowerwall compatibility.
 Handles the complete OAuth flow matching pypowerwall's terminal setup process.
 """
 
-import os
 import secrets
 import urllib.parse
 import hashlib
@@ -14,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 import requests
 
 from .token_storage import PyPowerwallAuthStorage
-from ...utils.logging import get_logger, ComponentType
+from ...utils.logging import get_logger
 
 
 class TeslaOAuthManager:
@@ -308,16 +307,6 @@ class TeslaOAuthManager:
                 site=selected_site
             )
             
-            # --- Create and return the authenticated pypowerwall instance ---
-            import pypowerwall
-            powerwall_instance = pypowerwall.Powerwall(
-                email=session_data['email'],
-                cloudmode=True,
-                authmode="token",
-                authpath=str(self.auth_storage.storage_path) + "/",
-                timeout=30
-            )
-
             # Update session
             session_data['step'] = 'complete'
             session_data['selected_site'] = selected_site
@@ -329,7 +318,7 @@ class TeslaOAuthManager:
                 'message': 'Setup complete. Auth file created.',
                 'email': session_data['email'],
                 'site': selected_site,
-                'powerwall_instance': powerwall_instance
+                'credentials_saved': True,
             }
             
         except Exception as e:
@@ -410,13 +399,14 @@ class TeslaOAuthManager:
             }
             
             # Update stored auth data
+            existing_site = auth_data.get('site') or {}
             self.auth_storage.store_auth_data(
                 email=auth_data['email'],
                 tokens=updated_tokens,
                 site={
-                    'id': auth_data.get('site_id'),
-                    'name': auth_data.get('site_name'),
-                    'type': auth_data.get('site_type')
+                    'id': existing_site.get('id'),
+                    'name': existing_site.get('name'),
+                    'type': existing_site.get('type')
                 }
             )
             
@@ -451,7 +441,9 @@ class TeslaOAuthManager:
                 cloudmode=True,
                 authmode="token",
                 authpath=str(self.auth_storage.storage_path) + "/",
-                timeout=30
+                timeout=30,
+                siteid=(auth_data.get('site') or {}).get('id'),
+                failover=False,
             )
             
             # Test basic connectivity by getting site info
@@ -461,15 +453,15 @@ class TeslaOAuthManager:
             
             # Get basic Powerwall info
             battery_level = pw.level()
-            power_data = pw.power()
             
             # Create a simplified Powerwall info structure
+            site_id = (auth_data.get('site') or {}).get('id', 'unknown')
             powerwall_info = {
-                'id': auth_data.get('site_id', 'unknown'),
-                'serial_number': auth_data.get('site_id', 'unknown'),
-                'site_id': auth_data.get('site_id', 'unknown'),
+                'id': site_id,
+                'serial_number': site_id,
+                'site_id': site_id,
                 'display_name': f"Powerwall ({auth_data['email']})",
-                'energy_site_id': auth_data.get('site_id', 'unknown'),
+                'energy_site_id': site_id,
                 'resource_type': 'battery',
                 'state': 'online' if battery_level is not None else 'unknown',
                 'components': {

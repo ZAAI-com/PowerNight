@@ -26,6 +26,10 @@ interface AuthInfo {
   access_token_masked?: string;
   refresh_token_masked?: string;
   message?: string;
+  connected?: boolean;
+  connection_status?: 'connected' | 'disconnected' | 'unknown';
+  last_connection_attempt?: string | null;
+  connection_error?: string | null;
 }
 
 interface VersionInfo {
@@ -64,6 +68,7 @@ const Settings: React.FC = () => {
   // Auth Info State
   const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
   const [authInfoLoading, setAuthInfoLoading] = useState(false);
+  const [connectionTesting, setConnectionTesting] = useState(false);
 
   // Version Info State
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
@@ -190,6 +195,11 @@ const Settings: React.FC = () => {
 
       if (data.success) {
         setCurrentStep('complete');
+        await fetchAuthInfo();
+      } else if (data.credentials_saved) {
+        setCurrentStep('complete');
+        await fetchAuthInfo();
+        setError(data.connection_error || data.message || 'Tesla credentials were saved, but the live connection failed.');
       } else {
         setError(data.error || 'Failed to complete setup');
       }
@@ -241,6 +251,30 @@ const Settings: React.FC = () => {
       });
     } finally {
       setVersionLoading(false);
+    }
+  };
+
+  const testTeslaConnection = async () => {
+    setConnectionTesting(true);
+    setError(null);
+    try {
+      const response = await api.authenticatedFetch('/api/auth/tesla/test-connection', {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (data.success) {
+        setAuthInfo((current) => current ? { ...current, ...data.data } : current);
+        showToast('Tesla cloud connection successful', 'success');
+      } else {
+        setAuthInfo((current) => current ? { ...current, ...data.data, connected: false } : current);
+        setError(data.error || 'Tesla cloud connection failed');
+        showToast(data.error || 'Tesla cloud connection failed', 'error');
+      }
+    } catch {
+      setError('Failed to test Tesla cloud connection');
+      showToast('Failed to test Tesla cloud connection', 'error');
+    } finally {
+      setConnectionTesting(false);
     }
   };
 
@@ -393,9 +427,17 @@ const Settings: React.FC = () => {
 
             {(currentStep === 'selecting_site' || currentStep === 'complete') && (
               <div className="space-y-4">
-                <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                  <p className="text-green-800 font-medium">✅ Tesla Account connected</p>
-                  <p className="text-green-700 text-sm mt-1">Email: {email}</p>
+                <div className={`p-4 border rounded-md ${
+                  authInfo?.connected
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-yellow-50 border-yellow-200'
+                }`}>
+                  <p className={`font-medium ${authInfo?.connected ? 'text-green-800' : 'text-yellow-800'}`}>
+                    {authInfo?.connected ? '✅ Tesla cloud connected' : '⚠️ Tesla credentials stored; live connection unavailable'}
+                  </p>
+                  <p className={`text-sm mt-1 ${authInfo?.connected ? 'text-green-700' : 'text-yellow-700'}`}>
+                    Email: {email}
+                  </p>
                 </div>
               </div>
             )}
@@ -465,9 +507,9 @@ const Settings: React.FC = () => {
                 </div>
               ) : authInfo.authenticated ? (
                 <div className="space-y-4">
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                    <p className="text-green-800 font-medium">✅ PyPowerwall authentication file found</p>
-                    <p className="text-green-700 text-sm mt-1">Authentication data is available and ready to use</p>
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                    <p className="text-blue-800 font-medium">Tesla credentials stored</p>
+                    <p className="text-blue-700 text-sm mt-1">Token validity and live Tesla cloud connectivity are shown separately below.</p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -528,6 +570,40 @@ const Settings: React.FC = () => {
                   </div>
 
                   <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-3">Live Connection</h3>
+                    <dl className="space-y-2">
+                      <div>
+                        <dt className="text-sm font-medium text-gray-500">Status</dt>
+                        <dd className="text-sm">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            authInfo.connected
+                              ? 'bg-green-100 text-green-800'
+                              : authInfo.connection_status === 'disconnected'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {authInfo.connected ? 'Connected' : authInfo.connection_status === 'disconnected' ? 'Disconnected' : 'Unknown'}
+                          </span>
+                        </dd>
+                      </div>
+                      {authInfo.last_connection_attempt && (
+                        <div>
+                          <dt className="text-sm font-medium text-gray-500">Last Attempt</dt>
+                          <dd className="text-sm text-gray-900 font-mono">
+                            {formatDateTimeWithTimezone(authInfo.last_connection_attempt, timezoneInfo?.timezone)}
+                          </dd>
+                        </div>
+                      )}
+                      {authInfo.connection_error && (
+                        <div>
+                          <dt className="text-sm font-medium text-gray-500">Connection Error</dt>
+                          <dd className="text-sm text-red-700">{authInfo.connection_error}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  </div>
+
+                  <div>
                     <h3 className="text-lg font-medium text-gray-900 mb-3">Token Information</h3>
                     <dl className="space-y-2">
                       <div>
@@ -571,9 +647,19 @@ const Settings: React.FC = () => {
                     </dl>
                   </div>
 
-                  <div className="pt-4 border-t border-gray-200">
+                  <div className="pt-4 border-t border-gray-200 flex flex-wrap gap-3">
+                    <button
+                      onClick={testTeslaConnection}
+                      disabled={connectionTesting}
+                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {connectionTesting
+                        ? 'Testing Connection...'
+                        : authInfo.connected ? 'Test Connection' : 'Retry Connection'}
+                    </button>
                     <button
                       onClick={fetchAuthInfo}
+                      disabled={authInfoLoading}
                       className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
                     >
                       Refresh Auth Info

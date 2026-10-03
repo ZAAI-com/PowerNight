@@ -4,7 +4,7 @@ Tesla OAuth authentication API endpoints.
 Handles web-based OAuth flow, token management, and Powerwall discovery.
 """
 
-from flask import Blueprint, request, jsonify, session, redirect, url_for
+from flask import Blueprint, current_app, request, jsonify, session
 from datetime import datetime, timezone
 
 from ...core.auth.tesla_oauth import TeslaOAuthManager
@@ -29,6 +29,49 @@ def init_auth_api(app):
     storage_path = os.environ.get('POWERNIGHT_DATA_PATH', 'data')
     oauth_manager = TeslaOAuthManager(storage_path=storage_path)
     app.register_blueprint(auth_blueprint)
+
+
+def _shared_connector():
+    """Return the application's long-lived Powerwall connector, when available."""
+    return getattr(current_app, 'powerwall_connector', None)
+
+
+def _shared_connection_status():
+    """Return a JSON-safe snapshot of live Tesla connection state."""
+    connector = _shared_connector()
+    if connector is None or not hasattr(connector, 'get_connection_status'):
+        return {
+            'connected': False,
+            'connection_status': 'unknown',
+            'last_connection_attempt': None,
+            'connection_error': None,
+        }
+
+    status = connector.get_connection_status()
+    if not isinstance(status, dict):
+        return {
+            'connected': False,
+            'connection_status': 'unknown',
+            'last_connection_attempt': None,
+            'connection_error': None,
+        }
+    return {
+        'connected': bool(status.get('connected')),
+        'connection_status': status.get('connection_status', 'unknown'),
+        'last_connection_attempt': status.get('last_connection_attempt'),
+        'connection_error': status.get('connection_error'),
+    }
+
+
+def _connect_shared_connector(force=False):
+    """Connect the shared connector used by the scheduler and manual commands."""
+    connector = _shared_connector()
+    if connector is None:
+        raise RuntimeError('Powerwall connector is not available')
+    if force:
+        connector.disconnect()
+    connector.ensure_connected()
+    return _shared_connection_status()
 
 
 @auth_blueprint.route('/tesla/status', methods=['GET'])
@@ -70,13 +113,15 @@ def get_auth_info():
     try:
         # Get basic auth status
         status = oauth_manager.get_auth_status()
+        connection_status = _shared_connection_status()
         
         if not status.get('authenticated'):
             return jsonify({
                 'success': True,
                 'data': {
                     'authenticated': False,
-                    'message': 'No Tesla authentication found'
+                    'message': 'No Tesla authentication found',
+                    **connection_status,
                 },
                 'timestamp': datetime.now(timezone.utc).isoformat()
             })
@@ -101,6 +146,7 @@ def get_auth_info():
             'access_token_masked': _mask_token(auth_data.get('access_token', '')),
             'refresh_token_masked': _mask_token(auth_data.get('refresh_token', ''))
         }
+        response_data.update(connection_status)
         
         return jsonify({
             'success': True,
@@ -312,11 +358,36 @@ def complete_auth_setup():
         result = oauth_manager.complete_setup(session_id, site_id)
         
         if result['success']:
+            try:
+                connection_status = _connect_shared_connector(force=True)
+            except Exception as connection_error:
+                logger.log_error(
+                    ComponentType.WEB,
+                    f"Tesla credentials saved but shared connector failed ({type(connection_error).__name__})",
+                    connection_error,
+                )
+                connection_status = _shared_connection_status()
+                return jsonify({
+                    'success': False,
+                    'credentials_saved': True,
+                    'connected': False,
+                    'connection_status': 'disconnected',
+                    'connection_error': connection_status.get('connection_error') or (
+                        'Tesla cloud connection failed. Check Settings and the container logs.'
+                    ),
+                    'message': 'Tesla credentials were saved, but the live connection failed.',
+                    'email': result['email'],
+                    'site': result['site'],
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }), 502
+
             return jsonify({
                 'success': True,
                 'message': result['message'],
                 'email': result['email'],
                 'site': result['site'],
+                'credentials_saved': True,
+                **connection_status,
                 'timestamp': datetime.now(timezone.utc).isoformat()
             })
         else:
@@ -414,6 +485,9 @@ def logout():
         success = oauth_manager.revoke_tokens()
         
         if success:
+            connector = _shared_connector()
+            if connector is not None:
+                connector.disconnect()
             # Clear any session data
             session.clear()
             
@@ -498,43 +572,47 @@ def test_connection():
         JSON response with connection test result
     """
     try:
-        # Test pypowerwall connection using stored auth data
-        result = oauth_manager.test_pypowerwall_connection("")
-        
-        if result['success']:
-            return jsonify({
-                'success': True,
-                'message': 'pypowerwall connection test successful',
-                'data': {
-                    'powerwalls_found': 1,
-                    'api_accessible': True,
-                    'connection_type': 'pypowerwall_cloud',
-                    'powerwall_info': result['powerwall']
-                },
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            })
-        else:
+        if not oauth_manager.auth_storage.has_auth_data():
             return jsonify({
                 'success': False,
-                'error': result.get('error', 'Connection test failed'),
+                'error': 'No Tesla authentication configured',
+                'code': 'TESLA_AUTH_REQUIRED',
+                'message': 'Connect or reconnect your Tesla account in Settings.',
                 'data': {
                     'api_accessible': False,
-                    'connection_type': 'pypowerwall_cloud'
+                    'connection_type': 'pypowerwall_cloud',
+                    **_shared_connection_status(),
                 },
                 'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 500
+            }), 503
+
+        connection_status = _connect_shared_connector(force=True)
+        return jsonify({
+            'success': True,
+            'message': 'Tesla cloud connection successful',
+            'data': {
+                'api_accessible': True,
+                'connection_type': 'pypowerwall_cloud',
+                **connection_status,
+            },
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
         
     except Exception as e:
         logger.log_error(ComponentType.WEB, "Connection test failed", e)
+        connection_status = _shared_connection_status()
         return jsonify({
             'success': False,
-            'error': 'Internal server error',
+            'error': connection_status.get('connection_error') or (
+                'Tesla cloud connection failed. Check Settings and the container logs.'
+            ),
             'data': {
                 'api_accessible': False,
-                'connection_type': 'pypowerwall_cloud'
+                'connection_type': 'pypowerwall_cloud',
+                **connection_status,
             },
             'timestamp': datetime.now(timezone.utc).isoformat()
-        }), 500
+        }), 502
 
 
 @auth_blueprint.route('/site-details', methods=['GET'])
@@ -576,7 +654,9 @@ def get_site_details():
             cloudmode=True,
             authmode="token",
             authpath=str(oauth_manager.auth_storage.storage_path) + "/",
-            timeout=30
+            timeout=30,
+            siteid=auth_data['site'].get('id'),
+            failover=False,
         )
 
         # Get comprehensive site data using multiple pypowerwall methods

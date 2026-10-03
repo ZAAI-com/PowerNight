@@ -188,28 +188,21 @@ class TaskExecutor:
         if not self.powerwall_connector:
             raise PowerwallError("Powerwall connector not available")
 
-        if not self.powerwall_connector.is_connected():
-            # The shared connector may have no live session (e.g. the one-shot
-            # connect() at startup ran before Tesla login completed, or hit a
-            # transient failure). Attempt a reconnect before giving up, mirroring
-            # the connector's own command methods which do
-            # `if not is_connected(): connect()`. connect() re-reads/refreshes the
-            # token and rebuilds the pypowerwall handle, so a token that is valid
-            # on disk now produces a working session and scheduled tasks self-heal.
-            try:
-                self.powerwall_connector.connect()
-            except Exception as e:
-                # connect() may raise PowerwallError subclasses or
-                # CircuitBreakerOpenException (not a PowerwallError). Surface the
-                # user-facing message while preserving the real cause via `from e`.
-                raise PowerwallError(
-                    "Powerwall is not connected or authenticated. Please login via the Settings page."
-                ) from e
-
-            if not self.powerwall_connector.is_connected():
-                raise PowerwallError(
-                    "Powerwall is not connected or authenticated. Please login via the Settings page."
-                )
+        try:
+            self.powerwall_connector.ensure_connected()
+        except Exception as error:
+            safe_detail = self.powerwall_connector._safe_log_detail(error)
+            self.logger.error(
+                "Powerwall reconnect failed for task %s: %s",
+                self.task_id,
+                safe_detail,
+            )
+            status = self.powerwall_connector.get_connection_status()
+            failure_category = status.get('connection_error_code') or 'connection'
+            safe_error = status.get('connection_error') or (
+                'Tesla cloud connection failed. Check Settings and the container logs.'
+            )
+            raise PowerwallError(f'[{failure_category}] {safe_error}') from error
 
         command_type = self.command.command_type
         params = self.command.params

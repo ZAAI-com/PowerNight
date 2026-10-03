@@ -8,6 +8,10 @@ export interface AuthStatus {
   energy_site_id?: string;
   token_expired?: boolean;
   expires_at?: string;
+  connected?: boolean;
+  connection_status?: 'connected' | 'disconnected' | 'unknown';
+  last_connection_attempt?: string | null;
+  connection_error?: string | null;
 }
 
 export interface PowerwallStatus {

@@ -85,19 +85,18 @@ class TestExecuteCommandReconnect:
         return TaskExecutor(task_id, 'Reserve task', command)
 
     def test_reconnects_when_disconnected_then_executes(self):
-        """Disconnected on first check -> connect() -> connected -> command runs."""
+        """The canonical connection guard runs before the command."""
         executor = self._reserve_executor('task-reconnect')
 
         connector = MagicMock()
-        # is_connected(): False before reconnect, True after connect() succeeds.
-        connector.is_connected.side_effect = [False, True]
+        connector.ensure_connected.return_value = True
         connector.set_backup_reserve_percentage.return_value = {'ok': True}
         connector._sanitize_api_response.return_value = {'ok': True}
         executor.powerwall_connector = connector
 
         result = executor._execute_command()
 
-        connector.connect.assert_called_once()
+        connector.ensure_connected.assert_called_once()
         connector.set_backup_reserve_percentage.assert_called_once_with(50)
         assert result['success'] is True
 
@@ -112,13 +111,15 @@ class TestExecuteCommandReconnect:
         executor = self._reserve_executor('task-authfail')
 
         connector = MagicMock()
-        connector.is_connected.return_value = False
-        connector.connect.side_effect = PowerwallAuthenticationError(
+        connector.ensure_connected.side_effect = PowerwallAuthenticationError(
             "No valid access token available"
         )
+        connector.get_connection_status.return_value = {
+            'connection_error': 'Tesla authentication failed. Reconnect your Tesla account in Settings.'
+        }
         executor.powerwall_connector = connector
 
-        with pytest.raises(PowerwallError, match="Please login via the Settings page"):
+        with pytest.raises(PowerwallError, match="Tesla authentication failed"):
             executor._execute_command()
 
         connector.set_backup_reserve_percentage.assert_not_called()
@@ -134,11 +135,13 @@ class TestExecuteCommandReconnect:
         executor = self._reserve_executor('task-cbopen')
 
         connector = MagicMock()
-        connector.is_connected.return_value = False
-        connector.connect.side_effect = CircuitBreakerOpenException("circuit open")
+        connector.ensure_connected.side_effect = CircuitBreakerOpenException("circuit open")
+        connector.get_connection_status.return_value = {
+            'connection_error': 'Tesla cloud connection is temporarily paused after repeated failures.'
+        }
         executor.powerwall_connector = connector
 
-        with pytest.raises(PowerwallError, match="Please login via the Settings page"):
+        with pytest.raises(PowerwallError, match="temporarily paused"):
             executor._execute_command()
 
         connector.set_backup_reserve_percentage.assert_not_called()
