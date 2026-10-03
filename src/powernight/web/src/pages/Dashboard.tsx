@@ -40,7 +40,7 @@ const Dashboard: React.FC = () => {
         // Persist to localStorage
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data.data));
       } else {
-        setError(data.error || 'Failed to fetch site details');
+        setError(data.message || data.error || 'Failed to fetch site details');
       }
     } catch (err) {
       console.error('Failed to fetch site details:', err);

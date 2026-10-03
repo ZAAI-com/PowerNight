@@ -62,6 +62,7 @@ def get_app_config() -> Dict[str, Any]:
 
 
 @config_blueprint.route('', methods=['GET'])
+@require_auth
 def get_config_api():
     """
     API endpoint to get the application configuration.

@@ -32,6 +32,10 @@ describe('PowerNightAPI', () => {
     api.clearApiKey();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe('API Key management', () => {
     it('should set and get API key', () => {
       api.setApiKey('test-key');
@@ -124,12 +128,37 @@ describe('PowerNightAPI', () => {
     });
 
     it('should clear a rejected key from authenticated fetch requests', async () => {
+      const dispatchEvent = vi.spyOn(window, 'dispatchEvent');
       api.setApiKey('invalid-key');
       vi.mocked(fetch).mockResolvedValue({ status: 401 } as Response);
 
       await api.authenticatedFetch('/api/auth/site-details');
 
       expect(api.isAuthenticated()).toBe(false);
+      expect(localStorage.getItem('powernight_api_key')).toBeNull();
+      expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'powernight:auth-required',
+      }));
+    });
+
+    it.each([false, true])('should preserve app login on Tesla 503 (key stored: %s)', async (hasKey) => {
+      const dispatchEvent = vi.spyOn(window, 'dispatchEvent');
+      if (hasKey) api.setApiKey('valid-key');
+      const response = new Response(JSON.stringify({
+        success: false,
+        error: 'No valid authentication token available',
+        code: 'TESLA_AUTH_REQUIRED',
+        message: 'Connect or reconnect your Tesla account in Settings.',
+      }), { status: 503 });
+      vi.mocked(fetch).mockResolvedValue(response);
+
+      const result = await api.authenticatedFetch('/api/auth/site-details');
+
+      expect(result).toBe(response);
+      expect((await result.json()).code).toBe('TESLA_AUTH_REQUIRED');
+      expect(api.isAuthenticated()).toBe(hasKey);
+      expect(localStorage.getItem('powernight_api_key')).toBe(hasKey ? 'valid-key' : null);
+      expect(dispatchEvent).not.toHaveBeenCalled();
     });
 
     it('should authenticate with valid API key', async () => {

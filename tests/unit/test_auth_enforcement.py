@@ -7,6 +7,7 @@ no credentials remain available on their trusted local network.
 """
 
 import pytest
+from unittest.mock import Mock
 
 from powernight.core.config.schema import PowerNightConfig
 from powernight.web.app import create_app
@@ -95,6 +96,7 @@ class TestAuthEnforcement:
         "/api/v1/tasks",
         "/api/v1/logs/executions",
         "/api/v1/backup-reserve",
+        "/api/v1/config",
     ])
     def test_protected_endpoint_requires_auth(self, auth_client, path):
         resp = auth_client.get(path)
@@ -121,6 +123,84 @@ class TestAuthEnforcement:
     def test_config_timezone_post_requires_auth(self, auth_client):
         resp = auth_client.post("/api/v1/config/timezone", json={"timezone": "UTC"})
         assert resp.status_code == 401
+
+
+@pytest.mark.unit
+class TestAuthenticationBoundaries:
+
+    @pytest.mark.parametrize("client_fixture", ["open_client", "auth_client"])
+    @pytest.mark.parametrize("path", [
+        "/api/auth/site-details",
+        "/api/auth/tesla/powerwalls",
+    ])
+    def test_missing_tesla_credentials_do_not_reject_app_login(
+        self, request, client_fixture, path
+    ):
+        client = request.getfixturevalue(client_fixture)
+        headers = {"X-API-Key": API_KEY} if client_fixture == "auth_client" else {}
+        resp = client.get(path, headers=headers)
+        assert resp.status_code == 503
+        assert resp.json["success"] is False
+        assert resp.json["code"] == "TESLA_AUTH_REQUIRED"
+        assert resp.json["message"] == "Connect or reconnect your Tesla account in Settings."
+        assert "timestamp" in resp.json
+        assert client.get("/api/v1/auth/check", headers=headers).status_code == 200
+
+    @pytest.mark.parametrize("client_fixture", ["open_client", "auth_client"])
+    def test_failed_tesla_refresh_does_not_reject_app_login(
+        self, request, client_fixture, monkeypatch
+    ):
+        client = request.getfixturevalue(client_fixture)
+        from powernight.web.api import auth_api
+
+        oauth = auth_api.oauth_manager
+        monkeypatch.setattr(oauth.auth_storage, "load_auth_data", lambda: {
+            "access_token": "expired-tesla-token",
+        })
+        monkeypatch.setattr(oauth.auth_storage, "is_token_expired", lambda data: True)
+        refresh = Mock(return_value=False)
+        monkeypatch.setattr(oauth, "refresh_access_token", refresh)
+
+        headers = {"X-API-Key": API_KEY} if client_fixture == "auth_client" else {}
+        resp = client.get("/api/auth/site-details", headers=headers)
+        refresh.assert_called_once_with()
+        assert resp.status_code == 503
+        assert resp.json["code"] == "TESLA_AUTH_REQUIRED"
+        assert resp.json["message"] == "Connect or reconnect your Tesla account in Settings."
+        assert client.get("/api/v1/auth/check", headers=headers).status_code == 200
+
+    @pytest.mark.parametrize("path", [
+        "/api/auth/site-details",
+        "/api/auth/tesla/powerwalls",
+        "/api/v1/config",
+    ])
+    @pytest.mark.parametrize("headers", [{}, {"X-API-Key": "wrong"}])
+    def test_invalid_app_credentials_are_rejected_before_tesla_access(
+        self, auth_client, path, headers, monkeypatch
+    ):
+        from powernight.web.api import auth_api
+
+        token_lookup = Mock()
+        auth_lookup = Mock()
+        monkeypatch.setattr(auth_api.oauth_manager, "get_valid_access_token", token_lookup)
+        monkeypatch.setattr(auth_api.oauth_manager.auth_storage, "has_auth_data", auth_lookup)
+        resp = auth_client.get(path, headers=headers)
+        assert resp.status_code == 401
+        assert "code" not in resp.json
+        token_lookup.assert_not_called()
+        auth_lookup.assert_not_called()
+
+    @pytest.mark.parametrize("client_fixture", ["open_client", "auth_client"])
+    def test_config_reads_remain_available_to_authorized_clients(
+        self, request, client_fixture
+    ):
+        client = request.getfixturevalue(client_fixture)
+        headers = {"X-API-Key": API_KEY} if client_fixture == "auth_client" else {}
+        resp = client.get("/api/v1/config", headers=headers)
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
+        assert set(resp.json["data"]) == {"web", "automation", "powerwall"}
+        assert resp.json["data"]["web"]["port"] == 8020
 
 
 @pytest.mark.unit

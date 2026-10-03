@@ -454,9 +454,10 @@ def get_powerwalls():
             return jsonify({
                 'success': False,
                 'error': 'No Tesla authentication configured',
-                'message': 'Complete the Tesla login in Settings first',
+                'code': 'TESLA_AUTH_REQUIRED',
+                'message': 'Connect or reconnect your Tesla account in Settings.',
                 'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 401
+            }), 503
 
         # Test pypowerwall connection using stored auth data
         result = oauth_manager.test_pypowerwall_connection("")
@@ -554,8 +555,10 @@ def get_site_details():
             return jsonify({
                 'success': False,
                 'error': 'No valid authentication token available',
+                'code': 'TESLA_AUTH_REQUIRED',
+                'message': 'Connect or reconnect your Tesla account in Settings.',
                 'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 401
+            }), 503
 
         # Load auth data to get site info
         auth_data = oauth_manager.auth_storage.load_auth_data()
