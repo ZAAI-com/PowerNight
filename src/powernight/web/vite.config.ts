@@ -11,7 +11,7 @@ export default defineConfig({
     outDir: '../../../dist',
     emptyOutDir: true,
     rollupOptions: {
-      input: resolve(__dirname, 'index.html')
+      input: resolve(import.meta.dirname, 'index.html')
     }
   },
   server: {
@@ -26,6 +26,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    environmentOptions: {
+      jsdom: { url: 'http://localhost:3000' },
+    },
     setupFiles: ['./test/setup.ts'],
     // Playwright e2e specs live under test/e2e and are run via `npm run test:e2e`
     exclude: [...configDefaults.exclude, '**/e2e/**']

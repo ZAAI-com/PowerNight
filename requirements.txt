@@ -1,12 +1,12 @@
 # Core Tesla Powerwall API
-pypowerwall>=0.16.0
+pypowerwall>=0.18.2
 
 # Web Framework
 Flask>=3.1.3
 Flask-CORS>=6.0.5
 
 # Database
-SQLAlchemy>=2.0.51
+SQLAlchemy>=2.1.3
 
 # Task Scheduling
 schedule>=1.2.2
@@ -18,12 +18,12 @@ PyYAML>=6.0.3
 requests>=2.34.2
 
 # Utilities
-click>=8.4.2
-pytz>=2026.2
+click>=8.5.0
+pytz>=2026.4
 
 # Validation and Monitoring
 jsonschema>=4.26.0
 psutil>=7.2.2
 
 # Token encryption
-cryptography>=49.0.0
+cryptography>=50.0.2

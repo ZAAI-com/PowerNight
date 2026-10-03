@@ -16,22 +16,13 @@ const localStorageMock = {
     for (const key of Object.keys(localStorageStore)) delete localStorageStore[key];
   }),
 };
-global.localStorage = localStorageMock as unknown as Storage;
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+  configurable: true,
+});
 
 // Mock fetch
 global.fetch = vi.fn();
-
-// Mock window.location
-Object.defineProperty(window, 'location', {
-  value: {
-    origin: 'http://localhost:3000',
-    href: 'http://localhost:3000',
-    pathname: '/',
-    search: '',
-    hash: '',
-  },
-  writable: true,
-});
 
 // Mock ResizeObserver
 global.ResizeObserver = vi.fn().mockImplementation(() => ({

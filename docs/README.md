@@ -225,6 +225,10 @@ Optimized for Synology DSM Docker integration:
 
 For contributors and developers:
 
+Python 3.11+ is required (Python 3.12+ for the optional documentation tools).
+Docker and CI use Python 3.14; frontend CI uses Node.js 26.
+TypeScript remains on 6.0.3 until typescript-eslint supports TypeScript 7.
+
 ```bash
 # Clone repository
 git clone https://github.com/ZAAI-com/PowerNight.git
@@ -234,7 +238,7 @@ cd PowerNight
 pip install -e ".[dev]"
 
 # Install Node.js dependencies
-npm install
+npm ci
 
 # Build frontend (with version metadata)
 ./build.sh --no-docker

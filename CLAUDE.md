@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 PowerNight is a Docker container application that automates Tesla Powerwall backup reserve management. It uses a **React SPA frontend** with a **Flask API backend** to provide scheduling, monitoring, and control capabilities.
 
 **Technology Stack:**
-- Backend: Python 3.10+ (Flask, SQLAlchemy, pypowerwall)
+- Backend: Python 3.11+ (Flask, SQLAlchemy, pypowerwall)
 - Frontend: React 19.2 + TypeScript + Vite + Tailwind CSS + React Router 7
 - Database: SQLite (file-based)
 - Deployment: Docker (multi-stage build)

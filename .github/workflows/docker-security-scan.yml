@@ -37,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Determine image tag
         id: tag
@@ -51,7 +51,7 @@ jobs:
           echo "Scanning image: ${{ env.DOCKER_IMAGE }}:$TAG"
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.DOCKER_IMAGE }}:${{ steps.tag.outputs.tag }}
           format: 'sarif'
@@ -60,13 +60,13 @@ jobs:
         continue-on-error: true  # Don't fail workflow, but report issues
 
       - name: Upload Trivy scan results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4.38.2
         if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
 
       - name: Run Trivy for detailed output
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.DOCKER_IMAGE }}:${{ steps.tag.outputs.tag }}
           format: 'table'
