@@ -203,7 +203,7 @@ class CronCommand:
         if not validation.valid:
             raise PowerwallValidationError(
                 "command",
-                self.command_type,
+                self.command_enum.value,
                 f"Command validation failed: {', '.join(validation.errors)}"
             )
         
@@ -230,7 +230,7 @@ class CronCommand:
             else:
                 raise PowerwallValidationError(
                     "command_type",
-                    self.command_type,
+                    self.command_enum.value,
                     "Unsupported command type"
                 )
         
