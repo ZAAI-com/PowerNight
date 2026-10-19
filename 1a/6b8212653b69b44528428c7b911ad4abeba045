@@ -1,0 +1,25 @@
+compose.release-test.yml
+  s_5c897049a131de::t_d6553604d05fd9 1-24
+scripts/release_smoke.py
+  s_5c897049a131de::t_d6553604d05fd9 1-145
+.github/workflows/docker-health-test.yml
+  s_5c897049a131de::t_10702d33e8044b 14-15,30-31,75-77,84,116-117,128-129
+  s_5c897049a131de::t_9aea275d9bf486 119,122-125
+  s_5c897049a131de::t_a6e385ef6af93a 9-12,25-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1a6b8212653b69b44528428c7b911ad4abeba045",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
