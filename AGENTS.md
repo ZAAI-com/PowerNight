@@ -8,7 +8,7 @@ This document provides specific instructions for AI agents working on the PowerN
 PowerNight uses a **React SPA (Single Page Application)** with a Flask backend. There is ONLY ONE frontend implementation.
 
 **Frontend Stack:**
-- React 19.2 + TypeScript
+- React 19.3 + TypeScript
 - Vite (build tool)
 - Tailwind CSS (styling)
 - React Router 7 (client-side routing)
@@ -390,7 +390,7 @@ docker inspect PowerNight | grep -A 5 "Mounts"
 - Grid Settings (Backup Reserve, Grid Charging, Grid Export Mode)
 - Additional Data (Load Power, Site Power, Last Updated timestamp)
 - Raw Data (Collapsible JSON view of complete site details)
-- Manual refresh button (no auto-fetch on mount)
+- Refresh every 20 seconds while visible, plus a manual refresh button
 
 ### Planner Page (`/planner`)
 **File:** `src/powernight/web/src/pages/Planner.tsx`

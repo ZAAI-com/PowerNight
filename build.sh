@@ -139,14 +139,14 @@ get_backend_dependencies() {
 
     python3 - <<'PY'
 import json
-import re
 import tomllib
+from packaging.requirements import Requirement
 from pathlib import Path
 
 dependencies = tomllib.loads(Path("pyproject.toml").read_text())["project"]["dependencies"]
-print(json.dumps({name.lower(): version for name, version in (
-    re.split(r"(?=[<>=!~])", dep, maxsplit=1) for dep in dependencies
-)}))
+requirements = [Requirement(dependency) for dependency in dependencies]
+print(json.dumps({requirement.name.lower(): str(requirement.specifier)
+                  for requirement in requirements}))
 PY
 }
 

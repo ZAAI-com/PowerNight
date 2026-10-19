@@ -106,14 +106,18 @@ powernight status
 
 1. **Install & Run PowerNight with Docker Compose**
 
-   Download `docker-compose.yml` and `.env.example` from the release. For a
-   protected deployment, put `POWERNIGHT_API_KEY=<your generated key>` in `.env`
-   (generate it with `openssl rand -hex 32`). Omit the key only on a trusted LAN.
-   Use a tested version or digest instead of `latest` during a staged rollout.
+   After 2.0.0 is published, obtain `docker-compose.yml`, `compose.release.yml`,
+   `.env.example`, and `config.example.yaml` from the tagged repository (or the
+   release assets with `SHA256SUMS`). The release override pins **2.0.0** and
+   persists settings under `/data`; the base file alone still uses unchanged `latest`.
+   Follow [the release runbook](releases/2.0.0.md#persistent-release-configuration)
+   to seed a fresh config or preserve an upgrade config and verify permissions.
+   Set your Tesla email and optional API key in `.env` (generate a key with
+   `openssl rand -hex 32`). Omit the key only on a trusted LAN.
 
    ```bash
-   mkdir -p PowerNight-Data
-   docker compose up -d
+   docker compose -f docker-compose.yml -f compose.release.yml pull
+   docker compose -f docker-compose.yml -f compose.release.yml up -d
    ```
 
 2. **Open web interface**
@@ -143,14 +147,14 @@ powernight status
 
 ### Docker Hub (Recommended)
 
-Use the supplied Docker Compose file, which mounts `./PowerNight-Data:/data`.
-For a version-pinned release, set the service image to `zaaicom/powernight:2.0.0`
-after that version has been published, then run `docker compose pull` and
-`docker compose up -d`. Keep the data directory and `.env` next to the Compose file.
+Use `docker-compose.yml` together with `compose.release.yml` after 2.0.0 is
+published. Both commands in Quick Start include the override so an unchanged
+`latest` cannot be launched accidentally. Keep `PowerNight-Data`, `.env`, and
+both Compose files together. Follow the persistent-config steps in the runbook.
 
 ### GitHub CR (Container Registry)
 
-The same release is mirrored at `ghcr.io/zaai-com/powernight:2.0.0`. To use GHCR,
+After publication, the same release is mirrored at `ghcr.io/zaai-com/powernight:2.0.0`. To use GHCR,
 change only the service image in the Compose file; preserve the existing `/data`
 mount and environment settings.
 
@@ -158,21 +162,8 @@ mount and environment settings.
 
 **Recommended for production deployments** - ensures persistent volumes are always configured.
 
-1. Download `docker-compose.yml` file
-
-2. For a protected deployment, create a `.env` file next to it (see `.env.example`) with a strong API key:
-
-```bash
-echo "POWERNIGHT_API_KEY=$(openssl rand -hex 32)" > .env
-```
-
-   Skip this step on a trusted LAN to run without authentication.
-
-3. Start the application:
-
-```bash
-docker compose up -d
-```
+Use the version-pinned Quick Start and persistent-config runbook above. Do not
+run the base file alone for a staged 2.0.0 install.
 
 ### Synology NAS
 
@@ -182,7 +173,7 @@ Optimized for Synology DSM Docker integration:
 
 2. **Create Folder** `/docker/PowerNight-Data` via File Station and add Read&Write permission to 'SYSTEM' user
 
-3. **Pull image** from Docker Hub **via Synology DSM UI**: Go to Registry tab → Search for `zaaicom/powernight` → Download `latest` tag
+3. **Pull image** from Docker Hub **via Synology DSM UI**: Go to Registry tab → Search for `zaaicom/powernight` → Download `2.0.0` after publication and configure the persistent YAML as described in the release runbook
 
 4. **Create container** with:
    - **Port Settings**: Local Port 8020 → Container Port 8020

@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0  # Full history for version info
 
@@ -45,21 +45,24 @@ jobs:
           else
             VERSION=${GITHUB_REF#refs/tags/}
           fi
-          test "$GITHUB_REF" = "refs/tags/$VERSION"
+          if [ "$GITHUB_REF" != "refs/tags/$VERSION" ]; then
+            echo "::error::Select refs/tags/$VERSION when dispatching this release workflow (not a branch)."
+            exit 1
+          fi
           git merge-base --is-ancestor HEAD origin/main
           [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Extracted version: $VERSION"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '26'
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
 
       - name: Set up Python
-        uses: actions/setup-python@v7.0.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.14'
 
@@ -106,27 +109,27 @@ jobs:
           echo "✓ Frontend build successful"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4.4.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.4.1
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4.6.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v4.6.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata for Docker
         id: meta
-        uses: docker/metadata-action@v6.2.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
             ${{ env.GHCR_IMAGE }}
@@ -142,7 +145,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build
-        uses: docker/build-push-action@v7.4.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: ${{ env.PLATFORMS }}
@@ -157,7 +160,7 @@ jobs:
             VCS_REF=${{ github.sha }}
 
       - name: Update Docker Hub description
-        uses: peter-evans/dockerhub-description@v5.0.0
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -183,7 +186,7 @@ jobs:
           Platforms: `{os.environ['PLATFORMS']}`
 
           **latest is unchanged.** Complete canary validation, then run Docker Promote
-          from main with this version and digest. Do not rebuild for promotion.
+          from main with this version, digest, and `canary_verified=true`. Do not rebuild for promotion.
           """
           with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as stream:
               stream.write(summary)

@@ -423,3 +423,7 @@ __marimo__/
 version-info.json
 # Config backups may contain credentials
 .config_backups/
+
+# Workspace artifacts and credential-bearing configuration backups
+.context/
+.backups/

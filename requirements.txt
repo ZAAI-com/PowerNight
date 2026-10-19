@@ -19,6 +19,7 @@ requests>=2.34.2
 
 # Utilities
 click>=8.5.0
+packaging>=24.0
 pytz>=2026.4
 
 # Validation and Monitoring

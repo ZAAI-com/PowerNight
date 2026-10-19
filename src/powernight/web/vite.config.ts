@@ -18,7 +18,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8020',
+        target: process.env.POWERNIGHT_API_PROXY_TARGET || 'http://localhost:8020',
         changeOrigin: true
       }
     }

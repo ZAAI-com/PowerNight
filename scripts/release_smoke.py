@@ -34,6 +34,14 @@ with sqlite3.connect(root / 'powernight.db') as db:
             error_message TEXT, created_at DATETIME, updated_at DATETIME
         );
     """)
+'''
+SEED_CONFIG = '''
+import json, yaml
+from pathlib import Path
+root = Path('/data')
+config = yaml.safe_load(Path('/app/config/config.yaml').read_text())
+config['automation'].update(enabled=False, timezone='UTC')
+root.joinpath('config.yaml').write_text(yaml.safe_dump(config))
 # Deliberately invalid test-only auth data: startup fails before any cloud call.
 (root / '.pypowerwall.auth').write_text(json.dumps({'release_smoke': True}))
 (root / '.pypowerwall.site').write_text('release-smoke-site')
@@ -48,12 +56,18 @@ with sqlite3.connect(root / 'powernight.db') as db:
     assert not db.execute("SELECT name FROM sqlite_master WHERE name='schedule_entries'").fetchall()
     columns = {row[1] for row in db.execute('PRAGMA table_info(task_executions)')}
     assert {'execution_type', 'task_name', 'command', 'command_params', 'api_response'} <= columns
-    assert db.execute("SELECT id FROM task_presets WHERE name='Existing preset'").fetchall() == [('oldest',)]
+    legacy = db.execute("SELECT id FROM task_presets WHERE name='Existing preset'").fetchall()
+    assert legacy == ([('oldest',)] if upgrade else [])
+    builtins = {row[0] for row in db.execute('SELECT name FROM task_presets WHERE is_builtin = 1')}
+    assert builtins == {
+        'Night Charge to 100%', 'Morning Low Reserve', 'Enable Grid Charging',
+        'Disable Grid Charging', 'Self-Consumption Mode', 'Backup Mode', 'Export PV Only',
+    }, builtins
     tasks = db.execute('SELECT id, name, enabled FROM tasks ORDER BY id').fetchall()
     assert tasks and all(not row[2] for row in tasks), 'Test tasks must remain disabled'
     presets = db.execute('SELECT id, name FROM task_presets ORDER BY id').fetchall()
 files = {name: hashlib.sha256(root.joinpath(name).read_bytes()).hexdigest()
-         for name in ('.pypowerwall.auth', '.pypowerwall.site', '.flask_secret')}
+         for name in ('.pypowerwall.auth', '.pypowerwall.site', '.flask_secret', 'config.yaml')}
 print(json.dumps({'tasks': tasks, 'presets': presets, 'files': files}))
 '''
 
@@ -74,8 +88,8 @@ def request(base, path, key='', payload=None, expected=200):
     return json.loads(body) if body.startswith('{') else body
 
 
-def exercise(image, output, protected):
-    mode = 'protected' if protected else 'open'
+def exercise(image, output, protected, upgrade):
+    mode = ('upgrade-' if upgrade else 'fresh-') + ('protected' if protected else 'open')
     project = f'powernight-release-{uuid4().hex[:10]}'
     key = 'release-smoke-only-key' if protected else ''
     env = dict(os.environ, POWERNIGHT_TEST_IMAGE=image, POWERNIGHT_TEST_API_KEY=key)
@@ -87,7 +101,8 @@ def exercise(image, output, protected):
         return result.stdout.strip() if capture else None
 
     try:
-        compose('run', '--rm', '--no-deps', 'PowerNight', 'python', '-c', SEED_LEGACY)
+        compose('run', '--rm', '--no-deps', 'PowerNight', 'python', '-c',
+                (SEED_LEGACY if upgrade else '') + SEED_CONFIG)
         compose('up', '-d', '--wait', '--wait-timeout', '90')
         port = compose('port', 'PowerNight', '8020', capture=True).rsplit(':', 1)[1]
         base = f'http://127.0.0.1:{port}'
@@ -109,21 +124,24 @@ def exercise(image, output, protected):
         preset = {'name': 'Release smoke preset', 'command': 'reserve', 'command_params': {'reserve': 40}}
         request(base, '/api/v1/tasks/presets', key, preset, expected=201)
         duplicate = request(base, '/api/v1/tasks/presets', key, preset, expected=409)
-        assert 'INSERT' not in json.dumps(duplicate)
-        request(base, '/api/v1/config/timezone', key, {'timezone': 'UTC'})
+        assert duplicate['message'] == 'A preset with this name already exists'
+        request(base, '/api/v1/config/timezone', key, {'timezone': 'America/New_York'})
         if protected:
             compose('exec', '-T', 'PowerNight', 'python', '-c',
-                    "from pathlib import Path; assert 'release-smoke-only-key' not in Path('/app/config/config.yaml').read_text()")
-        before = json.loads(compose('exec', '-T', 'PowerNight', 'python', '-c', SNAPSHOT, capture=True))
+                    "from pathlib import Path; assert 'release-smoke-only-key' not in Path('/data/config.yaml').read_text()")
+        assert request(base, '/api/v1/config/timezone', key)['data']['timezone'] == 'America/New_York'
+        snapshot = f'upgrade = {upgrade!r}\n' + SNAPSHOT
+        before = json.loads(compose('exec', '-T', 'PowerNight', 'python', '-c', snapshot, capture=True))
         compose('stop', '--timeout', '10')
         compose('up', '-d', '--force-recreate', '--wait', '--wait-timeout', '90')
         port = compose('port', 'PowerNight', '8020', capture=True).rsplit(':', 1)[1]
         base = f'http://127.0.0.1:{port}'
         assert request(base, f"/api/v1/tasks/{task['id']}", key)['data']['name'] == task['name']
-        after = json.loads(compose('exec', '-T', 'PowerNight', 'python', '-c', SNAPSHOT, capture=True))
+        assert request(base, '/api/v1/config/timezone', key)['data']['timezone'] == 'America/New_York'
+        after = json.loads(compose('exec', '-T', 'PowerNight', 'python', '-c', snapshot, capture=True))
         assert before == after, 'Data, auth artifacts, or Flask secret changed during recreation'
         result = {'mode': mode, 'version': version, 'passed': True,
-                  'migration': 'synthetic legacy schema', 'container_recreation': True,
+                  'migration': 'synthetic legacy schema' if upgrade else 'fresh install', 'container_recreation': True,
                   'persistent_sqlite': True, 'auth_artifacts': 'synthetic, no Tesla login',
                   'task_count': len(after['tasks']), 'preset_count': len(after['presets'])}
         print(json.dumps(result), flush=True)
@@ -141,5 +159,6 @@ if __name__ == '__main__':
     parser.add_argument('--output-dir', type=Path, default=ROOT / '.context/release/compose-smoke')
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    results = [exercise(args.image, args.output_dir, protected) for protected in (False, True)]
+    results = [exercise(args.image, args.output_dir, protected, upgrade)
+               for upgrade in (False, True) for protected in (False, True)]
     (args.output_dir / 'report.json').write_text(json.dumps(results, indent=2) + '\n')

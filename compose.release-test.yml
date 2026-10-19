@@ -6,6 +6,7 @@ services:
       - "127.0.0.1::8020"
     environment:
       POWERNIGHT_DATA_PATH: /data
+      POWERNIGHT_CONFIG_PATH: /data/config.yaml
       POWERNIGHT_WEB_HOST: 0.0.0.0
       POWERNIGHT_WEB_PORT: "8020"
       POWERNIGHT_API_KEY: ${POWERNIGHT_TEST_API_KEY:-}

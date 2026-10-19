@@ -19,16 +19,16 @@ run_mode = "concurrent"
 
 # Full app: Flask API + built React assets. POWERNIGHT_WEB_PORT maps to CONDUCTOR_PORT.
 [scripts.run.app]
-command = "POWERNIGHT_WEB_PORT=$CONDUCTOR_PORT python -m powernight.main"
+command = "POWERNIGHT_DATA_PATH=$PWD/data POWERNIGHT_LOGS_PATH=$PWD/logs POWERNIGHT_WEB_PORT=$CONDUCTOR_PORT python -m powernight.main"
+available_in = ["local"]
 default = true
 icon = "zap"
 
-# Frontend hot-reload (Vite). API proxy in vite.config.ts targets localhost:8020;
-# run the app script on 8020 in another terminal when exercising live API calls.
+# Frontend hot-reload uses the next allocated port and proxies to this workspace API.
 [scripts.run.ui]
-command = "npm run dev -- --port $CONDUCTOR_PORT --strictPort"
+command = "POWERNIGHT_API_PROXY_TARGET=http://127.0.0.1:$CONDUCTOR_PORT npm run dev -- --port $((CONDUCTOR_PORT + 1)) --strictPort"
 icon = "layout"
-available_in = "local"
+available_in = ["local"]
 
 # Quick backend verification (same pytest scope as CI).
 [scripts.run.test-backend]

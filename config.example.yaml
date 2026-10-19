@@ -1,0 +1,22 @@
+# Copy to PowerNight-Data/config.yaml only for a fresh installation.
+# Keep credentials in .env; UI settings are saved into this persistent file.
+powerwall:
+  tesla_email: user@example.com
+  timeout: 30.0
+  verify_ssl: true
+automation:
+  enabled: false
+  schedule: []
+  timezone: UTC
+  check_interval: 60.0
+web_interface:
+  enabled: true
+  host: 0.0.0.0
+  port: 8020
+  auth_enabled: false
+logging:
+  level: INFO
+  file_path: /data/logs/powernight.log
+  file_enabled: true
+monitoring:
+  enabled: false

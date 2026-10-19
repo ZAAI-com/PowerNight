@@ -41,3 +41,17 @@ def test_release_rejects_version_drift(tmp_path, target):
     (tmp_path / 'package-lock.json').write_text(json.dumps(lock))
     with pytest.raises(ValueError, match='does not match source versions'):
         check_version('2.0.0', tmp_path)
+
+
+def test_build_metadata_accepts_bare_extras_and_markers(tmp_path):
+    import os
+    import subprocess
+    import sys
+    dependencies = ['requests', 'Flask[async]>=3.1; python_version >= "3.11"', 'wheel~=0.48']
+    (tmp_path / 'pyproject.toml').write_text('[project]\ndependencies = ' + json.dumps(dependencies) + '\n')
+    # Exercise the real build helper without running the application build.
+    helpers = (ROOT / 'build.sh').read_text().rsplit('# Run main function', 1)[0]
+    result = subprocess.run(['bash', '-c', helpers + '\nget_backend_dependencies\n'],
+                            cwd=tmp_path, capture_output=True, text=True, check=True,
+                            env=dict(os.environ, PATH=str(Path(sys.executable).parent) + os.pathsep + os.environ['PATH']))
+    assert json.loads(result.stdout) == {'requests': '', 'flask': '>=3.1', 'wheel': '~=0.48'}

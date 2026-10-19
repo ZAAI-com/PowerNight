@@ -8,7 +8,7 @@ PowerNight is a Docker container application that automates Tesla Powerwall back
 
 **Technology Stack:**
 - Backend: Python 3.11+ (Flask, SQLAlchemy, pypowerwall)
-- Frontend: React 19.2 + TypeScript + Vite + Tailwind CSS + React Router 7
+- Frontend: React 19.3 + TypeScript + Vite + Tailwind CSS + React Router 7
 - Database: SQLite (file-based)
 - Deployment: Docker (multi-stage build)
 - Task Scheduling: Background thread with `schedule` library
