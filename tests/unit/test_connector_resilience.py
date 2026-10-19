@@ -171,3 +171,26 @@ def test_repeated_outage_fallback_never_renews_cache_age(
         assert connector._data_cache.get(cache_key) is None
         assert connector._data_cache._cache[cache_key]['timestamp'] == original_timestamp
     getattr(connector._powerwall, client_method).assert_called()
+
+
+@pytest.mark.parametrize('reserve', [0.0, 42.0])
+@pytest.mark.parametrize('expired', [False, True])
+def test_status_keeps_fresh_vitals_when_only_reserve_fails(connector, reserve, expired):
+    connector.ensure_connected = MagicMock(return_value=True)
+    connector._handle_rate_limit = MagicMock()
+    connector._powerwall = MagicMock()
+    connector._powerwall.vitals.return_value = {
+        'battery': {'percentage': 81, 'charging': True}, 'grid': {'connected': True},
+    }
+    connector._powerwall.get_reserve.side_effect = RuntimeError('reserve unavailable')
+    connector._data_cache.set('backup_reserve_percentage', reserve)
+    entry = connector._data_cache._cache['backup_reserve_percentage']
+    if expired:
+        entry['timestamp'] -= 3600
+    original_timestamp = entry['timestamp']
+    for _ in range(2):
+        result = connector.get_status()
+        assert result.backup_reserve_percentage == reserve
+        assert result.battery_level == 81
+        assert connector._data_cache.get('powerwall_status') is None
+        assert connector._data_cache._cache['backup_reserve_percentage']['timestamp'] == original_timestamp

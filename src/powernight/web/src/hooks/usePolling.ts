@@ -3,6 +3,8 @@ import { useEffect, useRef } from 'react';
 /** Non-overlapping, visibility-aware polling. Zero disables repeated polling. */
 export function usePolling(callback: () => Promise<void>, intervalMs: number) {
   const inFlight = useRef(false);
+  const callbackRef = useRef(callback);
+  useEffect(() => { callbackRef.current = callback; }, [callback]);
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
@@ -15,8 +17,10 @@ export function usePolling(callback: () => Promise<void>, intervalMs: number) {
       try {
         if (!inFlight.current && document.visibilityState !== 'hidden') {
           inFlight.current = true;
-          try { await callback(); } finally { inFlight.current = false; }
+          try { await callbackRef.current(); } finally { inFlight.current = false; }
         }
+      } catch (error) {
+        console.error('Polling request failed:', error);
       } finally { schedule(); }
     };
     const onVisibility = () => {
@@ -30,5 +34,5 @@ export function usePolling(callback: () => Promise<void>, intervalMs: number) {
       window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [callback, intervalMs]);
+  }, [intervalMs]);
 }

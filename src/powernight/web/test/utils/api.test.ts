@@ -173,7 +173,7 @@ describe('PowerNightAPI', () => {
     it('restores the persisted previous key after a failed login interceptor clears it', async () => {
       api.setApiKey('previous-key');
       mockedAxios.get.mockImplementationOnce(async () => {
-        api.clearApiKey(); // The response interceptor clears a rejected trial key.
+        api.clearApiKey(); // Simulate the interceptor; this axios mock bypasses it.
         throw new Error('Unauthorized');
       });
       await expect(api.authenticate('invalid-key')).rejects.toThrow('Unauthorized');

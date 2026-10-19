@@ -908,15 +908,27 @@ class PowerwallConnector(PowerwallConnectorInterface):
             self._handle_rate_limit()
 
             # Get comprehensive status from Powerwall through circuit breaker
+            reserve_is_fresh = True
             def _get_status_api_call():
+                nonlocal reserve_is_fresh
                 vitals = self._powerwall.vitals()
                 if not vitals:
                     raise PowerwallAPIError("Failed to retrieve Powerwall status")
 
                 # Already inside the breaker: never re-enter its non-reentrant lock.
                 self._handle_rate_limit()
-                reserve = self._powerwall.get_reserve()
-                backup_reserve = self._data_parser.parse_reserve_percentage(reserve)
+                try:
+                    reserve = self._powerwall.get_reserve()
+                    backup_reserve = self._data_parser.parse_reserve_percentage(reserve)
+                except Exception:
+                    backup_reserve = self._data_cache.get('backup_reserve_percentage')
+                    if backup_reserve is None:
+                        backup_reserve = self._data_cache.get_stale('backup_reserve_percentage')
+                    if backup_reserve is None:
+                        raise
+                    # A mixed fresh/stale status must not renew either cache.
+                    self.logger.warning("Using cached reserve with fresh Powerwall vitals")
+                    reserve_is_fresh = False
 
                 # Extract relevant information
                 battery_level = float(vitals.get('battery', {}).get('percentage', 0))
@@ -946,9 +958,10 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 return status
 
             result = self._circuit_breaker.call(_get_status_api_call)
-            self._last_status = result
-            self._data_cache.set(cache_key, result)
-            self._data_cache.set('backup_reserve_percentage', result.backup_reserve_percentage)
+            if reserve_is_fresh:
+                self._last_status = result
+                self._data_cache.set(cache_key, result)
+                self._data_cache.set('backup_reserve_percentage', result.backup_reserve_percentage)
             return result
 
         def _fallback_operation():

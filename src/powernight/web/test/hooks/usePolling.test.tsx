@@ -44,4 +44,32 @@ describe('visibility-aware serial polling', () => {
     expect(callback).toHaveBeenCalledTimes(count);
     unmount();
   });
+
+  it('handles rejected callbacks and keeps polling', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const callback = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(undefined);
+    const { unmount } = renderHook(() => usePolling(callback, 20000));
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(error).toHaveBeenCalledWith('Polling request failed:', expect.any(Error));
+    await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
+    expect(callback).toHaveBeenCalledTimes(2);
+    unmount();
+  });
+
+  it('uses the latest callback without restarting the interval on rerenders', async () => {
+    const first = vi.fn(async () => {});
+    const second = vi.fn(async () => {});
+    const { rerender, unmount } = renderHook(({ callback }) => usePolling(callback, 20000), {
+      initialProps: { callback: first },
+    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    rerender({ callback: second });
+    await act(async () => { await vi.advanceTimersByTimeAsync(9999); });
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(second).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
 });

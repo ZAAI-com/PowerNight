@@ -37,7 +37,9 @@ const Dashboard: React.FC = () => {
     inFlight.current = true;
     setSiteDetailsLoading(true);
     try {
-      const response = await api.authenticatedFetch('/api/auth/site-details');
+      const response = await api.authenticatedFetch('/api/auth/site-details', {
+        signal: AbortSignal.timeout(90000),
+      });
       const data = await response.json();
 
       if (!isMountedRef.current) return;

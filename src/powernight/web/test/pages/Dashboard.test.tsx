@@ -28,7 +28,9 @@ describe('Dashboard', () => {
     const { unmount } = render(<Dashboard />);
 
     await waitFor(() => {
-      expect(api.authenticatedFetch).toHaveBeenCalledWith('/api/auth/site-details');
+      expect(api.authenticatedFetch).toHaveBeenCalledWith('/api/auth/site-details', {
+        signal: expect.any(AbortSignal),
+      });
     });
 
     unmount();
@@ -91,6 +93,34 @@ describe('Dashboard', () => {
       expect(api.authenticatedFetch).toHaveBeenCalledTimes(2);
     } finally {
       unmount();
+      vi.useRealTimers();
+    }
+  });
+
+
+  it('releases a stalled request after its timeout and retries on the next interval', async () => {
+    vi.useFakeTimers();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(milliseconds => {
+      const controller = new AbortController();
+      window.setTimeout(() => controller.abort(), milliseconds);
+      return controller.signal;
+    });
+    vi.mocked(api.authenticatedFetch).mockImplementationOnce((_url, options) => new Promise((_resolve, reject) => {
+      options!.signal!.addEventListener('abort', () => reject(new DOMException('Timeout', 'AbortError')));
+    }));
+    const { unmount } = render(<Dashboard />);
+    try {
+      await act(async () => { await vi.advanceTimersByTimeAsync(90000); });
+      expect(screen.getByRole('button', { name: 'Update Data' })).toBeEnabled();
+      expect(screen.getByText('Failed to fetch site details from server')).toBeVisible();
+      await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
+      expect(api.authenticatedFetch).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('Home')).toBeVisible();
+    } finally {
+      unmount();
+      timeout.mockRestore();
+      error.mockRestore();
       vi.useRealTimers();
     }
   });

@@ -114,7 +114,7 @@ describe('Planner', () => {
     // Success feedback is shown via toast
     expect(await screen.findByText('Task "Night reserve" created')).toBeInTheDocument();
   });
-  it('shows a failed preset save inside the labelled dialog and permits retry', async () => {
+  it('shows a failed preset save inside the labelled dialog and keeps it open', async () => {
     mockApi.createTaskPreset.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 409'), {
       response: { data: { message: 'A preset with this name already exists' } },
     }));
@@ -126,6 +126,8 @@ describe('Planner', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('A preset with this name already exists');
     expect(within(dialog).getByRole('button', { name: 'Save' })).toBeEnabled();
+    fireEvent.click(dialog.firstElementChild!);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
     fireEvent(dialog, new Event('cancel', { bubbles: true }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     vi.restoreAllMocks();

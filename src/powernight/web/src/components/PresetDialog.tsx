@@ -11,8 +11,8 @@ export function PresetDialog({ onClose, children }: { onClose: () => void; child
   return (
     <dialog ref={ref} aria-labelledby="preset-dialog-title" onCancel={onClose}
       onClick={event => { if (event.target === event.currentTarget) onClose(); }}
-      className="m-auto bg-white p-6 rounded-lg shadow-xl max-w-md w-full backdrop:bg-black/50">
-      {children}
+      className="m-auto bg-white p-0 rounded-lg shadow-xl max-w-md w-full backdrop:bg-black/50">
+      <div className="p-6">{children}</div>
     </dialog>
   );
 }
