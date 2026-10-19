@@ -7,6 +7,7 @@ REST API endpoints for task management in the Planner.
 from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime, timezone
 from typing import Dict, Any
+import re
 
 from ...core.database.services import TaskService, TaskExecutionService, TaskPresetService
 from ...core.database.exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError, PresetNameConflictError, PresetProtectedError
@@ -745,13 +746,8 @@ def create_preset():
         # Validate default_time format if provided
         default_time = data.get('default_time')
         if default_time is not None:
-            if not isinstance(default_time, str):
-                raise ValidationError("Invalid time format. Must be HH:MM")
-            try:
-                hour, minute = default_time.split(':')
-                if not (0 <= int(hour) <= 23 and 0 <= int(minute) <= 59):
-                    raise ValueError("Invalid time range")
-            except (ValueError, IndexError):
+            if (not isinstance(default_time, str)
+                    or re.fullmatch(r'([01][0-9]|2[0-3]):[0-5][0-9]', default_time) is None):
                 raise ValidationError("Invalid time format. Must be HH:MM")
 
         preset_service = TaskPresetService()

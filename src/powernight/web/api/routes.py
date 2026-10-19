@@ -66,6 +66,8 @@ def version_info():
         metadata = json.loads(metadata_path.read_text())
     except (OSError, ValueError):
         pass  # Build metadata is optional in source-only development.
+    if not isinstance(metadata, dict):
+        metadata = {}
     return jsonify({
         'build_date': metadata.get('build_timestamp', metadata.get('build_date', 'unknown')),
         'dependencies': metadata.get('dependencies', metadata.get('backend_dependencies', {})),

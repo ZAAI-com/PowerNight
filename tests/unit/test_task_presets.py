@@ -123,3 +123,30 @@ def test_builtin_seeding_continues_after_individual_failure(monkeypatch):
     monkeypatch.setattr(migration, 'TaskPresetService', lambda: service)
     assert migration.seed_builtin_presets() is False
     assert service.create_preset.call_count == len(migration.BUILTIN_PRESETS)
+
+
+@pytest.mark.parametrize('value', ['7:5', ' 9: 05', '09:5', '9:05', '01:0_0', '24:00', '12:60', '12:00\n', '', 900])
+def test_preset_requires_strict_hh_mm(preset_client, value):
+    response = preset_client.post('/api/v1/tasks/presets', json={
+        'name': 'Bad time', 'command': 'reserve', 'command_params': {'reserve': 40},
+        'default_time': value,
+    })
+    assert response.status_code == 422
+    assert response.json['message'] == 'Invalid time format. Must be HH:MM'
+
+
+@pytest.mark.parametrize('value', ['00:00', '09:05', '23:59', None])
+def test_preset_accepts_valid_default_time(preset_client, value):
+    response = preset_client.post('/api/v1/tasks/presets', json={
+        'name': 'Valid time', 'command': 'reserve', 'command_params': {'reserve': 40},
+        'default_time': value,
+    })
+    assert response.status_code == 201
+
+
+def test_upgrade_warns_on_incomplete_migration(monkeypatch):
+    monkeypatch.setattr(migration, 'run_migration', lambda: False)
+    warning = MagicMock()
+    monkeypatch.setattr(migration.logger, 'warning', warning)
+    migration.upgrade()
+    warning.assert_called_once()

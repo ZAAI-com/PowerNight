@@ -39,7 +39,8 @@ def drop_legacy_schedule_entries_table() -> bool:
 
 def upgrade():
     """Run database migration."""
-    run_migration()
+    if not run_migration():
+        logger.warning("Database migration completed with failures; check migration logs")
 
 
 def migrate_task_executions_table() -> bool:

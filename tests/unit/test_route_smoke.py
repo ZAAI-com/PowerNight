@@ -150,3 +150,12 @@ def test_frontend_api_paths_match_backend_routes(app):
         "Frontend api.ts references routes the backend does not serve:\n"
         + "\n".join(missing)
     )
+
+
+@pytest.mark.parametrize('metadata', ['[]', 'null', '123', '"version"'])
+def test_version_tolerates_nonobject_build_metadata(app, client, metadata):
+    (Path(app.static_folder) / 'version-info.json').write_text(metadata)
+    response = client.get('/version')
+    assert response.status_code == 200
+    assert response.json['build_date'] == 'unknown'
+    assert response.json['dependencies'] == {}
