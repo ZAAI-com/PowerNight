@@ -1,0 +1,30 @@
+src/powernight/web/test/setup.ts
+  s_5c897049a131de::t_2cd4e8ee31ad93 1
+src/powernight/web/src/pages/Planner.tsx
+  s_5c897049a131de::t_2cd4e8ee31ad93 407,420,430
+src/powernight/web/src/pages/Dashboard.tsx
+  s_5c897049a131de::t_2cd4e8ee31ad93 7-9
+  s_5c897049a131de::t_7fa5ad7403d718 6
+src/powernight/web/src/utils/api.ts
+  s_5c897049a131de::t_2cd4e8ee31ad93 14
+src/powernight/web/tsconfig.json
+  s_5c897049a131de::t_2cd4e8ee31ad93 8,25-26
+src/powernight/web/test/pages/Settings.test.tsx
+  s_5c897049a131de::t_e42437e09e170f 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ecc817579ff85d1f166f50a3d1ac31bd8ee9d9dd",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
