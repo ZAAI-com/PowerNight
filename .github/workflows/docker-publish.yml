@@ -12,9 +12,13 @@ on:
         type: string
 
 env:
-  GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/powernight
+  GHCR_IMAGE: ghcr.io/zaai-com/powernight
   DOCKERHUB_IMAGE: zaaicom/powernight
   PLATFORMS: linux/amd64,linux/arm64,linux/arm/v7
+
+concurrency:
+  group: powernight-release-publication
+  cancel-in-progress: false
 
 jobs:
   build-and-publish:
@@ -33,13 +37,18 @@ jobs:
 
       - name: Extract version from tag
         id: version
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$REQUESTED_VERSION"
           else
             VERSION=${GITHUB_REF#refs/tags/}
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          test "$GITHUB_REF" = "refs/tags/$VERSION"
+          git merge-base --is-ancestor HEAD origin/main
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Extracted version: $VERSION"
 
       - name: Set up Node.js
@@ -60,18 +69,25 @@ jobs:
           pip install -e .
           echo "✓ Backend package installed"
 
+      - name: Verify release version matches source
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: python scripts/check_release_version.py "$RELEASE_VERSION"
+
       - name: Install frontend dependencies
         run: |
           # Retry npm ci up to 3 times to handle transient network errors
           for i in 1 2 3; do
-            npm ci && break || {
+            if npm ci; then
+              break
+            else
               if [ $i -eq 3 ]; then
                 echo "npm ci failed after 3 attempts"
                 exit 1
               fi
               echo "npm ci failed, retrying ($i/3)..."
               sleep 5
-            }
+            fi
           done
 
       - name: Build frontend
@@ -115,9 +131,9 @@ jobs:
           images: |
             ${{ env.GHCR_IMAGE }}
             ${{ env.DOCKERHUB_IMAGE }}
+          flavor: latest=false
           tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=raw,value=${{ steps.version.outputs.version }}
           labels: |
             org.opencontainers.image.title=PowerNight
             org.opencontainers.image.description=Schedule Tesla Powerwall Grid-Charging during the night
@@ -150,36 +166,25 @@ jobs:
           readme-filepath: ./docs/README.md
 
       - name: Generate build summary
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Published Images" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**GitHub Container Registry (Primary):**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.GHCR_IMAGE }}:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.GHCR_IMAGE }}:latest\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Docker Hub (Mirror):**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.DOCKERHUB_IMAGE }}:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.DOCKERHUB_IMAGE }}:latest\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Platforms" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- linux/amd64" >> $GITHUB_STEP_SUMMARY
-          echo "- linux/arm64" >> $GITHUB_STEP_SUMMARY
-          echo "- linux/arm/v7" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Pull Commands" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "# GitHub Container Registry (Recommended)" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.GHCR_IMAGE }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# Docker Hub (Mirror)" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.DOCKERHUB_IMAGE }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Links" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- [GitHub Packages](https://github.com/${{ github.repository }}/pkgs/container/powernight)" >> $GITHUB_STEP_SUMMARY
-          echo "- [Docker Hub Repository](https://hub.docker.com/r/${{ env.DOCKERHUB_IMAGE }})" >> $GITHUB_STEP_SUMMARY
+          python - <<'PYTHON'
+          import os
+          from pathlib import Path
+          summary = f"""## Staged PowerNight {os.environ['VERSION']}
+
+          Versioned images:
+          - `{os.environ['GHCR_IMAGE']}:{os.environ['VERSION']}`
+          - `{os.environ['DOCKERHUB_IMAGE']}:{os.environ['VERSION']}`
+
+          Digest: `{os.environ['DIGEST']}`
+          Platforms: `{os.environ['PLATFORMS']}`
+
+          **latest is unchanged.** Complete canary validation, then run Docker Promote
+          from main with this version and digest. Do not rebuild for promotion.
+          """
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as stream:
+              stream.write(summary)
+          PYTHON
