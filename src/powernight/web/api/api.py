@@ -750,11 +750,11 @@ def health_check():
         except Exception:
             health_data['status'] = 'degraded'
 
-        # Powerwall check (quick)
+        # Health polling must use cached state, not wait on the Tesla cloud.
         try:
             if checks['configuration']:
                 powerwall = get_powerwall_connector()
-                checks['powerwall'] = powerwall.is_connected()
+                checks['powerwall'] = bool(powerwall.get_connection_status()['connected'])
         except Exception:
             pass
 

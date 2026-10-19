@@ -390,7 +390,7 @@ class TestHealthAPI:
         with patch('powernight.web.api.api.get_powerwall_connector') as mock_connector, \
              patch('powernight.web.api.api.get_planner', return_value=mock_planner):
             mock_powerwall = Mock()
-            mock_powerwall.is_connected.return_value = True
+            mock_powerwall.get_connection_status.return_value = {'connected': True}
             mock_connector.return_value = mock_powerwall
 
             response = client.get('/api/v1/health')
@@ -410,7 +410,7 @@ class TestHealthAPI:
         with patch('powernight.web.api.api.get_powerwall_connector') as mock_connector, \
              patch('powernight.web.api.api.get_planner', return_value=mock_planner):
             mock_powerwall = Mock()
-            mock_powerwall.is_connected.return_value = False
+            mock_powerwall.get_connection_status.return_value = {'connected': False}
             mock_connector.return_value = mock_powerwall
 
             response = client.get('/api/v1/health')

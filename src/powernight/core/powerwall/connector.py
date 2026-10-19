@@ -157,6 +157,8 @@ class PowerwallConnector(PowerwallConnectorInterface):
         self._powerwall: Optional[pypowerwall.Powerwall] = None
         self._connected = False
         self._connection_lock = threading.RLock()
+        # Never hold this lock during network calls or rate-limit sleeps.
+        self._status_lock = threading.Lock()
         self._last_connection_attempt: Optional[str] = None
         self._last_connection_error: Optional[str] = None
         self._last_connection_error_code: Optional[str] = None
@@ -438,15 +440,17 @@ class PowerwallConnector(PowerwallConnectorInterface):
         return detail
 
     def _record_connection_failure(self, error: Exception) -> None:
-        self._connected = False
         code, message = self._safe_connection_failure(error)
-        self._last_connection_error_code = code
-        self._last_connection_error = message
+        with self._status_lock:
+            self._connected = False
+            self._last_connection_error_code = code
+            self._last_connection_error = message
 
     def _record_connection_success(self) -> None:
-        self._connected = True
-        self._last_connection_error_code = None
-        self._last_connection_error = None
+        with self._status_lock:
+            self._connected = True
+            self._last_connection_error_code = None
+            self._last_connection_error = None
 
     def reload_credentials(self) -> Dict[str, Any]:
         """Reload the current Tesla identity and selected site from /data."""
@@ -466,7 +470,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
 
     def get_connection_status(self) -> Dict[str, Any]:
         """Return cached connection state without performing a network request."""
-        with self._connection_lock:
+        with self._status_lock:
             if self._connected:
                 status = 'connected'
             elif self._last_connection_attempt is None:
@@ -552,7 +556,8 @@ class PowerwallConnector(PowerwallConnectorInterface):
             return True
 
         with self._connection_lock:
-            self._last_connection_attempt = datetime.now(timezone.utc).isoformat()
+            with self._status_lock:
+                self._last_connection_attempt = datetime.now(timezone.utc).isoformat()
             try:
                 return self._circuit_breaker.call(_connect_operation)
             except CircuitBreakerOpenException as error:
@@ -624,14 +629,16 @@ class PowerwallConnector(PowerwallConnectorInterface):
             if self._powerwall:
                 self.logger.info("Disconnecting from Powerwall")
             self._powerwall = None
-            self._connected = False
+            with self._status_lock:
+                self._connected = False
 
     def is_connected(self) -> bool:
         """Check if connected to Powerwall."""
         with self._connection_lock:
             # Can't test connection without powerwall object
             if not self._powerwall:
-                self._connected = False
+                with self._status_lock:
+                    self._connected = False
                 return False
 
             try:

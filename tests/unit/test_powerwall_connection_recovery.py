@@ -1,6 +1,7 @@
 """Regression coverage for Tesla cloud connection recovery."""
 
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +14,34 @@ from pypowerwall.cloud.exceptions import (
 from powernight.core.powerwall.connector import PowerwallConnector
 from powernight.core.powerwall.exceptions import PowerwallConnectionError
 from powernight.core.scheduler.circuit_breaker import CircuitBreakerOpenException
+
+
+@pytest.mark.parametrize('operation', ['connect', 'is_connected'])
+def test_cached_status_remains_responsive_during_network_request(tmp_path, monkeypatch, operation):
+    monkeypatch.setenv('POWERNIGHT_DATA_PATH', str(tmp_path))
+    connector = make_connector(tmp_path)
+    powerwall = MagicMock()
+    connector._powerwall = powerwall
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow_vitals():
+        entered.set()
+        assert release.wait(3)
+        return {'online': True}
+
+    powerwall.vitals.side_effect = slow_vitals
+    with patch('powernight.core.powerwall.connector.pypowerwall.Powerwall', return_value=powerwall):
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            request = workers.submit(getattr(connector, operation))
+            try:
+                assert entered.wait(2)
+                status = workers.submit(connector.get_connection_status).result(timeout=0.5)
+                assert status['connected'] is False
+            finally:
+                release.set()
+            assert request.result(timeout=2) is True
+    assert connector.get_connection_status()['connected'] is True
 
 
 def make_connector(tmp_path, auth_data=None):

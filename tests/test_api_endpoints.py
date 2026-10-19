@@ -257,21 +257,24 @@ class TestTestConnectionAPI:
 class TestHealthAPI:
     """Test /api/v1/health endpoint."""
 
-    def test_health_endpoint(self, client, mock_planner):
+    @pytest.mark.parametrize('connected', [True, False])
+    def test_health_endpoint(self, client, mock_planner, connected):
         mock_planner.get_status.return_value = {'is_running': True, 'task_count': 0}
 
         with patch('powernight.web.api.api.get_powerwall_connector') as mock_connector, \
              patch('powernight.web.api.api.get_planner', return_value=mock_planner):
             mock_powerwall = Mock()
-            mock_powerwall.is_connected.return_value = True
+            mock_powerwall.get_connection_status.return_value = {'connected': connected}
             mock_connector.return_value = mock_powerwall
 
             response = client.get('/api/v1/health')
 
-        assert response.status_code == 200
+        assert response.status_code == (200 if connected else 503)
         data = response.get_json()
-        assert data['status'] == 'healthy'
+        assert data['status'] == ('healthy' if connected else 'degraded')
         assert 'checks' in data
+        mock_powerwall.is_connected.assert_not_called()
+        mock_powerwall.get_connection_status.assert_called_once()
 
 
 class TestErrorHandling:
