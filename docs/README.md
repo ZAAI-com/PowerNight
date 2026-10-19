@@ -104,17 +104,16 @@ powernight status
 
 ## Quick Start
 
-1. **Install & Run PowerNight Docker Container**
+1. **Install & Run PowerNight with Docker Compose**
 
-   Authentication is optional on a trusted LAN. This example enables it; omit the `POWERNIGHT_API_KEY` line to run without a login.
+   Download `docker-compose.yml` and `.env.example` from the release. For a
+   protected deployment, put `POWERNIGHT_API_KEY=<your generated key>` in `.env`
+   (generate it with `openssl rand -hex 32`). Omit the key only on a trusted LAN.
+   Use a tested version or digest instead of `latest` during a staged rollout.
+
    ```bash
-   # Generate a strong API key first: openssl rand -hex 32
-   docker run -d \
-     --name PowerNight \
-     -p 8020:8020 \
-     -e POWERNIGHT_API_KEY=your-strong-key \
-     -v ./PowerNight-Data:/data \
-     zaaicom/powernight:latest
+   mkdir -p PowerNight-Data
+   docker compose up -d
    ```
 
 2. **Open web interface**
@@ -144,39 +143,16 @@ powernight status
 
 ### Docker Hub (Recommended)
 
-Docker Hub is recommended for most users, especially Synology NAS deployments.
-
-```bash
-# Run with volume mount (IMPORTANT for data persistence)
-# Generate a strong API key first: openssl rand -hex 32
-docker run -d \
-  --name PowerNight \
-  -p 8020:8020 \
-  -e POWERNIGHT_API_KEY=your-strong-key \
-  -v ./PowerNight-Data:/data \
-  zaaicom/powernight:latest
-```
-
-**⚠️ IMPORTANT**: Always use volume mounts (`-v ./PowerNight-Data:/data`) to persist OAuth tokens, database, and configuration. Without volumes, data is lost after container restart.
-
-**🔐 OPTIONAL**: A nonempty `POWERNIGHT_API_KEY` automatically enables authentication. Omit it for an open trusted-LAN deployment. When enabled, send the key as an `X-API-Key` header (or `Authorization: Bearer <key>`).
+Use the supplied Docker Compose file, which mounts `./PowerNight-Data:/data`.
+For a version-pinned release, set the service image to `zaaicom/powernight:2.0.0`
+after that version has been published, then run `docker compose pull` and
+`docker compose up -d`. Keep the data directory and `.env` next to the Compose file.
 
 ### GitHub CR (Container Registry)
 
-Alternative registry hosted on GitHub Packages.
-
-```bash
-# Pull from GHCR
-docker pull ghcr.io/zaai-com/powernight:latest
-
-# Run with volume mount (the API key is optional and enables authentication)
-docker run -d \
-  --name PowerNight \
-  -p 8020:8020 \
-  -e POWERNIGHT_API_KEY=your-strong-key \
-  -v ./PowerNight-Data:/data \
-  ghcr.io/zaai-com/powernight:latest
-```
+The same release is mirrored at `ghcr.io/zaai-com/powernight:2.0.0`. To use GHCR,
+change only the service image in the Compose file; preserve the existing `/data`
+mount and environment settings.
 
 ### Docker Compose
 
@@ -195,7 +171,7 @@ echo "POWERNIGHT_API_KEY=$(openssl rand -hex 32)" > .env
 3. Start the application:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Synology NAS
@@ -250,6 +226,11 @@ python -m powernight.main
 Access at [http://localhost:8020](http://localhost:8020)
 
 
+
+## Releases
+
+See [2.0.0 release notes, upgrade checks, and rollback](releases/2.0.0.md).
+Version tags are staged before `latest`; local testing is not a live canary.
 
 ## Security
 
