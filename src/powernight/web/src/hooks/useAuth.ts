@@ -14,7 +14,7 @@ export function useAuth() {
   });
 
   const login = useCallback(async (apiKey: string) => {
-    setAuthState(prev => ({ ...prev, isLoading: true, error: undefined }));
+    setAuthState(prev => ({ ...prev, error: undefined }));
     
     try {
       await api.authenticate(apiKey);
@@ -49,11 +49,16 @@ export function useAuth() {
 
   // Check authentication requirements on mount
   useEffect(() => {
+    // Ignore results after this effect is cleaned up or the hook unmounts.
+    let cancelled = false;
+
     const checkAuthRequirements = async () => {
       try {
         const authRequired = await api.checkAuthRequired();
+        if (cancelled) return;
+
         const hasApiKey = api.isAuthenticated();
-        
+
         if (!authRequired) {
           // Authentication is disabled, we're always "authenticated"
           setAuthState({
@@ -74,7 +79,9 @@ export function useAuth() {
             error: 'Authentication required'
           });
         }
-      } catch (error) {
+      } catch {
+        if (cancelled) return;
+
         // If we can't check auth requirements, assume auth is required
         setAuthState({
           isAuthenticated: false,
@@ -85,6 +92,10 @@ export function useAuth() {
     };
 
     checkAuthRequirements();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Listen for auth events

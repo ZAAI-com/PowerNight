@@ -85,6 +85,8 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
   // Load timezone info on mount
   useEffect(() => {
     refreshTimezone();
+    // Intentionally run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update current time every second
@@ -93,6 +95,8 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
 
     const interval = setInterval(updateCurrentTime, 1000);
     return () => clearInterval(interval);
+    // Re-subscribe only when the timezone changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timezoneInfo?.timezone]);
 
   const contextValue: TimezoneContextType = {
@@ -111,6 +115,7 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useTimezone = (): TimezoneContextType => {
   const context = useContext(TimezoneContext);
   if (context === undefined) {

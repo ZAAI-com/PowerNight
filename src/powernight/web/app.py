@@ -5,21 +5,68 @@ Creates and configures the Flask application with blueprints and error handling.
 """
 
 import os
-import time
-from typing import Optional, Dict, Any
+import logging
+from typing import Optional
 
-from flask import request
 from flask import Flask
 
 from ..core.config import PowerNightConfig as Config
 from ..core.powerwall import PowerwallConnector
 from .api.routes import main_blueprint
 from .api import api_blueprint
-from .api.auth_api import auth_blueprint, init_auth_api
+from .api.auth_api import init_auth_api
 from .api.config_api import config_blueprint
 from .api.logs_api import logs_blueprint
 from .api.tasks_api import tasks_blueprint
 from .middleware import configure_middleware
+from pathlib import Path
+from ..utils.secure_files import write_private_file
+
+
+def _load_or_create_secret() -> str:
+    """Load the persisted Flask secret, generating it on first run."""
+    import secrets
+
+    directory = Path(os.environ.get('POWERNIGHT_DATA_PATH', 'data'))
+    secret_file = directory / '.flask_secret'
+    try:
+        if secret_file.exists():
+            secret_file.chmod(0o600)
+            previous = secret_file.read_text().strip()
+            if previous:
+                return previous
+        import fcntl
+
+        directory.mkdir(parents=True, exist_ok=True)
+        # Serialize initialization and empty-file repair across app workers.
+        # Keep this lock inode stable while the secret is atomically replaced.
+        descriptor = os.open(directory / '.flask_secret.lock',
+                             os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, 'r+') as lock:
+            os.fchmod(lock.fileno(), 0o600)
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            exists = secret_file.exists()
+            if exists:
+                secret_file.chmod(0o600)
+                previous = secret_file.read_text().strip()
+                if previous:
+                    return previous
+            value = secrets.token_hex(32)
+            if not write_private_file(secret_file, value, exclusive=not exists):
+                # Respect a key published by an older, non-locking process.
+                previous = secret_file.read_text().strip()
+                if previous:
+                    return previous
+                raise OSError("Persisted Flask secret is empty")
+            return value
+    except (OSError, ImportError):
+        # Fall back to an ephemeral secret rather than refusing to start;
+        # sessions will not survive restarts in this case
+        logging.getLogger(__name__).warning(
+            "Cannot use persisted Flask secret; sessions will not survive restarts",
+            exc_info=True,
+        )
+        return secrets.token_hex(32)
 
 
 def create_app(
@@ -56,12 +103,36 @@ def create_app(
 
     # Store shared components on the app object
     app.powerwall_connector = powerwall_connector
+    app.testing = testing
+
+    # Session/signing secret: env var wins; otherwise persist a generated
+    # secret under the data path so sessions survive restarts
+    app.secret_key = os.environ.get('FLASK_SECRET_KEY') or _load_or_create_secret()
 
     # Load configuration
     app.config.from_object(config)
 
     # Configure middleware
     configure_middleware(app)
+
+    # Authentication failures must be 401s on every blueprint, not 500s
+    from .api.errors import AuthenticationError, AuthorizationError
+
+    @app.errorhandler(AuthenticationError)
+    def handle_authentication_error(error):
+        return {
+            'success': False,
+            'error': 'Authentication required',
+            'message': str(error)
+        }, 401
+
+    @app.errorhandler(AuthorizationError)
+    def handle_authorization_error(error):
+        return {
+            'success': False,
+            'error': 'Forbidden',
+            'message': str(error)
+        }, 403
 
     # Register blueprints
     # Main blueprint for serving React SPA (must be last for catch-all route)

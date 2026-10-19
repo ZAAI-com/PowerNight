@@ -8,6 +8,9 @@ on:
       - 'docs/README.md'
   workflow_dispatch:  # Allow manual trigger
 
+permissions:
+  contents: read
+
 jobs:
   sync-readme:
     name: Update Docker Hub Description
@@ -15,10 +18,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Update Docker Hub description
-        uses: peter-evans/dockerhub-description@v4
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -28,8 +31,9 @@ jobs:
 
       - name: Generate sync summary
         run: |
-          echo "## README Sync Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✓ README.md has been synced to Docker Hub" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "[View on Docker Hub](https://hub.docker.com/r/zaaicom/powernight)" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## README Sync Complete"
+            echo ""
+            echo "README.md has been synced to Docker Hub."
+            echo "[View on Docker Hub](https://hub.docker.com/r/zaaicom/powernight)"
+          } >> "$GITHUB_STEP_SUMMARY"

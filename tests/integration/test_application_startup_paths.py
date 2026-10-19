@@ -33,6 +33,7 @@ automation:
   schedule: []
 web_interface:
   enabled: true
+  auth_enabled: false
   host: 0.0.0.0
   port: 8080
 logging:
@@ -85,6 +86,7 @@ automation:
   schedule: []
 web_interface:
   enabled: true
+  auth_enabled: false
   host: 0.0.0.0
   port: 8080
 logging:
@@ -139,6 +141,7 @@ automation:
   schedule: []
 web_interface:
   enabled: true
+  auth_enabled: false
   host: 0.0.0.0
   port: 8080
 logging:
@@ -200,6 +203,7 @@ automation:
   schedule: []
 web_interface:
   enabled: true
+  auth_enabled: false
   host: 0.0.0.0
   port: 8080
 logging:
@@ -253,6 +257,7 @@ automation:
   schedule: []
 web_interface:
   enabled: true
+  auth_enabled: false
   host: 0.0.0.0
   port: 8080
 logging:
@@ -309,6 +314,7 @@ automation:
   schedule: []
 web_interface:
   enabled: true
+  auth_enabled: false
   host: 0.0.0.0
   port: 8080
 logging:
@@ -391,6 +397,7 @@ automation:
   schedule: []
 web_interface:
   enabled: true
+  auth_enabled: false
   host: 0.0.0.0
   port: 8080
 logging:
@@ -442,6 +449,7 @@ automation:
   schedule: []
 web_interface:
   enabled: true
+  auth_enabled: false
   host: 0.0.0.0
   port: 8080
 logging:
@@ -510,6 +518,7 @@ automation:
   schedule: []
 web_interface:
   enabled: true
+  auth_enabled: false
   host: 0.0.0.0
   port: 8080
 logging:

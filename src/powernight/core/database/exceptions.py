@@ -28,3 +28,16 @@ class DatabaseMigrationError(DatabaseError):
 class TaskNotFoundError(DatabaseError):
     """Raised when a requested task is not found."""
     pass
+
+
+class PresetNotFoundError(DatabaseError):
+    """Raised when a requested preset is not found."""
+    pass
+
+
+class PresetNameConflictError(DatabaseError):
+    """Raised when a preset name is already in use."""
+
+
+class PresetProtectedError(DatabaseError):
+    """Raised when attempting to delete a built-in preset."""

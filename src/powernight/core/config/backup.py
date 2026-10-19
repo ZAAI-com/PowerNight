@@ -5,14 +5,14 @@ Handles automatic backup creation and recovery of configuration files.
 """
 
 import os
-import shutil
 import logging
+import stat
 import time
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime, timedelta
 
-from .exceptions import ConfigurationError, BackupError
+from ...utils.secure_files import protect_directory, write_private_file
 
 
 class ConfigBackupManager:
@@ -68,15 +68,20 @@ class ConfigBackupManager:
 
         try:
             backup_dir = self.get_backup_dir(config_path)
-            backup_dir.mkdir(parents=True, exist_ok=True)
+            protect_directory(backup_dir)
+            self._protect_existing_backups(config_path)
 
-            # Create timestamped backup filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Create timestamped backup filename; microseconds plus a
+            # collision counter so rapid consecutive saves never overwrite
+            # an earlier backup
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             backup_name = f"{config_path.stem}_{timestamp}{config_path.suffix}"
             backup_path = backup_dir / backup_name
-
-            # Copy the configuration file
-            shutil.copy2(config_path, backup_path)
+            counter = 1
+            while not write_private_file(backup_path, config_path.read_text(), exclusive=True):
+                backup_name = f"{config_path.stem}_{timestamp}_{counter}{config_path.suffix}"
+                backup_path = backup_dir / backup_name
+                counter += 1
 
             self.logger.info(f"Created configuration backup: {backup_path}")
 
@@ -88,6 +93,19 @@ class ConfigBackupManager:
         except Exception as e:
             self.logger.error(f"Failed to create backup of {config_path}: {e}")
             return None
+
+    def _protect_existing_backups(self, config_path: Path) -> None:
+        """Harden only this configuration's existing regular backup files."""
+        directory = self.get_backup_dir(config_path)
+        for backup in directory.glob(f'{config_path.stem}_*{config_path.suffix}'):
+            if backup.is_file() and not backup.is_symlink():
+                try:
+                    os.chmod(backup, 0o600)
+                    if stat.S_IMODE(backup.stat().st_mode) != 0o600:
+                        raise PermissionError(f"Cannot secure existing backup: {backup}")
+                except OSError:
+                    self.logger.warning("Cannot secure existing backup %s", backup, exc_info=True)
+                    raise
 
     def list_backups(self, config_path: Path) -> List[Path]:
         """
@@ -104,11 +122,14 @@ class ConfigBackupManager:
         if not backup_dir.exists():
             return []
 
+        self._protect_existing_backups(config_path)
+
         # Find backup files matching the config file name
         config_stem = config_path.stem
         backup_pattern = f"{config_stem}_*{config_path.suffix}"
 
-        backup_files = list(backup_dir.glob(backup_pattern))
+        backup_files = [p for p in backup_dir.glob(backup_pattern)
+                        if not p.is_symlink() and p.is_file()]
 
         # Sort by modification time, newest first
         backup_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
@@ -135,15 +156,15 @@ class ConfigBackupManager:
                     return False
                 backup_path = backups[0]
 
-            if not backup_path.exists():
-                self.logger.error(f"Backup file does not exist: {backup_path}")
+            if backup_path.is_symlink() or not backup_path.is_file():
+                self.logger.error(f"Backup must be a regular file: {backup_path}")
                 return False
 
             # Create parent directory if needed
             config_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Restore the backup
-            shutil.copy2(backup_path, config_path)
+            write_private_file(config_path.resolve(), backup_path.read_text())
 
             self.logger.info(f"Restored configuration from backup: {backup_path} -> {config_path}")
             return True
@@ -210,7 +231,8 @@ class ConfigBackupManager:
         try:
             # Find all backup files for this config
             backup_pattern = f"{config_stem}_*"
-            backup_files = list(backup_dir.glob(backup_pattern))
+            backup_files = [p for p in backup_dir.glob(backup_pattern)
+                            if not p.is_symlink() and p.is_file()]
 
             # Sort by modification time, newest first
             backup_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
@@ -307,11 +329,13 @@ class ConfigRecoveryManager:
         if self._try_restore_from_valid_backup(config_path):
             return config_path
 
-        # Strategy 3: Create a new default configuration
-        if self._try_create_default_config(config_path):
-            return config_path
-
-        self.logger.error("All recovery strategies failed")
+        # No fabricated defaults: recovery only ever restores verified backups.
+        # Overwriting the user's config with example values could silently
+        # enable automation against a real Powerwall.
+        self.logger.error(
+            "Configuration recovery failed: no valid backup available. "
+            f"Fix or restore {config_path} manually (see 'powernight-cli validate-config')."
+        )
         return None
 
     def _try_restore_from_backup(self, config_path: Path) -> bool:
@@ -358,24 +382,3 @@ class ConfigRecoveryManager:
 
         return False
 
-    def _try_create_default_config(self, config_path: Path) -> bool:
-        """Try to create a new default configuration."""
-        try:
-            from .manager import ConfigManager
-
-            self.logger.info("Creating new default configuration")
-
-            manager = ConfigManager()
-            manager.create_default_config_file(config_path)
-
-            # Verify the created config
-            if self.backup_manager.verify_backup(config_path):
-                self.logger.info("Successfully created default configuration")
-                return True
-            else:
-                self.logger.error("Created default configuration failed validation")
-
-        except Exception as e:
-            self.logger.error(f"Failed to create default configuration: {e}")
-
-        return False

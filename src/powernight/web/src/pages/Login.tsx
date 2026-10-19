@@ -1,37 +1,27 @@
 import React, { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { cn } from '../utils/helpers';
 
-const Login: React.FC = () => {
-  const { error, clearError } = useAuth();
-  const [email, setEmail] = useState('');
+interface LoginProps {
+  error?: string;
+  onLogin: (apiKey: string) => Promise<boolean>;
+  onClearError: () => void;
+}
+
+const Login: React.FC<LoginProps> = ({ error, onLogin, onClearError }) => {
+  const [apiKey, setApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleTeslaLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    const key = apiKey.trim();
+    if (!key) return;
 
     setIsLoading(true);
-    clearError();
+    onClearError();
 
     try {
-      // Start Tesla OAuth flow
-      const response = await fetch('/api/auth/setup/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      
-      const data = await response.json();
-      if (data.success && data.auth_url) {
-        window.location.href = data.auth_url;
-      } else {
-        throw new Error(data.error || 'Failed to initiate Tesla login');
-      }
-    } catch (err) {
-      console.error('Tesla login error:', err);
-      // Error will be handled by the error state
+      await onLogin(key);
     } finally {
       setIsLoading(false);
     }
@@ -60,24 +50,25 @@ const Login: React.FC = () => {
             PowerNight
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Tesla Powerwall Automation System
+            Enter the API key configured for this PowerNight server
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleTeslaLogin}>
+        <form className="mt-8 space-y-6" onSubmit={handleLogin}>
           <div>
-            <label htmlFor="email" className="sr-only">
-              Tesla Account Email
+            <label htmlFor="api-key" className="sr-only">
+              API key
             </label>
             <input
-              id="email"
-              name="email"
-              type="email"
+              id="api-key"
+              name="api-key"
+              type="password"
               required
+              autoComplete="current-password"
               className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-              placeholder="Enter your Tesla account email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your API key"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
               disabled={isLoading}
             />
           </div>
@@ -113,10 +104,10 @@ const Login: React.FC = () => {
           <div>
             <button
               type="submit"
-              disabled={isLoading || !email.trim()}
+              disabled={isLoading || !apiKey.trim()}
               className={cn(
                 'group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500',
-                isLoading || !email.trim()
+                isLoading || !apiKey.trim()
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700'
               )}
@@ -124,14 +115,14 @@ const Login: React.FC = () => {
               {isLoading ? (
                 <LoadingSpinner size="sm" />
               ) : (
-                'Connect Tesla Account'
+                'Sign In'
               )}
             </button>
           </div>
 
           <div className="text-center">
             <p className="text-xs text-gray-500">
-              You'll be redirected to Tesla to authorize PowerNight
+              Tesla account authorization is managed separately in Settings.
             </p>
           </div>
         </form>

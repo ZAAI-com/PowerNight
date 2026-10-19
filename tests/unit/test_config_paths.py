@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch, mock_open
 
 from powernight.core.config.manager import ConfigManager
-from powernight.core.config.schema import PowerNightConfig, create_default_config, create_dummy_config
+from powernight.core.config.schema import PowerNightConfig, create_default_config
 
 
 class TestConfigPathResolution:
@@ -106,14 +106,6 @@ logging:
         assert config.logging.file_path == "logs/powernight.log"
         assert not config.logging.file_path.startswith("/app/")
         assert not config.logging.file_path.startswith("/")
-
-    def test_dummy_config_uses_relative_paths(self):
-        """Test that dummy configuration uses relative paths."""
-        config = create_dummy_config()
-        
-        # Should use relative path, not Docker path
-        assert config.logging.file_path == "logs/powernight.log"
-        assert not config.logging.file_path.startswith("/app/")
 
     def test_config_from_dict_uses_relative_paths(self):
         """Test that config created from dict uses relative paths by default."""

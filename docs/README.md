@@ -31,7 +31,7 @@ PowerNight is a lightweight Docker-based application with a web interface that a
 - 🐳 **Docker-First Design** - Multi-stage builds, non-root user, security hardening
 - 🏗️ **Multi-Architecture** - Supports AMD64, ARM64, ARM/v7 (Raspberry Pi compatible)
 - 💾 **Persistent Storage** - SQLite database with Docker volume mounting
-- 🔄 **Auto-Recovery** - Circuit breaker pattern, exponential backoff, health monitoring
+- 🔄 **Resilience** - Circuit breaker pattern, 30s response caching, health monitoring
 - 📱 **Modern Web UI** - React SPA with responsive design
 - 📜 **Structured Logging** - JSON logs with component filtering and real-time updates
 
@@ -104,13 +104,20 @@ powernight status
 
 ## Quick Start
 
-1. **Install & Run PowerNight Docker Container**
+1. **Install & Run PowerNight with Docker Compose**
+
+   After 2.0.0 is published, obtain `docker-compose.yml`, `compose.release.yml`,
+   `.env.example`, and `config.example.yaml` from the tagged repository (or the
+   release assets with `SHA256SUMS`). The release override pins **2.0.0** and
+   persists settings under `/data`; the base file alone still uses unchanged `latest`.
+   Follow [the release runbook](releases/2.0.0.md#persistent-release-configuration)
+   to seed a fresh config or preserve an upgrade config and verify permissions.
+   Set your Tesla email and optional API key in `.env` (generate a key with
+   `openssl rand -hex 32`). Omit the key only on a trusted LAN.
+
    ```bash
-   docker run -d \
-     --name PowerNight \
-     -p 8020:8020 \
-     -v ./PowerNight-Data:/data \
-     zaaicom/powernight:latest
+   docker compose -f docker-compose.yml -f compose.release.yml pull
+   docker compose -f docker-compose.yml -f compose.release.yml up -d
    ```
 
 2. **Open web interface**
@@ -140,46 +147,23 @@ powernight status
 
 ### Docker Hub (Recommended)
 
-Docker Hub is recommended for most users, especially Synology NAS deployments.
-
-```bash
-# Run with volume mount (IMPORTANT for data persistence)
-docker run -d \
-  --name PowerNight \
-  -p 8020:8020 \
-  -v ./PowerNight-Data:/data \
-  zaaicom/powernight:latest
-```
-
-**⚠️ IMPORTANT**: Always use volume mounts (`-v ./PowerNight-Data:/data`) to persist OAuth tokens, database, and configuration. Without volumes, data is lost after container restart.
+Use `docker-compose.yml` together with `compose.release.yml` after 2.0.0 is
+published. Both commands in Quick Start include the override so an unchanged
+`latest` cannot be launched accidentally. Keep `PowerNight-Data`, `.env`, and
+both Compose files together. Follow the persistent-config steps in the runbook.
 
 ### GitHub CR (Container Registry)
 
-Alternative registry hosted on GitHub Packages.
-
-```bash
-# Pull from GHCR
-docker pull ghcr.io/zaai-com/powernight:latest
-
-# Run with volume mount
-docker run -d \
-  --name PowerNight \
-  -p 8020:8020 \
-  -v ./PowerNight-Data:/data \
-  ghcr.io/zaai-com/powernight:latest
-```
+After publication, the same release is mirrored at `ghcr.io/zaai-com/powernight:2.0.0`. To use GHCR,
+change only the service image in the Compose file; preserve the existing `/data`
+mount and environment settings.
 
 ### Docker Compose
 
 **Recommended for production deployments** - ensures persistent volumes are always configured.
 
-1. Download `docker-compose.yml` file
-
-2. Start the application:
-
-```bash
-docker-compose up -d
-```
+Use the version-pinned Quick Start and persistent-config runbook above. Do not
+run the base file alone for a staged 2.0.0 install.
 
 ### Synology NAS
 
@@ -189,7 +173,7 @@ Optimized for Synology DSM Docker integration:
 
 2. **Create Folder** `/docker/PowerNight-Data` via File Station and add Read&Write permission to 'SYSTEM' user
 
-3. **Pull image** from Docker Hub **via Synology DSM UI**: Go to Registry tab → Search for `zaaicom/powernight` → Download `latest` tag
+3. **Pull image** from Docker Hub **via Synology DSM UI**: Go to Registry tab → Search for `zaaicom/powernight` → Download `2.0.0` after publication and configure the persistent YAML as described in the release runbook
 
 4. **Create container** with:
    - **Port Settings**: Local Port 8020 → Container Port 8020
@@ -208,6 +192,10 @@ Optimized for Synology DSM Docker integration:
 
 For contributors and developers:
 
+Python 3.11+ is required (Python 3.12+ for the optional documentation tools).
+Docker and CI use Python 3.14; frontend CI uses Node.js 26.
+TypeScript remains on 6.0.3 until typescript-eslint supports TypeScript 7.
+
 ```bash
 # Clone repository
 git clone https://github.com/ZAAI-com/PowerNight.git
@@ -217,7 +205,7 @@ cd PowerNight
 pip install -e ".[dev]"
 
 # Install Node.js dependencies
-npm install
+npm ci
 
 # Build frontend (with version metadata)
 ./build.sh --no-docker
@@ -228,20 +216,30 @@ python -m powernight.main
 
 Access at [http://localhost:8020](http://localhost:8020)
 
+For frontend hot reload, run `npm run dev` in another terminal. Its `/api`
+proxy defaults to `http://localhost:8020`. To use a different backend port,
+run `POWERNIGHT_API_PROXY_TARGET=http://127.0.0.1:8123 npm run dev`.
+This Vite configuration reads the shell environment, not `.env` files.
 
+
+## Releases
+
+See [2.0.0 release notes, upgrade checks, and rollback](releases/2.0.0.md).
+Version tags are staged before `latest`; local testing is not a live canary.
 
 ## Security
 
-### Local Access Only
+### Optional Authentication
 
-**PowerNight is designed for trusted local networks only**
+**PowerNight expects a trusted local network; enable authentication when other clients can reach it**
 
-- 🏠 **Local Network Only**: Deploy within your home/private network behind a firewall
-- 🔓 **Web UI Access**: The web interface is **NOT password protected**
+- 🔐 **Credential-driven protection**: No credential means open LAN access. Setting `POWERNIGHT_API_KEY` (generate with `openssl rand -hex 32`) automatically enables authentication.
+- 🔑 **Sending the key**: When enabled, include it as an `X-API-Key` header or `Authorization: Bearer <key>`. Only `/health` and `/version` are public.
+- 🏠 **Local Network Preferred**: Deploy within your home/private network behind a firewall
 - ❌ **Do NOT expose to internet**: Never expose port 8020 directly to the public internet
-- 🔐 **Network Security Required**: Use firewall rules, VPN, or reverse proxy for access control
+- 🔐 **Defense in depth**: Use firewall rules, VPN, or reverse proxy in addition to the API key
 
-> **Warning**: Exposing PowerNight to the internet without additional security could allow unauthorized control of your Tesla Powerwall.
+> **Warning**: Even with the API key set, avoid exposing PowerNight directly to the internet; place it behind a VPN or reverse proxy to protect control of your Tesla Powerwall.
 
 For detailed security guidance, see [SECURITY.md](SECURITY.md).
 

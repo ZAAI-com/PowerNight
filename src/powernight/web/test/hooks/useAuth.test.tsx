@@ -1,30 +1,36 @@
-import { renderHook, act } from '@testing-library/react';
+import { vi, type Mocked } from 'vitest';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAuth } from '../../src/hooks/useAuth';
 import { api } from '../../src/utils/api';
 
 // Mock the API
-jest.mock('../../src/utils/api', () => ({
+vi.mock('../../src/utils/api', () => ({
   api: {
-    isAuthenticated: jest.fn(),
-    authenticate: jest.fn(),
-    logout: jest.fn(),
+    isAuthenticated: vi.fn(),
+    authenticate: vi.fn(),
+    logout: vi.fn(),
+    checkAuthRequired: vi.fn(),
   },
 }));
 
-const mockApi = api as jest.Mocked<typeof api>;
+const mockApi = api as Mocked<typeof api>;
 
 describe('useAuth', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockApi.isAuthenticated.mockReturnValue(false);
+    // Default: auth is required and no API key present -> unauthenticated.
+    mockApi.checkAuthRequired.mockResolvedValue(true);
   });
 
-  it('should initialize with unauthenticated state', () => {
+  it('should initialize to unauthenticated when auth is required and no key is set', async () => {
     const { result } = renderHook(() => useAuth());
 
+    // The mount effect resolves checkAuthRequired asynchronously; wait for it.
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
     expect(result.current.isAuthenticated).toBe(false);
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.error).toBeUndefined();
+    expect(result.current.error).toBe('Authentication required');
   });
 
   it('should handle successful login', async () => {
@@ -56,6 +62,23 @@ describe('useAuth', () => {
     expect(result.current.isAuthenticated).toBe(false);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.error).toBe('Invalid API key');
+  });
+
+  it('keeps the login form mounted while a login attempt is pending', async () => {
+    let fail!: (reason: Error) => void;
+    mockApi.authenticate.mockReturnValueOnce(new Promise((_resolve, reject) => { fail = reject; }));
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    let pending!: Promise<boolean>;
+    act(() => { pending = result.current.login('trial-key'); });
+    expect(result.current.isLoading).toBe(false);
+    await act(async () => {
+      fail(new Error('Invalid API key'));
+      expect(await pending).toBe(false);
+    });
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.error).toBe('Invalid API key');
+    expect(result.current.isLoading).toBe(false);
   });
 
   it('should handle logout', () => {

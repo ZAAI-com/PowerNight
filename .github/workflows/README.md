@@ -25,15 +25,15 @@ This directory contains automated workflows for PowerNight's CI/CD pipeline.
 9. Update Docker Hub repository description from docs/README.md
 10. Generate build summary
 
-**Docker Tags Created**:
+**Versioned Docker Tags Created** (latest is promoted separately):
 
 *GitHub Container Registry (Primary):*
 - `ghcr.io/zaai-com/powernight:<version>` (e.g., `1.0.0`)
-- `ghcr.io/zaai-com/powernight:latest`
+- `ghcr.io/zaai-com/powernight:latest` (only after Docker Promote)
 
 *Docker Hub (Mirror):*
 - `zaaicom/powernight:<version>` (e.g., `1.0.0`)
-- `zaaicom/powernight:latest`
+- `zaaicom/powernight:latest` (only after Docker Promote)
 
 **Required Secrets** (Organization-level):
 - `DOCKERHUB_USERNAME` - Docker Hub username (zaaicom)
@@ -71,12 +71,12 @@ docker pull zaaicom/powernight:1.0.0
 1. Checkout repository
 2. Build frontend
 3. Build Docker image (amd64 only for speed)
-4. Start container with test configuration
-5. Wait for container health check to pass
-6. Test health endpoint (`/health`)
-7. Test web interface accessibility
-8. Display container logs
-9. Generate test summary
+4. Run `scripts/release_smoke.py` with isolated Docker Compose projects
+5. Verify open and protected API access, SPA routes, and bundled assets
+6. Migrate synthetic legacy data and verify preset conflicts return HTTP 409
+7. Confirm saved configuration excludes environment-provided API keys
+8. Recreate containers and verify database, auth artifacts, and Flask secret persist
+9. Save container logs and generate a JSON test summary; remove disposable volumes
 
 **Why This Matters**:
 - Catches Dockerfile issues early
@@ -172,90 +172,30 @@ trivy image zaaicom/powernight:1.0.0
 
 ## Release Process
 
-### Creating a New Release
+Releases are staged: Docker Publish writes version-only tags, and Docker Promote
+updates `latest` separately after a verified live canary. Local-only validation
+must not dispatch either publishing or promotion.
 
-1. **Update Version**
-   ```bash
-   # Edit pyproject.toml
-   version = "0.4.0"
-   ```
+1. Complete CI and Docker Compose persistence/migration tests for the release commit.
+   `python scripts/release_smoke.py --image powernight-release:test` runs the same
+   isolated smoke checks used by Docker Health Test, with no Tesla access.
+2. Verify all version identifiers using `python scripts/check_release_version.py 2.0.0`.
+3. Merge to `main` and tag the verified commit as `2.0.0` (no `v` prefix).
+   Pushing the tag triggers Docker Publish. Manual publication must also select
+   the release tag as its ref. Only commits contained in `main` are publishable.
+4. Record the image digest from the publish summary. Verify both registries have
+   that version and the required amd64, arm64, and arm/v7 manifests.
+5. Back up canary data, pin the version/digest in Docker Compose, and validate
+   upgrade, restart, reconnect, and one overnight scheduling cycle.
+6. Run Docker Promote from `main` with the version, exact digest, and
+   `canary_verified=true`. It verifies both registry tags before changing either
+   `latest` and promotes the tested digest without rebuilding.
+7. Publish the GitHub release notes and monitor the rollout. Registry promotion
+   is not atomic; on a partial failure, inspect both registries and finish using
+   the same verified digest.
 
-2. **Commit Changes**
-   ```bash
-   git add pyproject.toml
-   git commit -m "Bump version to 0.4.0"
-   git push origin main
-   ```
-
-3. **Create and Push Tag**
-   ```bash
-   # Create annotated tag
-   git tag -a 0.4.0 -m "Release 0.4.0 - Description of changes"
-
-   # Push tag to trigger workflow
-   git push origin 0.4.0
-   ```
-
-4. **Monitor Build**
-   - Go to [GitHub Actions](https://github.com/ZAAI-com/PowerNight/actions)
-   - Watch "Docker Publish" workflow
-   - Typical build time: 15-20 minutes
-
-5. **Verify on Registries**
-
-   **GitHub Container Registry (Primary):**
-   - Visit [GitHub Packages](https://github.com/ZAAI-com/PowerNight/pkgs/container/powernight)
-   - Verify new tags appear:
-     - `ghcr.io/zaai-com/powernight:0.4.0`
-     - `ghcr.io/zaai-com/powernight:latest`
-
-   **Docker Hub (Mirror):**
-   - Visit [Docker Hub Repository](https://hub.docker.com/r/zaaicom/powernight)
-   - Verify new tags appear:
-     - `zaaicom/powernight:0.4.0`
-     - `zaaicom/powernight:latest`
-
-   - Check multi-arch manifests on both registries
-
-6. **Test Pull**
-   ```bash
-   # Pull from GHCR (recommended)
-   docker pull ghcr.io/zaai-com/powernight:0.4.0
-   docker run -d -p 8020:8020 ghcr.io/zaai-com/powernight:0.4.0
-
-   # Or pull from Docker Hub (mirror)
-   docker pull zaaicom/powernight:0.4.0
-   docker run -d -p 8020:8020 zaaicom/powernight:0.4.0
-   ```
-
-### Hotfix Release
-
-For urgent fixes:
-
-1. Create hotfix branch
-   ```bash
-   git checkout -b hotfix/0.3.1
-   ```
-
-2. Make fixes and test
-   ```bash
-   # Make changes
-   git commit -m "Fix critical issue"
-   ```
-
-3. Update version to patch release
-   ```bash
-   # pyproject.toml
-   version = "0.3.1"
-   ```
-
-4. Merge and tag
-   ```bash
-   git checkout main
-   git merge hotfix/0.3.1
-   git tag -a 0.3.1 -m "Hotfix: Critical bug fix"
-   git push origin main 0.3.1
-   ```
+See [2.0.0 release notes and rollback runbook](../../docs/releases/2.0.0.md).
+Database rollback requires the pre-upgrade data backup as well as the old image.
 
 ---
 
@@ -425,8 +365,9 @@ To add a new architecture (e.g., `linux/riscv64`):
 
 1. **Always test locally first**
    ```bash
-   ./build.sh
-   docker run -d -p 8020:8020 powernight:latest
+   ./build.sh --no-docker
+   docker build -t powernight-release:test .
+   python scripts/release_smoke.py --image powernight-release:test
    ```
 
 2. **Use semantic versioning**
@@ -452,15 +393,15 @@ To add a new architecture (e.g., `linux/riscv64`):
    - Watch Actions tab during release
    - Don't assume success - verify!
 
-5. **Test published images**
+5. **Test staged images before promoting latest**
    ```bash
-   # Test GHCR image (recommended)
-   docker pull ghcr.io/zaai-com/powernight:latest
-   docker run --rm ghcr.io/zaai-com/powernight:latest powernight --version
+   # After version publication, test in isolated Compose projects (no Tesla access)
+   docker pull ghcr.io/zaai-com/powernight:2.0.0
+   python scripts/release_smoke.py --image ghcr.io/zaai-com/powernight:2.0.0
 
    # Or test Docker Hub image (mirror)
-   docker pull zaaicom/powernight:latest
-   docker run --rm zaaicom/powernight:latest powernight --version
+   docker pull zaaicom/powernight:2.0.0
+   python scripts/release_smoke.py --image zaaicom/powernight:2.0.0
    ```
 
 ---

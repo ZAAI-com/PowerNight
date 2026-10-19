@@ -277,11 +277,32 @@ class PowerwallDataCache:
         age = time.time() - entry['timestamp']
 
         if age > self.ttl_seconds:
-            del self._cache[key]
+            # Keep the entry so get_stale() can serve it as a fallback when
+            # the Powerwall is unreachable
             self.logger.debug(f"Cache entry '{key}' expired after {age:.1f}s")
             return None
 
         self.logger.debug(f"Cache hit for '{key}' (age: {age:.1f}s)")
+        return entry['data']
+
+    def get_stale(self, key: str) -> Optional[Any]:
+        """
+        Get cached data regardless of expiry.
+
+        Used as a degradation fallback when the Powerwall is unreachable:
+        stale data beats no data for read-only status display.
+
+        Args:
+            key: Cache key
+
+        Returns:
+            Cached data (possibly older than the TTL) or None if never cached
+        """
+        entry = self._cache.get(key)
+        if entry is None:
+            return None
+        age = time.time() - entry['timestamp']
+        self.logger.debug(f"Stale cache read for '{key}' (age: {age:.1f}s)")
         return entry['data']
 
     def set(self, key: str, data: Any) -> None:

@@ -40,7 +40,12 @@ class TaskExecutor:
         self.powerwall_connector: Optional[PowerwallConnector] = None
 
     def __call__(self) -> Dict[str, Any]:
-        """Make the executor callable for schedule library."""
+        """Make the executor callable for schedule library.
+
+        Runs in the planner's scheduler loop, so it must return immediately:
+        the actual command execution happens in a background thread. A slow
+        or hung Powerwall call must never block other scheduled tasks.
+        """
         # For scheduled executions, create an execution record first
         try:
             execution = self.execution_service.create_execution(
@@ -52,21 +57,29 @@ class TaskExecutor:
                 command_params=self.command.params
             )
             execution_id = execution['id']
-            
-            # Execute asynchronously to track the execution
-            self.execute_async(execution_id)
-            
+
+            worker = threading.Thread(
+                target=self.execute_async,
+                args=(execution_id,),
+                name=f"task-exec-{self.task_id}",
+                daemon=True
+            )
+            worker.start()
+
             return {
                 'success': True,
                 'task_id': self.task_id,
                 'execution_id': execution_id,
                 'message': 'Scheduled task execution started'
             }
-            
+
         except Exception as e:
             self.logger.error(f"Failed to start scheduled execution for task {self.task_id}: {e}")
-            # Fallback to direct execution
-            return self.execute()
+            return {
+                'success': False,
+                'task_id': self.task_id,
+                'message': f'Failed to start scheduled execution: {e}'
+            }
 
     def execute_async(self, execution_id: str) -> None:
         """
@@ -175,8 +188,21 @@ class TaskExecutor:
         if not self.powerwall_connector:
             raise PowerwallError("Powerwall connector not available")
 
-        if not self.powerwall_connector.is_connected():
-            raise PowerwallError("Powerwall is not connected or authenticated. Please login via the Settings page.")
+        try:
+            self.powerwall_connector.ensure_connected()
+        except Exception as error:
+            safe_detail = self.powerwall_connector._safe_log_detail(error)
+            self.logger.error(
+                "Powerwall reconnect failed for task %s: %s",
+                self.task_id,
+                safe_detail,
+            )
+            status = self.powerwall_connector.get_connection_status()
+            failure_category = status.get('connection_error_code') or 'connection'
+            safe_error = status.get('connection_error') or (
+                'Tesla cloud connection failed. Check Settings and the container logs.'
+            )
+            raise PowerwallError(f'[{failure_category}] {safe_error}') from error
 
         command_type = self.command.command_type
         params = self.command.params

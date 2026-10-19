@@ -4,6 +4,7 @@ Tests for ConfigManager functionality.
 
 import os
 import json
+import logging
 import yaml
 import pytest
 import tempfile
@@ -47,7 +48,7 @@ class TestConfigManager:
         """Test loading JSON configuration."""
         config_data = {
             "powerwall": {
-                "ip_address": "192.168.1.100",
+                "tesla_email": "test@example.com",
                 "timeout": 30.0
             },
             "automation": {
@@ -71,7 +72,7 @@ class TestConfigManager:
             config = manager.load_config(config_path)
 
             assert isinstance(config, PowerNightConfig)
-            assert config.powerwall.ip_address == "192.168.1.100"
+            assert config.powerwall.tesla_email == "test@example.com"
             assert config.powerwall.timeout == 30.0
             assert config.automation.enabled is True
             assert len(config.automation.schedule) == 1
@@ -85,7 +86,7 @@ class TestConfigManager:
         """Test loading YAML configuration."""
         config_data = {
             "powerwall": {
-                "ip_address": "192.168.1.100",
+                "tesla_email": "test@example.com",
                 "timeout": 30.0
             },
             "automation": {
@@ -109,7 +110,7 @@ class TestConfigManager:
             config = manager.load_config(config_path)
 
             assert isinstance(config, PowerNightConfig)
-            assert config.powerwall.ip_address == "192.168.1.100"
+            assert config.powerwall.tesla_email == "test@example.com"
             assert config.automation.enabled is True
 
         finally:
@@ -119,7 +120,7 @@ class TestConfigManager:
         """Test environment variable overrides."""
         config_data = {
             "powerwall": {
-                "ip_address": "192.168.1.100",
+                "tesla_email": "file@example.com",
                 "timeout": 30.0
             },
             "web_interface": {
@@ -133,14 +134,14 @@ class TestConfigManager:
 
         try:
             with patch.dict(os.environ, {
-                'POWERNIGHT_POWERWALL_IP': '192.168.1.200',
+                'POWERNIGHT_POWERWALL_EMAIL': 'override@example.com',
                 'POWERNIGHT_WEB_PORT': '8080',
                 'POWERNIGHT_LOG_LEVEL': 'DEBUG'
             }):
                 manager = ConfigManager()
                 config = manager.load_config(config_path)
 
-                assert config.powerwall.ip_address == "192.168.1.200"
+                assert config.powerwall.tesla_email == "override@example.com"
                 assert config.web_interface.port == 8080
                 assert config.logging.level == "DEBUG"
 
@@ -165,7 +166,7 @@ class TestConfigManager:
             with open(config_path, 'r') as f:
                 saved_data = json.load(f)
 
-            assert saved_data['powerwall']['ip_address'] == config.powerwall.ip_address
+            assert saved_data['powerwall']['tesla_email'] == config.powerwall.tesla_email
             assert saved_data['automation']['enabled'] == config.automation.enabled
 
         finally:
@@ -190,7 +191,7 @@ class TestConfigManager:
             with open(config_path, 'r') as f:
                 saved_data = yaml.safe_load(f)
 
-            assert saved_data['powerwall']['ip_address'] == config.powerwall.ip_address
+            assert saved_data['powerwall']['tesla_email'] == config.powerwall.tesla_email
             assert saved_data['automation']['enabled'] == config.automation.enabled
 
         finally:
@@ -201,7 +202,7 @@ class TestConfigManager:
         """Test configuration validation errors."""
         invalid_config_data = {
             "powerwall": {
-                "ip_address": "",  # Invalid: empty IP
+                "tesla_email": "not-an-email",  # Invalid: bad email format
                 "timeout": -5.0     # Invalid: negative timeout
             },
             "automation": {
@@ -313,7 +314,7 @@ class TestConfigManager:
         # Valid config
         valid_config = {
             "powerwall": {
-                "ip_address": "192.168.1.100"
+                "tesla_email": "user@example.com"
             }
         }
 
@@ -324,7 +325,7 @@ class TestConfigManager:
         # Invalid config
         invalid_config = {
             "powerwall": {
-                "ip_address": ""  # Empty IP
+                "tesla_email": "not-an-email"  # Bad email format
             }
         }
 
@@ -351,7 +352,7 @@ class TestConfigManager:
         """Test reloading configuration."""
         config_data = {
             "powerwall": {
-                "ip_address": "192.168.1.100"
+                "tesla_email": "first@example.com"
             }
         }
 
@@ -364,31 +365,64 @@ class TestConfigManager:
 
             # Load initial config
             config1 = manager.load_config(config_path)
-            assert config1.powerwall.ip_address == "192.168.1.100"
+            assert config1.powerwall.tesla_email == "first@example.com"
 
             # Modify file
-            config_data['powerwall']['ip_address'] = "192.168.1.200"
+            config_data['powerwall']['tesla_email'] = "second@example.com"
             with open(config_path, 'w') as f:
                 json.dump(config_data, f)
 
             # Reload config
             config2 = manager.reload_config()
-            assert config2.powerwall.ip_address == "192.168.1.200"
+            assert config2.powerwall.tesla_email == "second@example.com"
 
         finally:
             os.unlink(config_path)
 
     @patch.dict(os.environ, {'POWERNIGHT_CONFIG_PATH': '/custom/config.json'})
-    def test_find_config_with_env_var(self):
+    def test_find_config_with_env_var(self, tmp_path, monkeypatch, caplog):
         """Test finding config file with environment variable."""
+        # Isolate from any config files in the repo cwd or home directory
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+
         manager = ConfigManager()
 
-        # Should look for environment variable path first
-        with pytest.raises(ConfigurationError) as exc_info:
-            manager._find_config_file()
+        # Should look for environment variable path first, warn that it does
+        # not exist, then fail because no default location has a config
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(ConfigurationError) as exc_info:
+                manager._find_config_file()
 
-        # Should mention the environment variable path
-        assert "/custom/config.json" in str(exc_info.value) or "environment variable does not exist" in str(exc_info.value)
+        assert "/custom/config.json" in caplog.text
+        assert "POWERNIGHT_CONFIG_PATH" in str(exc_info.value)
+
+    def test_from_dict_rejects_incomplete_schedule_entries(self):
+        """Test that from_dict raises ValueError on schedule entries missing keys."""
+        with pytest.raises(ValueError):
+            PowerNightConfig.from_dict({
+                "automation": {"schedule": [{"time": "12:00"}]}
+            })
+
+        with pytest.raises(ValueError):
+            PowerNightConfig.from_dict({
+                "automation": {"schedule": [{"percentage": 40.0}]}
+            })
+
+    def test_bad_config_without_backups_raises_and_preserves_file(self):
+        """Test that recovery never fabricates defaults over a broken config."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / 'config.json'
+            broken_content = '{ invalid json }'
+            config_path.write_text(broken_content)
+
+            manager = ConfigManager()
+
+            with pytest.raises(ConfigurationError):
+                manager.load_config(config_path)
+
+            # The user's file must be left untouched, not replaced with defaults
+            assert config_path.read_text() == broken_content
 
     def test_thread_safety(self):
         """Test thread safety of singleton pattern."""

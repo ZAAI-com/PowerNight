@@ -1,211 +1,17 @@
 """
 Database services for PowerNight.
 
-Simplified services for schedule management without multi-profile complexity.
+Data access services for tasks, task executions, and task presets.
 """
 
-import uuid
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from .models import ScheduleEntry, Task, TaskExecution
-from .exceptions import DatabaseError, ScheduleNotFoundError, TaskNotFoundError
+from .models import Task, TaskExecution, TaskPreset
+from .exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError, PresetNameConflictError, PresetProtectedError
 from .connection import get_db_session_context
-
-
-class ScheduleService:
-    """Service for managing schedule entries."""
-    
-    def __init__(self, session: Optional[Session] = None):
-        self.session = session
-    
-    def _get_session(self) -> Session:
-        """Get database session."""
-        if self.session:
-            return self.session
-        return get_db_session_context()
-    
-    def create_schedule(
-        self, 
-        name: str,
-        time: str,
-        backup_reserve_percentage: int,
-        description: Optional[str] = None,
-        enabled: bool = True
-    ) -> ScheduleEntry:
-        """
-        Create a new schedule entry.
-        
-        Args:
-            name: Schedule name
-            time: Time in HH:MM format
-            backup_reserve_percentage: Backup reserve percentage to set
-            description: Optional description
-            enabled: Whether schedule is enabled
-        
-        Returns:
-            Created ScheduleEntry instance
-        """
-        try:
-            with self._get_session() as session:
-                schedule = ScheduleEntry(
-                    name=name,
-                    time=time,
-                    backup_reserve_percentage=backup_reserve_percentage,
-                    description=description,
-                    enabled=enabled
-                )
-                
-                session.add(schedule)
-                session.commit()
-                
-                return schedule
-                
-        except Exception as e:
-            raise DatabaseError(f"Failed to create schedule: {e}")
-    
-    def get_schedule(self, schedule_id: str) -> ScheduleEntry:
-        """
-        Get a schedule by ID.
-        
-        Args:
-            schedule_id: Schedule ID
-        
-        Returns:
-            ScheduleEntry instance
-            
-        Raises:
-            ScheduleNotFoundError: If schedule not found
-        """
-        try:
-            with self._get_session() as session:
-                schedule = session.query(ScheduleEntry).filter(
-                    ScheduleEntry.id == schedule_id
-                ).first()
-                
-                if not schedule:
-                    raise ScheduleNotFoundError(f"Schedule {schedule_id} not found")
-                
-                return schedule
-                
-        except ScheduleNotFoundError:
-            raise
-        except Exception as e:
-            raise DatabaseError(f"Failed to get schedule: {e}")
-    
-    def list_schedules(self) -> List[ScheduleEntry]:
-        """
-        List all schedule entries.
-        
-        Returns:
-            List of ScheduleEntry instances
-        """
-        try:
-            with self._get_session() as session:
-                schedules = session.query(ScheduleEntry).order_by(ScheduleEntry.time).all()
-                return schedules
-                
-        except Exception as e:
-            raise DatabaseError(f"Failed to list schedules: {e}")
-    
-    def update_schedule(
-        self, 
-        schedule_id: str,
-        **kwargs
-    ) -> ScheduleEntry:
-        """
-        Update a schedule entry.
-        
-        Args:
-            schedule_id: Schedule ID
-            **kwargs: Fields to update
-        
-        Returns:
-            Updated ScheduleEntry instance
-            
-        Raises:
-            ScheduleNotFoundError: If schedule not found
-        """
-        try:
-            with self._get_session() as session:
-                schedule = session.query(ScheduleEntry).filter(
-                    ScheduleEntry.id == schedule_id
-                ).first()
-                
-                if not schedule:
-                    raise ScheduleNotFoundError(f"Schedule {schedule_id} not found")
-                
-                # Update allowed fields
-                allowed_fields = {
-                    'name', 'time', 'backup_reserve_percentage', 
-                    'description', 'enabled'
-                }
-                
-                for field, value in kwargs.items():
-                    if field in allowed_fields and hasattr(schedule, field):
-                        setattr(schedule, field, value)
-                
-                schedule.updated_at = datetime.now(timezone.utc)
-                session.commit()
-                
-                return schedule
-                
-        except ScheduleNotFoundError:
-            raise
-        except Exception as e:
-            raise DatabaseError(f"Failed to update schedule: {e}")
-    
-    def delete_schedule(self, schedule_id: str) -> bool:
-        """
-        Delete a schedule entry.
-        
-        Args:
-            schedule_id: Schedule ID
-        
-        Returns:
-            True if deleted successfully
-            
-        Raises:
-            ScheduleNotFoundError: If schedule not found
-        """
-        try:
-            with self._get_session() as session:
-                schedule = session.query(ScheduleEntry).filter(
-                    ScheduleEntry.id == schedule_id
-                ).first()
-                
-                if not schedule:
-                    raise ScheduleNotFoundError(f"Schedule {schedule_id} not found")
-                
-                session.delete(schedule)
-                session.commit()
-                
-                return True
-                
-        except ScheduleNotFoundError:
-            raise
-        except Exception as e:
-            raise DatabaseError(f"Failed to delete schedule: {e}")
-    
-    def get_enabled_schedules(self) -> List[ScheduleEntry]:
-        """
-        Get all enabled schedule entries.
-        
-        Returns:
-            List of enabled ScheduleEntry instances
-        """
-        try:
-            with self._get_session() as session:
-                schedules = session.query(ScheduleEntry).filter(
-                    ScheduleEntry.enabled == True
-                ).order_by(ScheduleEntry.time).all()
-                
-                return schedules
-                
-        except Exception as e:
-            raise DatabaseError(f"Failed to get enabled schedules: {e}")
 
 
 class TaskService:
@@ -259,7 +65,7 @@ class TaskService:
                 return task.to_dict()
 
         except Exception as e:
-            raise DatabaseError(f"Failed to create task: {e}")
+            raise DatabaseError(f"Failed to create task: {e}") from e
     
     def get_task(self, task_id: str) -> Dict[str, Any]:
         """
@@ -289,7 +95,7 @@ class TaskService:
         except TaskNotFoundError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to get task: {e}")
+            raise DatabaseError(f"Failed to get task: {e}") from e
     
     def list_tasks(self, enabled_only: bool = False) -> List[Dict[str, Any]]:
         """
@@ -314,7 +120,7 @@ class TaskService:
                 return [t.to_dict() for t in tasks]
 
         except Exception as e:
-            raise DatabaseError(f"Failed to list tasks: {e}")
+            raise DatabaseError(f"Failed to list tasks: {e}") from e
     
     def update_task(
         self,
@@ -364,7 +170,7 @@ class TaskService:
         except TaskNotFoundError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to update task: {e}")
+            raise DatabaseError(f"Failed to update task: {e}") from e
     
     def delete_task(self, task_id: str) -> bool:
         """
@@ -396,7 +202,7 @@ class TaskService:
         except TaskNotFoundError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to delete task: {e}")
+            raise DatabaseError(f"Failed to delete task: {e}") from e
     
     def get_enabled_tasks(self) -> List[Dict[str, Any]]:
         """
@@ -449,7 +255,7 @@ class TaskService:
         except TaskNotFoundError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to update task execution status: {e}")
+            raise DatabaseError(f"Failed to update task execution status: {e}") from e
 
 
 class TaskExecutionService:
@@ -506,7 +312,7 @@ class TaskExecutionService:
                 return execution.to_dict()
 
         except Exception as e:
-            raise DatabaseError(f"Failed to create task execution: {e}")
+            raise DatabaseError(f"Failed to create task execution: {e}") from e
     
     def get_execution(self, execution_id: str) -> Dict[str, Any]:
         """
@@ -536,7 +342,7 @@ class TaskExecutionService:
         except DatabaseError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to get task execution: {e}")
+            raise DatabaseError(f"Failed to get task execution: {e}") from e
     
     def update_execution_status(
         self,
@@ -594,7 +400,7 @@ class TaskExecutionService:
         except DatabaseError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to update task execution status: {e}")
+            raise DatabaseError(f"Failed to update task execution status: {e}") from e
     
     def list_executions(
         self,
@@ -624,7 +430,7 @@ class TaskExecutionService:
                 return [e.to_dict() for e in executions]
 
         except Exception as e:
-            raise DatabaseError(f"Failed to list task executions: {e}")
+            raise DatabaseError(f"Failed to list task executions: {e}") from e
     
     def cleanup_old_executions(
         self,
@@ -672,7 +478,7 @@ class TaskExecutionService:
                 return deleted_count
 
         except Exception as e:
-            raise DatabaseError(f"Failed to cleanup old executions: {e}")
+            raise DatabaseError(f"Failed to cleanup old executions: {e}") from e
     
     def get_execution_logs(
         self,
@@ -737,4 +543,104 @@ class TaskExecutionService:
                 }
 
         except Exception as e:
-            raise DatabaseError(f"Failed to get execution logs: {e}")
+            raise DatabaseError(f"Failed to get execution logs: {e}") from e
+
+
+class TaskPresetService:
+    """Service for managing task presets."""
+
+    def __init__(self, session: Optional[Session] = None):
+        self.session = session
+
+    def _get_session(self) -> Session:
+        """Get database session."""
+        if self.session:
+            return self.session
+        return get_db_session_context()
+
+    def create_preset(
+        self,
+        name: str,
+        command: str,
+        command_params: Optional[Dict[str, Any]] = None,
+        default_time: Optional[str] = None,
+        is_builtin: bool = False,
+        sort_order: int = 0
+    ) -> Dict[str, Any]:
+        """Create a new task preset."""
+        try:
+            with self._get_session() as session:
+                preset = TaskPreset(
+                    name=name,
+                    command=command,
+                    command_params=command_params or {},
+                    default_time=default_time,
+                    is_builtin=is_builtin,
+                    sort_order=sort_order
+                )
+                session.add(preset)
+                session.commit()
+                session.refresh(preset)
+                return preset.to_dict()
+        except IntegrityError as e:
+            if self.preset_exists_by_name(name):
+                raise PresetNameConflictError("A preset with this name already exists") from e
+            raise DatabaseError("Failed to create preset") from e
+        except Exception as e:
+            raise DatabaseError("Failed to create preset") from e
+
+    def list_presets(self) -> List[Dict[str, Any]]:
+        """List all presets, ordered by sort_order then name."""
+        try:
+            with self._get_session() as session:
+                presets = session.query(TaskPreset).order_by(
+                    TaskPreset.sort_order, TaskPreset.name
+                ).all()
+                return [p.to_dict() for p in presets]
+        except Exception as e:
+            raise DatabaseError(f"Failed to list presets: {e}") from e
+
+    def get_preset(self, preset_id: str) -> Dict[str, Any]:
+        """Get a preset by ID."""
+        try:
+            with self._get_session() as session:
+                preset = session.query(TaskPreset).filter(
+                    TaskPreset.id == preset_id
+                ).first()
+                if not preset:
+                    raise PresetNotFoundError(f"Preset {preset_id} not found")
+                return preset.to_dict()
+        except PresetNotFoundError:
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to get preset: {e}") from e
+
+    def delete_preset(self, preset_id: str) -> bool:
+        """Delete a user preset. Built-in presets cannot be deleted."""
+        try:
+            with self._get_session() as session:
+                preset = session.query(TaskPreset).filter(
+                    TaskPreset.id == preset_id
+                ).first()
+                if not preset:
+                    raise PresetNotFoundError(f"Preset {preset_id} not found")
+                if preset.is_builtin:
+                    raise PresetProtectedError("Built-in presets cannot be deleted")
+                session.delete(preset)
+                session.commit()
+                return True
+        except (PresetNotFoundError, DatabaseError):
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to delete preset: {e}") from e
+
+    def preset_exists_by_name(self, name: str) -> bool:
+        """Check if a preset with the given name already exists."""
+        try:
+            with self._get_session() as session:
+                count = session.query(TaskPreset).filter(
+                    TaskPreset.name == name
+                ).count()
+                return count > 0
+        except Exception:
+            return False

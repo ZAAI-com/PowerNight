@@ -145,9 +145,10 @@ class Planner:
         from ..powerwall.commands import CronCommand, CommandType
 
         try:
-            # Create command from task data
+            # Create command from task data (CronCommand converts the string
+            # to CommandType itself)
             command = CronCommand(
-                command_type=CommandType(task_dict['command']),
+                command_type=task_dict['command'],
                 params=task_dict.get('command_params', {})
             )
 

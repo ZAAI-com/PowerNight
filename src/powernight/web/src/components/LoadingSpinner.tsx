@@ -21,6 +21,8 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   return (
     <div className={cn('flex flex-col items-center justify-center space-y-2', className)}>
       <div
+        role="status"
+        aria-label="Loading"
         className={cn(
           'animate-spin rounded-full border-2 border-gray-300 border-t-blue-600',
           sizeClasses[size]

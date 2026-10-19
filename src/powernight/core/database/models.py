@@ -4,51 +4,19 @@ Database models for PowerNight.
 Simplified models for Tesla Powerwall integration without multi-profile complexity.
 """
 
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
-from uuid import uuid4, UUID
-import json
+from typing import Dict, Any
+from uuid import uuid4
 
 from sqlalchemy import (
-    Column, String, Integer, Boolean, DateTime, Text, 
-    ForeignKey, UniqueConstraint, Index, JSON
+    Column, String, Integer, Boolean, DateTime, Text,
+    ForeignKey, JSON
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, Session
-# from sqlalchemy.dialects.postgresql import UUID as PostgresUUID, INET
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
 from ...utils.timezone_utils import safe_format_datetime
 
 Base = declarative_base()
-
-
-class ScheduleEntry(Base):
-    """Schedule entry model for time-based automation."""
-    
-    __tablename__ = 'schedule_entries'
-    
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    time = Column(String(8), nullable=False)  # HH:MM format
-    backup_reserve_percentage = Column(Integer, nullable=False)
-    enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert schedule entry to dictionary."""
-        return {
-            'id': str(self.id),
-            'name': self.name,
-            'description': self.description,
-            'time': self.time,
-            'backup_reserve_percentage': self.backup_reserve_percentage,
-            'enabled': self.enabled,
-            'created_at': safe_format_datetime(self.created_at),
-            'updated_at': safe_format_datetime(self.updated_at),
-        }
 
 
 class Task(Base):
@@ -82,6 +50,36 @@ class Task(Base):
             'last_status': self.last_status,
             'last_error': self.last_error,
             'execution_count': self.execution_count or 0,
+            'created_at': safe_format_datetime(self.created_at),
+            'updated_at': safe_format_datetime(self.updated_at),
+        }
+
+
+class TaskPreset(Base):
+    """Task preset model for reusable task templates."""
+
+    __tablename__ = 'task_presets'
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    name = Column(String(255), nullable=False, unique=True)
+    command = Column(String(50), nullable=False)
+    command_params = Column(JSON, nullable=True)
+    default_time = Column(String(8), nullable=True)  # Optional HH:MM
+    is_builtin = Column(Boolean, default=False)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert task preset to dictionary."""
+        return {
+            'id': str(self.id),
+            'name': self.name,
+            'command': self.command,
+            'command_params': self.command_params,
+            'default_time': self.default_time,
+            'is_builtin': self.is_builtin,
+            'sort_order': self.sort_order,
             'created_at': safe_format_datetime(self.created_at),
             'updated_at': safe_format_datetime(self.updated_at),
         }

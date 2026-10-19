@@ -5,12 +5,12 @@ set -e
 
 echo "🚀 Setting up PowerNight development environment..."
 
-# Check if Python 3.10+ is available
+# Check if Python 3.11+ is available
 python_version=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-required_version="3.10"
+required_version="3.11"
 
 if [ "$(printf '%s\n' "$required_version" "$python_version" | sort -V | head -n1)" != "$required_version" ]; then
-    echo "❌ Python 3.10+ is required. Found: $python_version"
+    echo "❌ Python 3.11+ is required. Found: $python_version"
     exit 1
 fi
 
@@ -27,12 +27,13 @@ pip install --upgrade pip
 
 # Install development dependencies
 echo "📚 Installing dependencies..."
-pip install -e .
-pip install -r requirements-dev.txt
+pip install -e ".[dev]"
 
 # Install pre-commit hooks
 echo "🔧 Setting up pre-commit hooks..."
-pre-commit install
+if [ -f ".pre-commit-config.yaml" ]; then
+    pre-commit install
+fi
 
 # Create necessary directories
 echo "📁 Creating directories..."
@@ -48,7 +49,7 @@ if [ ! -f "config/config.yaml" ]; then
 fi
 
 if [ ! -f ".env" ]; then
-    cp config/examples/powernight.env.example .env
+    cp .env.example .env
     echo "📝 Created .env from example"
 fi
 
