@@ -1,0 +1,32 @@
+src/powernight/utils/secure_files.py
+  s_5c897049a131de::t_884d20c6229b45 39-45
+src/powernight/core/config/manager.py
+  s_5c897049a131de::t_51b42bc737516f 169-173,177
+  s_5c897049a131de::t_a5cdf9f539e0c5 168
+tests/unit/test_config_persistence.py
+  s_5c897049a131de::t_1f0aa606992e77 155
+  s_5c897049a131de::t_4a6a8440147975 129-154,156-157
+src/powernight/web/app.py
+  s_5c897049a131de::t_908779af5b3627 30-31,40-61
+  s_5c897049a131de::t_58194775b2363c 33-35,38-39,62,146
+src/powernight/core/config/backup.py
+  s_5c897049a131de::t_a5cdf9f539e0c5 9,104-105,108,131-132,159-160,167,234-235
+tests/unit/test_secure_files.py
+  s_5c897049a131de::t_4a6a8440147975 90,97-122,124-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5e1ef8ce03c6de1897d559d9ee90a53b5c2260e5",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
