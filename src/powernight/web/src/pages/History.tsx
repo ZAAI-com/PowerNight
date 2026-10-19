@@ -22,6 +22,7 @@ const History: React.FC = () => {
   // GET /api/v1/logs/executions: status and task_name)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [taskNameFilter, setTaskNameFilter] = useState('');
+  const [debouncedTaskName, setDebouncedTaskName] = useState('');
 
   // Ignore responses from superseded requests (e.g. while typing in the
   // task name filter) so a slow response cannot clobber newer results.
@@ -36,7 +37,7 @@ const History: React.FC = () => {
 
       // Derive the offset from the already-loaded logs at request time
       const currentOffset = resetOffset ? 0 : logs.length;
-      const trimmedTaskName = taskNameFilter.trim();
+      const trimmedTaskName = debouncedTaskName.trim();
 
       const response: TaskExecutionLogsResponse = await api.getTaskExecutionLogs({
         limit: LIMIT,
@@ -79,15 +80,16 @@ const History: React.FC = () => {
     }
   };
 
-  // Initial load and reload when filters change (task name is debounced)
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      loadLogs(true);
-    }, taskNameFilter ? TASK_NAME_DEBOUNCE_MS : 0);
-
-    return () => clearTimeout(timeoutId);
+    const timer = window.setTimeout(() => setDebouncedTaskName(taskNameFilter), TASK_NAME_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [taskNameFilter]);
+  useEffect(() => {
+    void loadLogs(true);
+    return () => { requestIdRef.current += 1; };
+    // loadLogs also reads pagination state, which must not trigger reloads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, taskNameFilter]);
+  }, [statusFilter, debouncedTaskName]);
 
   return (
     <ErrorBoundary>

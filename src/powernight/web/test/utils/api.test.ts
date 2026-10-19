@@ -170,6 +170,17 @@ describe('PowerNightAPI', () => {
       expect(mockedAxios.get).toHaveBeenCalledWith('/auth/check');
     });
 
+    it('restores the persisted previous key after a failed login interceptor clears it', async () => {
+      api.setApiKey('previous-key');
+      mockedAxios.get.mockImplementationOnce(async () => {
+        api.clearApiKey(); // The response interceptor clears a rejected trial key.
+        throw new Error('Unauthorized');
+      });
+      await expect(api.authenticate('invalid-key')).rejects.toThrow('Unauthorized');
+      expect(localStorage.getItem('powernight_api_key')).toBe('previous-key');
+      expect(api.isAuthenticated()).toBe(true);
+    });
+
     it('should fail authentication with invalid API key', async () => {
       mockedAxios.get.mockRejectedValue(new Error('Unauthorized'));
 

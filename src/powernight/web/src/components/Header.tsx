@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { usePolling } from '../hooks/usePolling';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../utils/api';
 
@@ -27,36 +28,19 @@ const Header: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [health, setHealth] = useState<HealthState>('unknown');
 
-  // Poll system health every 30 seconds
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchHealth = async () => {
-      try {
-        const data = await api.getHealth();
-        if (cancelled) return;
-        setHealth(data.status);
-      } catch (err) {
-        if (cancelled) return;
-        // /api/v1/health returns HTTP 503 when unhealthy, which axios
-        // treats as an error; the response body still carries the status.
-        const responseStatus = (err as { response?: { data?: { status?: string } } })?.response?.data?.status;
-        if (responseStatus === 'degraded' || responseStatus === 'unhealthy') {
-          setHealth(responseStatus);
-        } else {
-          setHealth('unreachable');
-        }
-      }
-    };
-
-    fetchHealth();
-    const intervalId = window.setInterval(fetchHealth, HEALTH_POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const fetchHealth = useCallback(async () => {
+    try {
+      const data = await api.getHealth();
+      if (mounted.current) setHealth(data.status);
+    } catch (err) {
+      if (!mounted.current) return;
+      const status = (err as { response?: { data?: { status?: string } } })?.response?.data?.status;
+      setHealth(status === 'degraded' || status === 'unhealthy' ? status : 'unreachable');
+    }
   }, []);
+  usePolling(fetchHealth, HEALTH_POLL_INTERVAL_MS);
 
   const isActive = (path: string) => {
     return location.pathname === path;
@@ -114,7 +98,7 @@ const Header: React.FC = () => {
           <div className="flex items-center md:hidden">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="text-white p-2 rounded-md hover:bg-white/10 focus:outline-none"
+              className="text-white p-2 rounded-md hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               aria-label="Toggle navigation menu"
               aria-expanded={menuOpen}
             >
@@ -139,7 +123,7 @@ const Header: React.FC = () => {
                 key={item.path}
                 to={item.path}
                 onClick={() => setMenuOpen(false)}
-                className={`block px-4 py-2 text-sm font-bold transition-colors ${
+                className={`block px-4 py-2 text-sm font-bold transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white ${
                   isActive(item.path)
                     ? 'bg-white/20 text-white'
                     : 'text-white/90 hover:text-white hover:bg-white/10'

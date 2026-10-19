@@ -84,7 +84,7 @@ export interface TaskPreset {
   name: string;
   command: CommandType;
   command_params: Record<string, unknown>;
-  default_time?: string;
+  default_time?: string | null;
   is_builtin: boolean;
   sort_order: number;
   created_at?: string;

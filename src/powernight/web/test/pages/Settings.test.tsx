@@ -72,7 +72,7 @@ describe('Settings', () => {
     render(<Settings />);
 
     expect(await screen.findByLabelText('Tesla Account Email')).toBeInTheDocument();
-    expect(screen.queryByText('Tesla cloud connected')).not.toBeInTheDocument();
+    expect(screen.queryByText('✅ Tesla cloud connected')).not.toBeInTheDocument();
   });
 
   it.each([
@@ -105,7 +105,12 @@ describe('Settings', () => {
     render(<Settings />);
 
     for (const label of expected) {
-      expect((await screen.findAllByText(label)).length).toBeGreaterThan(0);
+      if (label === 'Unknown') {
+        const heading = await screen.findByText('Live Connection');
+        expect(heading.parentElement).toHaveTextContent('Unknown');
+      } else {
+        expect((await screen.findAllByText(label)).length).toBeGreaterThan(0);
+      }
     }
   });
 

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Task, CommandType, CommandDefinition, TaskFormData, TaskPreset } from '../types';
 import { api } from '../utils/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { PresetDialog } from '../components/PresetDialog';
 import { useToast } from '../contexts/ToastContext';
 import { formatDate } from '../utils/helpers';
 
@@ -22,6 +23,9 @@ const Planner: React.FC = () => {
   const [selectedPresetId, setSelectedPresetId] = useState<string>('');
   const [showSavePresetModal, setShowSavePresetModal] = useState(false);
   const [presetName, setPresetName] = useState('');
+  const [presetError, setPresetError] = useState<string | null>(null);
+  const [savingPreset, setSavingPreset] = useState(false);
+  const selectedPreset = presets.find(preset => preset.id === selectedPresetId);
 
   // Execution tracking state
   const [executingTasks, setExecutingTasks] = useState<Record<string, string>>({}); // taskId -> executionId
@@ -53,13 +57,6 @@ const Planner: React.FC = () => {
     enabled: true,
   });
 
-  // Load tasks and available commands
-  useEffect(() => {
-    loadTasks();
-    loadCommands();
-    loadPresets();
-  }, []);
-
   const loadTasks = async () => {
     try {
       setLoading(true);
@@ -85,14 +82,20 @@ const Planner: React.FC = () => {
     }
   };
 
-  const loadPresets = async () => {
+  const loadPresets = useCallback(async () => {
     try {
       const data = await api.getTaskPresets();
       setPresets(data.presets || []);
     } catch (err) {
-      console.error('Failed to load presets:', err);
+      showToast(err instanceof Error ? err.message : 'Failed to load presets', 'error');
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    void loadTasks();
+    void loadCommands();
+    void loadPresets();
+  }, [loadPresets]);
 
   const handlePresetSelect = (presetId: string) => {
     setSelectedPresetId(presetId);
@@ -111,7 +114,9 @@ const Planner: React.FC = () => {
   };
 
   const handleSavePreset = async () => {
-    if (!presetName.trim()) return;
+    if (!presetName.trim() || savingPreset) return;
+    setSavingPreset(true);
+    setPresetError(null);
     try {
       await api.createTaskPreset({
         name: presetName.trim(),
@@ -123,7 +128,10 @@ const Planner: React.FC = () => {
       setPresetName('');
       await loadPresets();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save preset');
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setPresetError(typeof message === 'string' ? message : err instanceof Error ? err.message : 'Failed to save preset');
+    } finally {
+      setSavingPreset(false);
     }
   };
 
@@ -509,19 +517,11 @@ const Planner: React.FC = () => {
                           </optgroup>
                         )}
                       </select>
-                      {selectedPresetId && (() => {
-                        const selected = presets.find(p => p.id === selectedPresetId);
-                        return selected && !selected.is_builtin ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePreset(selectedPresetId)}
-                            className="px-3 py-2 text-red-600 border border-red-300 rounded-md hover:bg-red-50"
-                            title="Delete this preset"
-                          >
-                            Delete
-                          </button>
-                        ) : null;
-                      })()}
+                      {selectedPreset && !selectedPreset.is_builtin && (
+                        <button type="button" onClick={() => handleDeletePreset(selectedPreset.id)}
+                          className="px-3 py-2 text-red-600 border border-red-300 rounded-md hover:bg-red-50"
+                          title="Delete this preset">Delete</button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -598,7 +598,7 @@ const Planner: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setPresetName(formData.name);
-                        setShowSavePresetModal(true);
+                        setPresetError(null); setShowSavePresetModal(true);
                       }}
                       className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
                     >
@@ -750,16 +750,17 @@ const Planner: React.FC = () => {
 
         {/* Save as Preset Modal */}
         {showSavePresetModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold mb-4">Save as Preset</h3>
+          <PresetDialog onClose={() => setShowSavePresetModal(false)}>
+              <h3 id="preset-dialog-title" className="text-lg font-semibold mb-4">Save as Preset</h3>
+              {presetError && <p role="alert" className="mb-4 text-red-700">{presetError}</p>}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="preset-name" className="block text-sm font-medium text-gray-700 mb-1">
                     Preset Name
                   </label>
                   <input
                     type="text"
+                    id="preset-name"
                     value={presetName}
                     onChange={(e) => setPresetName(e.target.value)}
                     placeholder="Enter preset name"
@@ -787,15 +788,14 @@ const Planner: React.FC = () => {
                   </button>
                   <button
                     onClick={handleSavePreset}
-                    disabled={!presetName.trim()}
+                    disabled={!presetName.trim() || savingPreset}
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     Save
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
+          </PresetDialog>
         )}
 
         {/* Delete Task Confirmation */}

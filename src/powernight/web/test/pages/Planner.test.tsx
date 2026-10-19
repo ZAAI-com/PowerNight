@@ -1,5 +1,5 @@
 import { vi, type Mocked } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import Planner from '../../src/pages/Planner';
 import { ToastProvider } from '../../src/contexts/ToastContext';
 import { api } from '../../src/utils/api';
@@ -7,6 +7,7 @@ import { api } from '../../src/utils/api';
 // Mock the API
 vi.mock('../../src/utils/api', () => ({
   api: {
+    createTaskPreset: vi.fn(),
     getTasks: vi.fn(),
     getTaskCommands: vi.fn(),
     getTaskPresets: vi.fn(),
@@ -113,4 +114,21 @@ describe('Planner', () => {
     // Success feedback is shown via toast
     expect(await screen.findByText('Task "Night reserve" created')).toBeInTheDocument();
   });
+  it('shows a failed preset save inside the labelled dialog and permits retry', async () => {
+    mockApi.createTaskPreset.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 409'), {
+      response: { data: { message: 'A preset with this name already exists' } },
+    }));
+    renderPlanner();
+    await openCreateForm();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Existing preset' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save as Preset' }));
+    const dialog = screen.getByRole('dialog', { name: 'Save as Preset' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('A preset with this name already exists');
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeEnabled();
+    fireEvent(dialog, new Event('cancel', { bubbles: true }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
 });

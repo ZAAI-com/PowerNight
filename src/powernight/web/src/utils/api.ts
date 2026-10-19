@@ -340,7 +340,8 @@ class PowerNightAPI {
       return true;
     } catch (error) {
       // Restore previous API key on failure
-      this.apiKey = tempApiKey;
+      if (tempApiKey) this.setApiKey(tempApiKey);
+      else this.clearApiKey();
       throw error;
     }
   }

@@ -125,6 +125,7 @@ const Settings: React.FC = () => {
         // Open Tesla auth in NEW browser tab
         const authWindow = window.open(data.auth_url, '_blank');
         if (!authWindow) {
+          setCurrentStep('initial');
           setError('The Tesla authorization popup was blocked by your browser. Please allow popups for this site and try again.');
         }
       } else {

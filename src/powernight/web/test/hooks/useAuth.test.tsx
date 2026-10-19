@@ -64,6 +64,18 @@ describe('useAuth', () => {
     expect(result.current.error).toBe('Invalid API key');
   });
 
+  it('keeps the login form mounted while a login attempt is pending', async () => {
+    let finish!: (result: boolean) => void;
+    mockApi.authenticate.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    let pending!: Promise<boolean>;
+    act(() => { pending = result.current.login('trial-key'); });
+    expect(result.current.isLoading).toBe(false);
+    await act(async () => { finish(false); await pending; });
+    expect(result.current.isLoading).toBe(false);
+  });
+
   it('should handle logout', () => {
     const { result } = renderHook(() => useAuth());
 

@@ -14,7 +14,7 @@ export function useAuth() {
   });
 
   const login = useCallback(async (apiKey: string) => {
-    setAuthState(prev => ({ ...prev, isLoading: true, error: undefined }));
+    setAuthState(prev => ({ ...prev, error: undefined }));
     
     try {
       await api.authenticate(apiKey);
@@ -49,9 +49,7 @@ export function useAuth() {
 
   // Check authentication requirements on mount
   useEffect(() => {
-    // Ignore stale results: if the component unmounts (or the effect
-    // re-runs) before the request resolves, a slow response must not
-    // clobber auth state set elsewhere (e.g. by a faster login()).
+    // Ignore results after this effect is cleaned up or the hook unmounts.
     let cancelled = false;
 
     const checkAuthRequirements = async () => {

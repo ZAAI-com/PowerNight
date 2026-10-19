@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { formatDate } from '../utils/helpers';
 import api from '../utils/api';
+import { usePolling } from '../hooks/usePolling';
 
 interface SiteDetails {
   timestamp?: string;
@@ -11,7 +12,7 @@ interface SiteDetails {
 }
 
 const STORAGE_KEY = 'powernight_site_details';
-const AUTO_REFRESH_INTERVAL_MS = 30000;
+const AUTO_REFRESH_INTERVAL_MS = 20000;
 
 const Dashboard: React.FC = () => {
   // Load initial data from localStorage
@@ -26,13 +27,15 @@ const Dashboard: React.FC = () => {
   });
   const [siteDetailsLoading, setSiteDetailsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   // Prevent state updates from in-flight requests after unmount
   const isMountedRef = useRef(true);
 
   const fetchSiteDetails = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setSiteDetailsLoading(true);
-    setError(null);
     try {
       const response = await api.authenticatedFetch('/api/auth/site-details');
       const data = await response.json();
@@ -40,6 +43,7 @@ const Dashboard: React.FC = () => {
       if (!isMountedRef.current) return;
 
       if (data.success) {
+        setError(null);
         setSiteDetails(data.data);
         // Persist to localStorage
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data.data));
@@ -51,26 +55,18 @@ const Dashboard: React.FC = () => {
       if (!isMountedRef.current) return;
       setError('Failed to fetch site details from server');
     } finally {
+      inFlight.current = false;
       if (isMountedRef.current) {
         setSiteDetailsLoading(false);
       }
     }
   }, []);
 
-  // Fetch on mount (localStorage cache is shown immediately as initial
-  // state) and auto-refresh every 30 seconds. The manual "Update Data"
-  // button remains available for on-demand refreshes.
   useEffect(() => {
     isMountedRef.current = true;
-    fetchSiteDetails();
-
-    const intervalId = window.setInterval(fetchSiteDetails, AUTO_REFRESH_INTERVAL_MS);
-
-    return () => {
-      isMountedRef.current = false;
-      window.clearInterval(intervalId);
-    };
-  }, [fetchSiteDetails]);
+    return () => { isMountedRef.current = false; };
+  }, []);
+  usePolling(fetchSiteDetails, AUTO_REFRESH_INTERVAL_MS);
 
   return (
     <div className="min-h-screen bg-gray-50">

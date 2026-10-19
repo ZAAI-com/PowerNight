@@ -77,7 +77,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
               type="button"
               onClick={() => dismissToast(toast.id)}
               aria-label="Dismiss notification"
-              className={`flex-shrink-0 text-lg leading-none focus:outline-none ${
+              className={`flex-shrink-0 text-lg leading-none focus-visible:ring-2 focus-visible:ring-offset-1 ${
                 toast.variant === 'success'
                   ? 'text-green-600 hover:text-green-800'
                   : 'text-red-600 hover:text-red-800'

@@ -112,8 +112,7 @@ const Tooltip: React.FC<TooltipProps> = ({
     setIsVisible(false);
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    e.preventDefault();
+  const handleTap = () => {
     setIsVisible((prev) => !prev);
   };
 
@@ -123,7 +122,7 @@ const Tooltip: React.FC<TooltipProps> = ({
         ref={triggerRef}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        onTouchStart={handleTouchStart}
+        onClick={handleTap}
         className="inline-block"
       >
         {children}
