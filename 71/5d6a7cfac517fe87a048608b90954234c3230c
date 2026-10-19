@@ -1,0 +1,24 @@
+tests/unit/test_config_persistence.py
+  s_5c897049a131de::t_8836e35e03eb01 1-113
+src/powernight/core/config/manager.py
+  s_5c897049a131de::t_7fa5ad7403d718 12,47-48,93,96,108-109,167-183,204,206-207,216-232,278-279,283-284,293-294,399,436,438,648
+tests/test_api_endpoints.py
+  s_5c897049a131de::t_b89e714ce103c2 218
+  s_5c897049a131de::t_53ca7a0c2b6165 192,196-217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "715d6a7cfac517fe87a048608b90954234c3230c",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
