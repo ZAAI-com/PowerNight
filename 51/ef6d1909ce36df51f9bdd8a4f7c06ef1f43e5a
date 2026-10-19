@@ -1,0 +1,27 @@
+docs/releases/2.0.0.md
+  s_5c897049a131de::t_9aea275d9bf486 37-42
+  s_5c897049a131de::t_89d5e510d1efbf 1-36,43-58,72-104
+  s_5c897049a131de::t_3b059301507182 59-71
+.github/workflows/README.md
+  s_5c897049a131de::t_7d8197aa11da41 74-79,368-370,396,398-400,403-404
+  s_5c897049a131de::t_56f67110b139c4 28,32,36,175-198
+docs/README.md
+  s_5c897049a131de::t_56f67110b139c4 107-112,115-116,146-149,153-155,174,230-233
+  s_5c897049a131de::t_a8d9b87ec575ac 234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "51ef6d1909ce36df51f9bdd8a4f7c06ef1f43e5a",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
