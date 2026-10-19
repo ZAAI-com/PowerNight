@@ -1,0 +1,27 @@
+tests/unit/test_route_smoke.py
+  s_5c897049a131de::t_4a6a8440147975 153-161
+src/powernight/core/database/migration.py
+  s_5c897049a131de::t_a5cdf9f539e0c5 42-43
+src/powernight/web/api/routes.py
+  s_5c897049a131de::t_a5cdf9f539e0c5 69-70,126
+src/powernight/web/api/tasks_api.py
+  s_5c897049a131de::t_51b42bc737516f 10,749-750
+tests/unit/test_task_presets.py
+  s_5c897049a131de::t_4a6a8440147975 126-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "627bf430ef6b706f2353b7047a67c56886c849d0",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
