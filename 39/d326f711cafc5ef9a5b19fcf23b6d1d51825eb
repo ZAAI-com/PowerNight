@@ -1,0 +1,29 @@
+.github/workflows/docker-security-scan.yml
+  s_5c897049a131de::t_51b42bc737516f 92-94
+.env.example
+  s_5c897049a131de::t_51b42bc737516f 19-20
+pyproject.toml
+  s_5c897049a131de::t_51b42bc737516f 50,173
+.conductor/settings.toml
+  s_5c897049a131de::t_a5cdf9f539e0c5 22
+scripts/package_release.py
+  s_5c897049a131de::t_a5cdf9f539e0c5 15
+docs/README.md
+  s_5c897049a131de::t_51b42bc737516f 219-222
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "39d326f711cafc5ef9a5b19fcf23b6d1d51825eb",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
