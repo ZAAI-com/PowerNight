@@ -1,0 +1,69 @@
+.github/workflows/ci.yml
+  s_5c897049a131de::t_02444c591aa006 8-10,17,20,39,42,68,71
+.github/workflows/docker-health-test.yml
+  s_5c897049a131de::t_02444c591aa006 51,54,61,103,106,129-134
+.github/workflows/docker-hub-readme-sync.yml
+  s_5c897049a131de::t_b60b53d99a716a 11-13,34-39
+  s_5c897049a131de::t_02444c591aa006 21,24
+config.example.yaml
+  s_5c897049a131de::t_f7fc197d98fd59 1-22
+src/powernight/web/vite.config.ts
+  s_5c897049a131de::t_02444c591aa006 21
+.env.example
+  s_5c897049a131de::t_02444c591aa006 17-20
+docs/releases/2.0.0.md
+  s_5c897049a131de::t_36b4e118b318b8 43-97,116-117,119-121,128-155
+  s_5c897049a131de::t_125f98a43562cd 9,16-21,40-41
+compose.release-test.yml
+  s_5c897049a131de::t_f7fc197d98fd59 9
+requirements.txt
+  s_5c897049a131de::t_02444c591aa006 22
+build.sh
+  s_5c897049a131de::t_02444c591aa006 143,147-149
+.gitignore
+  s_5c897049a131de::t_02444c591aa006 426-429
+AGENTS.md
+  s_5c897049a131de::t_02444c591aa006 11
+  s_5c897049a131de::t_8e644bb13f47a5 393
+CLAUDE.md
+  s_5c897049a131de::t_02444c591aa006 11
+tests/unit/test_release_version.py
+  s_5c897049a131de::t_38bb3073f0a41e 44-57
+scripts/release_smoke.py
+  s_5c897049a131de::t_09d4d15691be0e 60,133-134,141
+  s_5c897049a131de::t_f7fc197d98fd59 37-44,59,61-65,70,91-92,104-105,127-128,131-132,140,144,162-163
+.github/workflows/docker-publish.yml
+  s_5c897049a131de::t_02444c591aa006 34,48-51,58,65,112,115,118,125,132,148,163,189
+scripts/package_release.py
+  s_5c897049a131de::t_f7fc197d98fd59 1-24
+pyproject.toml
+  s_5c897049a131de::t_02444c591aa006 42
+.github/workflows/docker-promote.yml
+  s_5c897049a131de::t_02444c591aa006 46,49,56
+docs/README.md
+  s_5c897049a131de::t_36b4e118b318b8 109-116,119-120,150-153,157,165-166,176
+.github/workflows/docker-security-scan.yml
+  s_5c897049a131de::t_075ea4c5b65fc4 65
+  s_5c897049a131de::t_02444c591aa006 40,56,71
+  s_5c897049a131de::t_b60b53d99a716a 44-45,47-50,52-53,80-81,83-95
+.conductor/settings.toml
+  s_5c897049a131de::t_02444c591aa006 22-23,27,29,31
+compose.release.yml
+  s_5c897049a131de::t_f7fc197d98fd59 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "00876ad6e177d039a629494bbb77389e734e7c4a",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
