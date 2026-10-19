@@ -1,0 +1,64 @@
+src/powernight/web/src/components/Header.tsx
+  s_5c897049a131de::t_30e712dfe615d2 1-2,31-41,43,101,126
+src/powernight/web/test/hooks/usePolling.test.tsx
+  s_5c897049a131de::t_db6bcb16ed0dd7 1-47
+src/powernight/web/src/hooks/usePolling.ts
+  s_5c897049a131de::t_68ef6f744fa30b 1-10,12-34
+  s_5c897049a131de::t_e7b463e179de01 11
+src/powernight/web/src/utils/api.ts
+  s_5c897049a131de::t_30e712dfe615d2 343-344
+src/powernight/web/src/pages/History.tsx
+  s_5c897049a131de::t_30e712dfe615d2 25,40,84-90,92
+src/powernight/web/src/types/index.ts
+  s_5c897049a131de::t_30e712dfe615d2 87
+src/powernight/web/src/hooks/useAuth.ts
+  s_5c897049a131de::t_30e712dfe615d2 17,52
+docs/plans/ux-improvement-roadmap.md
+  s_5c897049a131de::t_36b4e118b318b8 22,24-27,29-30,48-51,194
+  s_5c897049a131de::t_e7b463e179de01 128,141,153,156-158,164-169,188
+  s_5c897049a131de::t_12526495c7115e 9
+src/powernight/web/src/pages/Settings.tsx
+  s_5c897049a131de::t_30e712dfe615d2 128
+src/powernight/web/src/pages/Dashboard.tsx
+  s_5c897049a131de::t_e7b463e179de01 67
+  s_5c897049a131de::t_30e712dfe615d2 4,15,30,36-37,46,58,68
+  s_5c897049a131de::t_330f3fc295398b 69
+src/powernight/web/src/components/Tooltip.tsx
+  s_5c897049a131de::t_30e712dfe615d2 115,125
+src/powernight/web/src/contexts/ToastContext.tsx
+  s_5c897049a131de::t_30e712dfe615d2 80
+src/powernight/web/test/pages/Planner.test.tsx
+  s_5c897049a131de::t_db6bcb16ed0dd7 2,10,117-133
+src/powernight/web/test/utils/api.test.ts
+  s_5c897049a131de::t_db6bcb16ed0dd7 173-183
+src/powernight/web/src/pages/Planner.tsx
+  s_5c897049a131de::t_30e712dfe615d2 7,26-28,90,117-119,131-134,520-524,601,753-755,791,798
+  s_5c897049a131de::t_db6bcb16ed0dd7 758,763
+  s_5c897049a131de::t_07cd63f29f27ba 1,85,92-98
+src/powernight/web/test/hooks/useAuth.test.tsx
+  s_5c897049a131de::t_db6bcb16ed0dd7 67-78
+src/powernight/web/test/setup.ts
+  s_5c897049a131de::t_09d4d15691be0e 72-77
+src/powernight/web/src/components/PresetDialog.tsx
+  s_5c897049a131de::t_68ef6f744fa30b 1-18
+src/powernight/web/test/pages/Dashboard.test.tsx
+  s_5c897049a131de::t_3336f0237d34d8 1,3,53-97
+src/powernight/web/test/pages/Settings.test.tsx
+  s_5c897049a131de::t_3b5419dfb2f902 75,108-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c628186c120280d268dfb5abdf3feef3bfab163b",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
