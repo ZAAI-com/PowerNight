@@ -65,7 +65,7 @@ jobs:
       - name: Install backend dependencies
         run: |
           echo "Installing PowerNight package..."
-          pip install -e .
+          pip install -e ".[build]"
           echo "✓ Backend package installed"
 
       - name: Install frontend dependencies
