@@ -9,6 +9,8 @@ from flask import Blueprint, jsonify, current_app, send_from_directory
 from datetime import datetime, timezone
 import os
 import sys
+import json
+from pathlib import Path
 
 from ... import __version__
 
@@ -58,7 +60,15 @@ def version_info():
 
     Returns detailed version and build information.
     """
+    metadata = {}
+    metadata_path = Path(current_app.static_folder) / 'version-info.json'
+    try:
+        metadata = json.loads(metadata_path.read_text())
+    except (OSError, ValueError):
+        pass  # Build metadata is optional in source-only development.
     return jsonify({
+        'build_date': metadata.get('build_timestamp', metadata.get('build_date', 'unknown')),
+        'dependencies': metadata.get('dependencies', metadata.get('backend_dependencies', {})),
         'application': 'PowerNight',
         'version': __version__,
         'python_version': f"{sys.version_info.major}.{sys.version_info.minor}",

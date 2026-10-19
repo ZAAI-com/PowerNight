@@ -226,7 +226,7 @@ class PowerNightLogger:
         """
         if isinstance(level, str):
             try:
-                level = LogLevel(level.upper())
+                level = LogLevel(level.strip().upper())
             except ValueError:
                 self.main_logger.warning(
                     f"Unknown log level '{level}', keeping {self.log_level.value}"
@@ -237,8 +237,6 @@ class PowerNightLogger:
             self.log_level = level
             py_level = self._log_level_to_python(level)
             self.main_logger.setLevel(py_level)
-            for handler in self.main_logger.handlers:
-                handler.setLevel(py_level)
             for component_logger in self._loggers.values():
                 component_logger.setLevel(py_level)
 

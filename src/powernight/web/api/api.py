@@ -202,7 +202,6 @@ def get_backup_reserve():
         # Get profile information from headers
         profile_id = request.headers.get('X-Powerwall-Profile', 'demo')
                 # Check if we're in demo mode (cloud mode only)
-        config = get_config()
         
         # Check if this is the Gruber EG Powerwall first
         is_gruber_eg = profile_id == 'gruber-eg'
@@ -429,7 +428,7 @@ def set_backup_reserve():
                     return jsonify({
                         'success': False,
                         'error': 'Powerwall Connection Error',
-                        'message': f'Cannot connect to Powerwall: {e}. Use force=true to override.',
+                        'message': 'Cannot connect to Powerwall. Use force=true to override.',
                         'request_id': request_id,
                         'timestamp': datetime.now(timezone.utc).isoformat()
                     }), 502
@@ -492,7 +491,7 @@ def set_backup_reserve():
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Backup reserve operation failed: {e}',
+            'message': 'Backup reserve operation failed',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 

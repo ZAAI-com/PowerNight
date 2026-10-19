@@ -32,6 +32,8 @@ class _SlidingWindowRateLimiter:
         now = time.monotonic()
         cutoff = now - self.window_seconds
         with self._lock:
+            self._hits = {client: [t for t in hits if t > cutoff]
+                          for client, hits in self._hits.items() if hits and hits[-1] > cutoff}
             hits = [t for t in self._hits.get(client_id, []) if t > cutoff]
             if len(hits) >= self.max_requests:
                 self._hits[client_id] = hits

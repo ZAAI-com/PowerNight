@@ -37,3 +37,7 @@ class PresetNotFoundError(DatabaseError):
 
 class PresetNameConflictError(DatabaseError):
     """Raised when a preset name is already in use."""
+
+
+class PresetProtectedError(DatabaseError):
+    """Raised when attempting to delete a built-in preset."""

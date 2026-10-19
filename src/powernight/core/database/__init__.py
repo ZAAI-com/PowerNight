@@ -6,7 +6,7 @@ for schedule management and settings persistence.
 """
 
 from .connection import get_db_session, get_db_session_context
-from .exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError, PresetNameConflictError
+from .exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError, PresetNameConflictError, PresetProtectedError
 from .models import Base, Task, TaskPreset
 from . import migration as db_migration
 
@@ -18,6 +18,7 @@ __all__ = [
     'TaskNotFoundError',
     'PresetNotFoundError',
     'PresetNameConflictError',
+    'PresetProtectedError',
     'Base',
     'Task',
     'TaskPreset',

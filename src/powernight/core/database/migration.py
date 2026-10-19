@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from .connection import get_database_manager, initialize_database
 from .services import TaskPresetService
-from .exceptions import PresetNameConflictError
+from .exceptions import PresetNameConflictError, DatabaseError
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +218,7 @@ def seed_builtin_presets() -> bool:
 
         preset_service = TaskPresetService()
 
+        failed = False
         for preset_data in BUILTIN_PRESETS:
             try:
                 if not preset_service.preset_exists_by_name(preset_data["name"]):
@@ -231,8 +232,12 @@ def seed_builtin_presets() -> bool:
                 # unique index makes this a no-op rather than a duplicate.
                 logger.info(f"Preset already exists (concurrent seed): {preset_data['name']}")
 
+            except DatabaseError:
+                failed = True
+                logger.exception("Failed to seed preset %s", preset_data['name'])
+
         logger.info("Built-in preset seeding completed")
-        return True
+        return not failed
     except Exception as e:
         logger.error(f"Failed to seed built-in presets: {e}")
         return False

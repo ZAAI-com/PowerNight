@@ -91,3 +91,35 @@ def test_builtin_seeding_tolerates_concurrent_name_conflicts(monkeypatch):
     monkeypatch.setattr(migration, 'TaskPresetService', lambda: service)
     assert migration.seed_builtin_presets() is True
     assert service.create_preset.call_count == len(migration.BUILTIN_PRESETS)
+
+
+@pytest.mark.parametrize('body', ['null', '[]', '"text"', '{invalid'])
+def test_non_object_preset_bodies_are_validation_errors(preset_client, body):
+    response = preset_client.post('/api/v1/tasks/presets', data=body, content_type='application/json')
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize('params', [{}, [], 'reserve', None])
+def test_invalid_command_params_are_rejected(preset_client, params):
+    response = preset_client.post('/api/v1/tasks/presets', json={
+        'name': 'Bad preset', 'command': 'reserve', 'command_params': params,
+    })
+    assert response.status_code == 422
+
+
+def test_protected_builtin_deletion_is_typed_and_returns_forbidden(service, preset_client):
+    from powernight.core.database.exceptions import PresetProtectedError
+    preset = service.create_preset('Builtin', 'reserve', {'reserve': 40}, is_builtin=True)
+    with pytest.raises(PresetProtectedError):
+        service.delete_preset(preset['id'])
+    assert preset_client.delete(f"/api/v1/tasks/presets/{preset['id']}").status_code == 403
+
+
+def test_builtin_seeding_continues_after_individual_failure(monkeypatch):
+    service = MagicMock()
+    service.preset_exists_by_name.return_value = False
+    service.create_preset.side_effect = [DatabaseError('unavailable')] + [{}] * (len(migration.BUILTIN_PRESETS) - 1)
+    monkeypatch.setattr(migration, 'initialize_database', lambda: None)
+    monkeypatch.setattr(migration, 'TaskPresetService', lambda: service)
+    assert migration.seed_builtin_presets() is False
+    assert service.create_preset.call_count == len(migration.BUILTIN_PRESETS)

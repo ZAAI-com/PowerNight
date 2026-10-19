@@ -20,15 +20,6 @@ from werkzeug.routing import RequestRedirect
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 API_TS_PATH = PROJECT_ROOT / "src" / "powernight" / "web" / "src" / "utils" / "api.ts"
 
-# Known non-structural 5xx responses. GET /api/auth/tesla/powerwalls maps the
-# perfectly normal "no Tesla auth data stored yet" state to HTTP 500 by design
-# (auth_api.py get_powerwalls returns 500 whenever the pypowerwall connection
-# test fails). That is an API design wart, not a routing/structure bug, so it
-# is exempted here instead of being asserted on.
-KNOWN_5XX_ROUTES = {
-    "/api/auth/tesla/powerwalls",
-}
-
 VALID_CONFIG = {
     "powerwall": {"tesla_email": "test@example.com"},
     "automation": {"enabled": False, "schedule": []},
@@ -77,8 +68,6 @@ def test_parameterless_get_routes_do_not_return_server_errors(app, client):
         if rule.arguments:
             continue  # needs path parameters, not smoke-testable generically
         if "GET" not in (rule.methods or set()):
-            continue
-        if rule.rule in KNOWN_5XX_ROUTES:
             continue
 
         checked += 1

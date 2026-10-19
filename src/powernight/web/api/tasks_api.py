@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any
 
 from ...core.database.services import TaskService, TaskExecutionService, TaskPresetService
-from ...core.database.exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError, PresetNameConflictError
+from ...core.database.exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError, PresetNameConflictError, PresetProtectedError
 from ...core.planner import get_task_manager
 from ...core.powerwall.commands import CronCommand, CommandType
 from ...core.powerwall.exceptions import PowerwallError
@@ -54,11 +54,11 @@ def list_tasks():
         })
 
     except Exception as e:
-        current_app.logger.error(f"Failed to list tasks: {e}")
+        current_app.logger.error(f"Failed to list tasks: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to list tasks: {e}',
+            'message': 'Failed to list tasks',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -101,11 +101,11 @@ def get_task(task_id: str):
         }), 404
 
     except Exception as e:
-        current_app.logger.error(f"Failed to get task: {e}")
+        current_app.logger.error(f"Failed to get task: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to get task: {e}',
+            'message': 'Failed to get task',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -181,7 +181,7 @@ def create_task():
                 task_manager = get_task_manager()
                 task_manager.register_task(task_data)
             except Exception as reg_error:
-                current_app.logger.error(f"Failed to register task: {reg_error}")
+                current_app.logger.error(f"Failed to register task: {reg_error}", exc_info=True)
                 # Continue - task is created but not scheduled
 
         return jsonify({
@@ -200,11 +200,11 @@ def create_task():
         }), 422
 
     except Exception as e:
-        current_app.logger.error(f"Failed to create task: {e}")
+        current_app.logger.error(f"Failed to create task: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to create task: {e}',
+            'message': 'Failed to create task',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -273,7 +273,7 @@ def update_task(task_id: str):
             task_manager = get_task_manager()
             task_manager.update_task(updated_task_data)
         except Exception as update_error:
-            current_app.logger.error(f"Failed to update task in planner: {update_error}")
+            current_app.logger.error(f"Failed to update task in planner: {update_error}", exc_info=True)
 
         return jsonify({
             'success': True,
@@ -299,11 +299,11 @@ def update_task(task_id: str):
         }), 422
 
     except Exception as e:
-        current_app.logger.error(f"Failed to update task: {e}")
+        current_app.logger.error(f"Failed to update task: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to update task: {e}',
+            'message': 'Failed to update task',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -347,11 +347,11 @@ def delete_task(task_id: str):
         }), 404
 
     except Exception as e:
-        current_app.logger.error(f"Failed to delete task: {e}")
+        current_app.logger.error(f"Failed to delete task: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to delete task: {e}',
+            'message': 'Failed to delete task',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -402,11 +402,11 @@ def toggle_task(task_id: str):
         }), 404
 
     except Exception as e:
-        current_app.logger.error(f"Failed to toggle task: {e}")
+        current_app.logger.error(f"Failed to toggle task: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to toggle task: {e}',
+            'message': 'Failed to toggle task',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -453,12 +453,12 @@ def execute_task(task_id: str):
 
     except Exception as e:
         error_msg = str(e)
-        current_app.logger.error(f"Failed to start task execution: {error_msg}")
+        current_app.logger.error(f"Failed to start task execution: {error_msg}", exc_info=True)
 
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to start task execution: {error_msg}',
+            'message': 'Failed to start task execution',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -504,11 +504,11 @@ def get_task_execution(task_id: str, execution_id: str):
         }), 404
 
     except Exception as e:
-        current_app.logger.error(f"Failed to get task execution: {e}")
+        current_app.logger.error(f"Failed to get task execution: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to get task execution: {e}',
+            'message': 'Failed to get task execution',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -545,11 +545,11 @@ def list_task_executions(task_id: str):
         })
 
     except Exception as e:
-        current_app.logger.error(f"Failed to list task executions: {e}")
+        current_app.logger.error(f"Failed to list task executions: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to list task executions: {e}',
+            'message': 'Failed to list task executions',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -627,11 +627,11 @@ def list_available_commands():
         })
 
     except Exception as e:
-        current_app.logger.error(f"Failed to list commands: {e}")
+        current_app.logger.error(f"Failed to list commands: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to list commands: {e}',
+            'message': 'Failed to list commands',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -671,11 +671,11 @@ def reload_all_tasks():
             }), 500
 
     except Exception as e:
-        current_app.logger.error(f"Failed to reload tasks: {e}")
+        current_app.logger.error(f"Failed to reload tasks: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to reload tasks: {e}',
+            'message': 'Failed to reload tasks',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -698,11 +698,11 @@ def list_presets():
         })
 
     except Exception as e:
-        current_app.logger.error(f"Failed to list presets: {e}")
+        current_app.logger.error(f"Failed to list presets: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to list presets: {e}',
+            'message': 'Failed to list presets',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
@@ -715,12 +715,14 @@ def create_preset():
         if not request.is_json:
             raise ValidationError("Request must contain JSON data")
 
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            raise ValidationError('Request body must be a JSON object')
 
         # Validate required fields
-        if not data.get('name', '').strip():
+        if not isinstance(data.get('name'), str) or not data['name'].strip():
             raise ValidationError("Preset name is required")
-        if not data.get('command'):
+        if not isinstance(data.get('command'), str) or not data['command']:
             raise ValidationError("Command is required")
 
         # Validate command type
@@ -733,15 +735,18 @@ def create_preset():
 
         # Validate command parameters if provided
         command_params = data.get('command_params', {})
-        if command_params:
-            command = CronCommand(data['command'], command_params)
-            validation = command.validate()
-            if not validation.valid:
-                raise ValidationError(f"Invalid command parameters: {', '.join(validation.errors)}")
+        if not isinstance(command_params, dict):
+            raise ValidationError("Command parameters must be a JSON object")
+        command = CronCommand(data['command'], command_params)
+        validation = command.validate()
+        if not validation.valid:
+            raise ValidationError(f"Invalid command parameters: {', '.join(validation.errors)}")
 
         # Validate default_time format if provided
         default_time = data.get('default_time')
-        if default_time:
+        if default_time is not None:
+            if not isinstance(default_time, str):
+                raise ValidationError("Invalid time format. Must be HH:MM")
             try:
                 hour, minute = default_time.split(':')
                 if not (0 <= int(hour) <= 23 and 0 <= int(minute) <= 59):
@@ -783,7 +788,7 @@ def create_preset():
         }), 409
 
     except Exception as e:
-        current_app.logger.error(f"Failed to create preset: {e}")
+        current_app.logger.error(f"Failed to create preset: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
@@ -814,27 +819,25 @@ def delete_preset(preset_id: str):
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 404
 
-    except DatabaseError as e:
-        if "Built-in" in str(e):
-            return jsonify({
-                'success': False,
-                'error': 'Forbidden',
-                'message': str(e),
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 403
+    except PresetProtectedError as e:
+        return jsonify({'success': False, 'error': 'Forbidden', 'message': str(e),
+                        'timestamp': datetime.now(timezone.utc).isoformat()}), 403
+
+    except DatabaseError:
+        current_app.logger.exception("Failed to delete preset")
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': str(e),
+            'message': 'Failed to delete preset',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
     except Exception as e:
-        current_app.logger.error(f"Failed to delete preset: {e}")
+        current_app.logger.error(f"Failed to delete preset: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to delete preset: {e}',
+            'message': 'Failed to delete preset',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 

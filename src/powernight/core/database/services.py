@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from .models import Task, TaskExecution, TaskPreset
-from .exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError, PresetNameConflictError
+from .exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError, PresetNameConflictError, PresetProtectedError
 from .connection import get_db_session_context
 
 
@@ -65,7 +65,7 @@ class TaskService:
                 return task.to_dict()
 
         except Exception as e:
-            raise DatabaseError(f"Failed to create task: {e}")
+            raise DatabaseError(f"Failed to create task: {e}") from e
     
     def get_task(self, task_id: str) -> Dict[str, Any]:
         """
@@ -95,7 +95,7 @@ class TaskService:
         except TaskNotFoundError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to get task: {e}")
+            raise DatabaseError(f"Failed to get task: {e}") from e
     
     def list_tasks(self, enabled_only: bool = False) -> List[Dict[str, Any]]:
         """
@@ -120,7 +120,7 @@ class TaskService:
                 return [t.to_dict() for t in tasks]
 
         except Exception as e:
-            raise DatabaseError(f"Failed to list tasks: {e}")
+            raise DatabaseError(f"Failed to list tasks: {e}") from e
     
     def update_task(
         self,
@@ -170,7 +170,7 @@ class TaskService:
         except TaskNotFoundError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to update task: {e}")
+            raise DatabaseError(f"Failed to update task: {e}") from e
     
     def delete_task(self, task_id: str) -> bool:
         """
@@ -202,7 +202,7 @@ class TaskService:
         except TaskNotFoundError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to delete task: {e}")
+            raise DatabaseError(f"Failed to delete task: {e}") from e
     
     def get_enabled_tasks(self) -> List[Dict[str, Any]]:
         """
@@ -255,7 +255,7 @@ class TaskService:
         except TaskNotFoundError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to update task execution status: {e}")
+            raise DatabaseError(f"Failed to update task execution status: {e}") from e
 
 
 class TaskExecutionService:
@@ -312,7 +312,7 @@ class TaskExecutionService:
                 return execution.to_dict()
 
         except Exception as e:
-            raise DatabaseError(f"Failed to create task execution: {e}")
+            raise DatabaseError(f"Failed to create task execution: {e}") from e
     
     def get_execution(self, execution_id: str) -> Dict[str, Any]:
         """
@@ -342,7 +342,7 @@ class TaskExecutionService:
         except DatabaseError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to get task execution: {e}")
+            raise DatabaseError(f"Failed to get task execution: {e}") from e
     
     def update_execution_status(
         self,
@@ -400,7 +400,7 @@ class TaskExecutionService:
         except DatabaseError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to update task execution status: {e}")
+            raise DatabaseError(f"Failed to update task execution status: {e}") from e
     
     def list_executions(
         self,
@@ -430,7 +430,7 @@ class TaskExecutionService:
                 return [e.to_dict() for e in executions]
 
         except Exception as e:
-            raise DatabaseError(f"Failed to list task executions: {e}")
+            raise DatabaseError(f"Failed to list task executions: {e}") from e
     
     def cleanup_old_executions(
         self,
@@ -478,7 +478,7 @@ class TaskExecutionService:
                 return deleted_count
 
         except Exception as e:
-            raise DatabaseError(f"Failed to cleanup old executions: {e}")
+            raise DatabaseError(f"Failed to cleanup old executions: {e}") from e
     
     def get_execution_logs(
         self,
@@ -543,7 +543,7 @@ class TaskExecutionService:
                 }
 
         except Exception as e:
-            raise DatabaseError(f"Failed to get execution logs: {e}")
+            raise DatabaseError(f"Failed to get execution logs: {e}") from e
 
 
 class TaskPresetService:
@@ -598,7 +598,7 @@ class TaskPresetService:
                 ).all()
                 return [p.to_dict() for p in presets]
         except Exception as e:
-            raise DatabaseError(f"Failed to list presets: {e}")
+            raise DatabaseError(f"Failed to list presets: {e}") from e
 
     def get_preset(self, preset_id: str) -> Dict[str, Any]:
         """Get a preset by ID."""
@@ -613,7 +613,7 @@ class TaskPresetService:
         except PresetNotFoundError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to get preset: {e}")
+            raise DatabaseError(f"Failed to get preset: {e}") from e
 
     def delete_preset(self, preset_id: str) -> bool:
         """Delete a user preset. Built-in presets cannot be deleted."""
@@ -625,14 +625,14 @@ class TaskPresetService:
                 if not preset:
                     raise PresetNotFoundError(f"Preset {preset_id} not found")
                 if preset.is_builtin:
-                    raise DatabaseError("Built-in presets cannot be deleted")
+                    raise PresetProtectedError("Built-in presets cannot be deleted")
                 session.delete(preset)
                 session.commit()
                 return True
         except (PresetNotFoundError, DatabaseError):
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to delete preset: {e}")
+            raise DatabaseError(f"Failed to delete preset: {e}") from e
 
     def preset_exists_by_name(self, name: str) -> bool:
         """Check if a preset with the given name already exists."""

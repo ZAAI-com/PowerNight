@@ -8,7 +8,6 @@ the static folder at a temp dist directory containing a minimal index.html.
 
 from pathlib import Path
 
-import pytest
 
 
 class TestPageRoutes:
@@ -48,6 +47,8 @@ class TestUtilityRoutes:
         data = response.get_json()
         assert data['application'] == 'PowerNight'
         assert 'version' in data
+        assert data['build_date'] == 'unknown'
+        assert data['dependencies'] == {}
 
     def test_favicon_returns_no_content(self, client):
         response = client.get('/favicon.ico')
