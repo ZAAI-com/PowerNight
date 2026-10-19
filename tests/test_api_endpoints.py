@@ -189,8 +189,32 @@ class TestConfigAPI:
                                data=json.dumps(config_data))
 
         assert response.status_code == 400
+
         data = response.get_json()
         assert data['success'] is False
+
+    @pytest.mark.parametrize(('endpoint', 'payload'), [
+        ('/api/v1/config/timezone', {'timezone': 'Europe/Berlin'}),
+        ('/api/v1/config', {'powerwall': {'timeout': 45}}),
+    ])
+    def test_config_endpoints_do_not_persist_runtime_credentials(
+        self, client, config_manager, config_file, monkeypatch, endpoint, payload
+    ):
+        original = yaml.safe_load(config_file.read_text())
+        monkeypatch.setenv('POWERNIGHT_API_KEY', 'runtime-only-secret')
+        monkeypatch.setenv('TESLA_EMAIL', 'your-email@example.com')
+        config_manager.load_config(config_file)
+
+        for _ in range(2):
+            response = client.post(endpoint, json=payload, headers={
+                'X-API-Key': 'runtime-only-secret',
+            })
+            assert response.status_code == 200
+            saved = yaml.safe_load(config_file.read_text())
+            assert saved['web_interface'] == original['web_interface']
+            assert saved['powerwall']['tesla_email'] == original['powerwall']['tesla_email']
+            assert config_manager.get_config().web_interface.api_key == 'runtime-only-secret'
+            assert 'runtime-only-secret' not in config_file.read_text()
 
 
 class TestTestConnectionAPI:

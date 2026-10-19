@@ -9,6 +9,7 @@ import json
 import yaml
 import logging
 import threading
+from copy import deepcopy
 from typing import Optional, Dict, Any, List, Union
 from pathlib import Path
 
@@ -43,6 +44,8 @@ class ConfigManager:
         self.logger = logging.getLogger(__name__)
         self._config: Optional[PowerNightConfig] = None
         self._config_path: Optional[Path] = None
+        self._persisted_data: Optional[Dict[str, Any]] = None
+        self._runtime_data: Optional[Dict[str, Any]] = None
         self._file_lock = threading.RLock()
         self._backup_manager = None
         self._recovery_manager = None
@@ -87,10 +90,10 @@ class ConfigManager:
 
             try:
                 # Load configuration from file
-                config_data = self._load_config_file(config_path)
+                file_data = self._load_config_file(config_path)
 
                 # Apply environment variable overrides
-                config_data = self._apply_env_overrides(config_data)
+                config_data = self._apply_env_overrides(file_data)
 
                 # Validate and create configuration object
                 config = PowerNightConfig.from_dict(config_data)
@@ -102,6 +105,8 @@ class ConfigManager:
 
                 self._config = config
                 self._config_path = config_path
+                self._persisted_data = deepcopy(file_data)
+                self._runtime_data = deepcopy(config.to_dict())
                 self.logger.info("Configuration loaded and validated successfully")
 
                 return config
@@ -159,6 +164,23 @@ class ConfigManager:
                     error_msg = "Cannot save invalid configuration:\n" + "\n".join(f"  - {error}" for error in validation_errors)
                     raise ConfigurationError(error_msg)
 
+                config_dict = config.to_dict()
+                if self._persisted_data is not None and self._runtime_data is not None:
+                    # Persist only edits, not unchanged environment overrides or
+                    # derived flags such as auth_enabled from an environment key.
+                    config_dict = self._merge_config_changes(
+                        self._persisted_data, self._runtime_data, config_dict
+                    )
+
+                runtime_config = PowerNightConfig.from_dict(
+                    self._apply_env_overrides(config_dict)
+                )
+                validation_errors = runtime_config.validate()
+                if validation_errors:
+                    raise ConfigurationError(
+                        "Cannot save invalid configuration: " + "; ".join(validation_errors)
+                    )
+
                 # Create backup before overwriting existing file
                 if self._auto_backup and config_path.exists():
                     backup_path = self._get_backup_manager().create_backup(config_path)
@@ -169,8 +191,6 @@ class ConfigManager:
                 config_path.parent.mkdir(parents=True, exist_ok=True)
 
                 # Save based on file extension
-                config_dict = config.to_dict()
-
                 if config_path.suffix.lower() == '.yaml' or config_path.suffix.lower() == '.yml':
                     with open(config_path, 'w') as f:
                         yaml.dump(config_dict, f, default_flow_style=False, indent=2)
@@ -181,8 +201,10 @@ class ConfigManager:
                 # Keep the in-memory singleton in sync: everything that calls
                 # get_config() (auth checks, scheduler, API reads) must see
                 # the saved settings without a restart
-                self._config = config
+                self._config = runtime_config
                 self._config_path = config_path
+                self._persisted_data = deepcopy(config_dict)
+                self._runtime_data = deepcopy(runtime_config.to_dict())
 
                 self.logger.info(f"Configuration saved to {config_path}")
 
@@ -190,6 +212,23 @@ class ConfigManager:
                 if isinstance(e, ConfigurationError):
                     raise
                 raise ConfigurationError(f"Failed to save configuration: {e}")
+
+    @classmethod
+    def _merge_config_changes(cls, persisted: Dict[str, Any],
+                              previous: Dict[str, Any],
+                              updated: Dict[str, Any]) -> Dict[str, Any]:
+        """Merge runtime edits into file-owned data without copying overrides."""
+        result = deepcopy(persisted)
+        for key, value in updated.items():
+            if isinstance(value, dict) and isinstance(previous.get(key), dict):
+                section = cls._merge_config_changes(
+                    result.get(key, {}), previous[key], value
+                )
+                if section or key in result:
+                    result[key] = section
+            elif key not in previous or value != previous[key]:
+                result[key] = deepcopy(value)
+        return result
 
     def get_config(self) -> PowerNightConfig:
         """
@@ -236,9 +275,13 @@ class ConfigManager:
             # Temporarily set the config for saving
             old_config = self._config
             old_path = self._config_path
+            old_persisted = self._persisted_data
+            old_runtime = self._runtime_data
 
             self._config = default_config
             self._config_path = config_path
+            self._persisted_data = None
+            self._runtime_data = None
 
             try:
                 self.save_config()
@@ -247,6 +290,8 @@ class ConfigManager:
                 # Restore previous state
                 self._config = old_config
                 self._config_path = old_path
+                self._persisted_data = old_persisted
+                self._runtime_data = old_runtime
 
         except Exception as e:
             raise ConfigurationError(f"Failed to create default configuration: {e}")
@@ -351,7 +396,7 @@ class ConfigManager:
             Configuration dictionary with environment overrides applied
         """
         # Make a copy to avoid modifying the original
-        config_data = config_data.copy()
+        config_data = deepcopy(config_data)
 
         # Environment variable mappings
         env_mappings = {
@@ -388,9 +433,9 @@ class ConfigManager:
                     else:
                         config_data[section][key] = value
 
-                    self.logger.debug(f"Applied environment override: {env_var} -> {section}.{key} = {config_data[section][key]}")
+                    self.logger.debug(f"Applied environment override: {env_var} -> {section}.{key}")
                 except ValueError as e:
-                    self.logger.warning(f"Invalid value for environment variable {env_var}: {value} ({e})")
+                    self.logger.warning(f"Invalid value for environment variable {env_var} ({type(e).__name__})")
 
         return config_data
 
