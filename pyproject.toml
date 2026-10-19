@@ -39,7 +39,6 @@ dependencies = [
     "PyYAML>=6.0.3",
     "requests>=2.34.2",
     "click>=8.5.0",
-    "packaging>=24.0",
     "pytz>=2026.4",
     "jsonschema>=4.26.0",
     "psutil>=7.2.2",
@@ -48,6 +47,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "packaging>=24.0",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.16.0",

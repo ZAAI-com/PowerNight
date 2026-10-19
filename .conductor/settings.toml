@@ -19,7 +19,7 @@ run_mode = "concurrent"
 
 # Full app: Flask API + built React assets. POWERNIGHT_WEB_PORT maps to CONDUCTOR_PORT.
 [scripts.run.app]
-command = "POWERNIGHT_DATA_PATH=$PWD/data POWERNIGHT_LOGS_PATH=$PWD/logs POWERNIGHT_WEB_PORT=$CONDUCTOR_PORT python -m powernight.main"
+command = "POWERNIGHT_DATA_PATH=$PWD/data POWERNIGHT_WEB_PORT=$CONDUCTOR_PORT python -m powernight.main"
 available_in = ["local"]
 default = true
 icon = "zap"

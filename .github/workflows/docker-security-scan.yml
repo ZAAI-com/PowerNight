@@ -89,6 +89,9 @@ jobs:
           summary = f"## Security Scan Results\n\n**Image:** `{image}`\n\n"
           summary += f"**Scan date:** {datetime.now(timezone.utc).isoformat()}\n\n"
           summary += 'SARIF report produced.\n' if available else 'Scanner did not produce a SARIF report.\n'
+          summary += f"\nSee the [Security tab](https://github.com/{os.environ['GITHUB_REPOSITORY']}/security/code-scanning) for uploaded reports.\n"
+          if not available:
+              summary += 'Check that the requested image tag is available on Docker Hub and review the scanner logs.\n'
           summary += f"\n### Manual scan\n\n```bash\ndocker pull {image}\ntrivy image {image}\n```\n"
           with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as stream:
               stream.write(summary)

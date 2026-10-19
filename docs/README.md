@@ -216,6 +216,10 @@ python -m powernight.main
 
 Access at [http://localhost:8020](http://localhost:8020)
 
+For frontend hot reload, run `npm run dev` in another terminal. Its `/api`
+proxy defaults to `http://localhost:8020`. To use a different backend port,
+run `POWERNIGHT_API_PROXY_TARGET=http://127.0.0.1:8123 npm run dev`.
+This Vite configuration reads the shell environment, not `.env` files.
 
 
 ## Releases

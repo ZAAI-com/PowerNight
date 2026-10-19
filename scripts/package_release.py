@@ -2,7 +2,6 @@
 import argparse
 import hashlib
 from pathlib import Path
-import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = ('docker-compose.yml', 'compose.release.yml', '.env.example', 'config.example.yaml')
@@ -13,7 +12,7 @@ def package(output: Path) -> None:
     checksums = []
     for name in FILES:
         data = (ROOT / name).read_bytes()
-        shutil.copyfile(ROOT / name, output / name)
+        (output / name).write_bytes(data)
         checksums.append(f'{hashlib.sha256(data).hexdigest()}  {name}\n')
     (output / 'SHA256SUMS').write_text(''.join(checksums))
 
