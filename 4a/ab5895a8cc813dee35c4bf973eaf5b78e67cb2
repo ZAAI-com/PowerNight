@@ -1,0 +1,27 @@
+.github/workflows/docker-publish.yml
+  s_5c897049a131de::t_10702d33e8044b 50-51,81-83,90,169-171,173-190
+  s_5c897049a131de::t_587597309c25fa 15,19-22,40-41,43-44,48-49,72-76,134,136
+.github/workflows/docker-promote.yml
+  s_5c897049a131de::t_10702d33e8044b 75-76
+  s_5c897049a131de::t_587597309c25fa 1-74,77-87
+tests/unit/test_release_version.py
+  s_5c897049a131de::t_89d5e510d1efbf 1-43
+scripts/check_release_version.py
+  s_5c897049a131de::t_587597309c25fa 1-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4aab5895a8cc813dee35c4bf973eaf5b78e67cb2",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
