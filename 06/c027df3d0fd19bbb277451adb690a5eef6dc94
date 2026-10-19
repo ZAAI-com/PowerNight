@@ -1,0 +1,31 @@
+tests/unit/test_powerwall_connection_recovery.py
+  s_5c897049a131de::t_8836e35e03eb01 47-92
+  s_18cf2c4e07aac9::t_fd767468af0e59 93-94
+src/powernight/core/powerwall/connector.py
+  s_5c897049a131de::t_fcb7e3e3a19b07 690,778,890,1004,1091,1132,1173,1214
+  s_5c897049a131de::t_f66ef4cce1f4c0 11,41-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "06c027df3d0fd19bbb277451adb690a5eef6dc94",
+  "prompts": {},
+  "sessions": {
+    "s_18cf2c4e07aac9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154e8-cf49-7fa3-9590-1a9847051d15",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
