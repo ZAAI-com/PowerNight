@@ -404,7 +404,7 @@ const Planner: React.FC = () => {
               </select>
             ) : paramDef.options ? (
               <select
-                value={formData.command_params[paramName] || ''}
+                value={String(formData.command_params[paramName] ?? '')}
                 onChange={(e) => handleParamChange(paramName, e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required={paramDef.required}
@@ -417,7 +417,7 @@ const Planner: React.FC = () => {
             ) : paramDef.type === 'number' ? (
               <input
                 type="number"
-                value={formData.command_params[paramName] || ''}
+                value={String(formData.command_params[paramName] ?? '')}
                 onChange={(e) => handleParamChange(paramName, parseFloat(e.target.value))}
                 min={paramDef.min}
                 max={paramDef.max}
@@ -427,7 +427,7 @@ const Planner: React.FC = () => {
             ) : (
               <input
                 type="text"
-                value={formData.command_params[paramName] || ''}
+                value={String(formData.command_params[paramName] ?? '')}
                 onChange={(e) => handleParamChange(paramName, e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required={paramDef.required}

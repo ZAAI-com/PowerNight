@@ -3,6 +3,10 @@ import { formatDate } from '../utils/helpers';
 import api from '../utils/api';
 
 interface SiteDetails {
+  timestamp?: string;
+  site_name?: string;
+  site_id?: string | number;
+  grid_export_mode?: string;
   [key: string]: unknown;
 }
 

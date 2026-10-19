@@ -1,4 +1,3 @@
-import React from 'react';
 import { vi, type Mocked } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Planner from '../../src/pages/Planner';

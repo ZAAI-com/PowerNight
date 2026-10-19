@@ -1,4 +1,3 @@
-import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import Settings from '../../src/pages/Settings';
@@ -57,7 +56,7 @@ describe('Settings', () => {
       name: 'UTC',
       current_time: null,
     });
-    vi.mocked(api.getAvailableTimezones).mockResolvedValue({ timezones: [] });
+    vi.mocked(api.getAvailableTimezones).mockResolvedValue({ timezones: [], count: 0 });
   });
 
   it('loads protected settings data through the authenticated request helper', async () => {

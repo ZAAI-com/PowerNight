@@ -11,6 +11,7 @@ import {
   TaskExecution,
   TaskExecutionLogsResponse,
   CommandDefinition,
+  CommandType,
   TaskPreset
 } from '../types';
 
