@@ -605,7 +605,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
                     error_details=self._safe_log_detail(error),
                     metadata={'host': self.config.host}
                 )
-                if "authentication" in str(error).lower():
+                if isinstance(error, PyPowerwallCloudNoTeslaAuthFile):
                     raise PowerwallAuthenticationError(
                         f"Authentication failed: {type(error).__name__}"
                     ) from error
@@ -723,7 +723,9 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 
                 return percentage
 
-            return self._circuit_breaker.call(_get_reserve_api_call)
+            result = self._circuit_breaker.call(_get_reserve_api_call)
+            self._data_cache.set(cache_key, result)
+            return result
 
         def _fallback_operation():
             """Fallback using cached data when the Powerwall is unreachable."""
@@ -760,8 +762,6 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 cache_key=cache_key
             )
 
-            # Cache in local cache as well for faster access
-            self._data_cache.set(cache_key, result)
             return result
 
         except Exception as e:
@@ -913,7 +913,10 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 if not vitals:
                     raise PowerwallAPIError("Failed to retrieve Powerwall status")
 
-                backup_reserve = self.get_backup_reserve_percentage()
+                # Already inside the breaker: never re-enter its non-reentrant lock.
+                self._handle_rate_limit()
+                reserve = self._powerwall.get_reserve()
+                backup_reserve = self._data_parser.parse_reserve_percentage(reserve)
 
                 # Extract relevant information
                 battery_level = float(vitals.get('battery', {}).get('percentage', 0))
@@ -942,7 +945,11 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 self.logger.debug("Retrieved comprehensive Powerwall status")
                 return status
 
-            return self._circuit_breaker.call(_get_status_api_call)
+            result = self._circuit_breaker.call(_get_status_api_call)
+            self._last_status = result
+            self._data_cache.set(cache_key, result)
+            self._data_cache.set('backup_reserve_percentage', result.backup_reserve_percentage)
+            return result
 
         def _fallback_operation():
             """Fallback using cached or last-known status when unreachable."""
@@ -981,9 +988,6 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 cache_key=cache_key
             )
 
-            # Update caches for future fallbacks
-            self._last_status = result
-            self._data_cache.set(cache_key, result)
             return result
 
         except Exception as e:

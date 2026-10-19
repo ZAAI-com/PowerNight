@@ -18,12 +18,18 @@ from powernight.core.powerwall.exceptions import PowerwallUnavailableError
 def connector(tmp_path, monkeypatch):
     """A connector with isolated storage and neutralized degradation state."""
     monkeypatch.setenv('POWERNIGHT_DATA_PATH', str(tmp_path))
+    import powernight.core.scheduler.circuit_breaker as circuit_breaker
+    circuit_breaker._circuit_breakers.clear()
     # Fresh degradation manager per test (module-level registry)
     import powernight.core.scheduler.degradation as degradation
     degradation._degradation_managers.clear()
 
     conn = PowerwallConnector(email='resilience@example.com')
-    return conn
+    try:
+        yield conn
+    finally:
+        degradation._degradation_managers.clear()
+        circuit_breaker._circuit_breakers.clear()
 
 
 @pytest.mark.unit
@@ -109,7 +115,7 @@ class TestCircuitBreakerTransitions:
             raise RuntimeError('boom')
 
         for _ in range(2):
-            with pytest.raises(Exception):
+            with pytest.raises(RuntimeError):
                 breaker.call(failing)
 
         # Breaker should now refuse calls (open state)
@@ -121,3 +127,47 @@ class TestCircuitBreakerTransitions:
         import time
         time.sleep(0.06)
         assert breaker.call(lambda: 'ok') == 'ok'
+
+
+def test_successful_status_finishes_without_reentering_breaker(connector):
+    """Use the real non-reentrant breaker; a nested call must fail boundedly."""
+    import threading
+    connector.ensure_connected = MagicMock(return_value=True)
+    connector._handle_rate_limit = MagicMock()
+    connector._powerwall = MagicMock()
+    connector._powerwall.vitals.return_value = {
+        'battery': {'percentage': 81, 'charging': True}, 'grid': {'connected': True},
+    }
+    connector._powerwall.get_reserve.return_value = 45
+    results = []
+    worker = threading.Thread(target=lambda: results.append(connector.get_status()), daemon=True)
+    worker.start()
+    worker.join(timeout=1)
+    assert not worker.is_alive(), 'get_status deadlocked inside the circuit breaker'
+    assert results[0].backup_reserve_percentage == 45
+    assert results[0].battery_level == 81
+    assert connector._data_cache.get('powerwall_status') is results[0]
+    assert connector._data_cache.get('backup_reserve_percentage') == 45
+    connector._powerwall.vitals.assert_called_once()
+    connector._powerwall.get_reserve.assert_called_once()
+
+
+@pytest.mark.parametrize(('method', 'cache_key', 'value', 'client_method'), [
+    ('get_backup_reserve_percentage', 'backup_reserve_percentage', 42.0, 'get_reserve'),
+    ('get_status', 'powerwall_status', PowerwallStatus(33, 80, False, True, 123), 'vitals'),
+])
+def test_repeated_outage_fallback_never_renews_cache_age(
+        connector, method, cache_key, value, client_method):
+    connector.ensure_connected = MagicMock(return_value=True)
+    connector._handle_rate_limit = MagicMock()
+    connector._powerwall = MagicMock()
+    getattr(connector._powerwall, client_method).side_effect = RuntimeError('offline')
+    connector._data_cache.set(cache_key, value)
+    entry = connector._data_cache._cache[cache_key]
+    entry['timestamp'] -= 3600
+    original_timestamp = entry['timestamp']
+    for _ in range(4):
+        assert getattr(connector, method)() == value
+        assert connector._data_cache.get(cache_key) is None
+        assert connector._data_cache._cache[cache_key]['timestamp'] == original_timestamp
+    getattr(connector._powerwall, client_method).assert_called()

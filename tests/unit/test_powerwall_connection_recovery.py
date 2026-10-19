@@ -12,7 +12,7 @@ from pypowerwall.cloud.exceptions import (
 )
 
 from powernight.core.powerwall.connector import PowerwallConnector
-from powernight.core.powerwall.exceptions import PowerwallConnectionError
+from powernight.core.powerwall.exceptions import PowerwallAuthenticationError, PowerwallConnectionError
 from powernight.core.scheduler.circuit_breaker import CircuitBreakerOpenException
 
 
@@ -179,18 +179,18 @@ def test_concurrent_ensure_connected_builds_one_session(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ('error', 'expected_code'),
+    ('error', 'expected_code', 'expected_exception'),
     [
-        (PyPowerwallCloudNoTeslaAuthFile('missing auth'), 'authentication'),
-        (PyPowerwallCloudTeslaNotConnected('Tesla session unavailable'), 'pypowerwall'),
-        (RuntimeError('network down'), 'connection'),
+        (PyPowerwallCloudNoTeslaAuthFile('missing auth'), 'authentication', PowerwallAuthenticationError),
+        (PyPowerwallCloudTeslaNotConnected('Tesla session unavailable'), 'pypowerwall', PowerwallConnectionError),
+        (RuntimeError('network down'), 'connection', PowerwallConnectionError),
     ],
 )
-def test_connection_failures_are_categorized(tmp_path, error, expected_code):
+def test_connection_failures_are_categorized(tmp_path, error, expected_code, expected_exception):
     connector = make_connector(tmp_path)
     connector._circuit_breaker.call.side_effect = error
 
-    with pytest.raises(Exception):
+    with pytest.raises(expected_exception):
         connector.connect()
 
     status = connector.get_connection_status()

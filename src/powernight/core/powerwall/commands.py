@@ -208,7 +208,7 @@ class CronCommand:
             )
         
         self.logger.info(
-            f"Executing task command: {self.command_type} with params {self.params}"
+            f"Executing task command: {self.command_enum.value} with params {self.params}"
         )
         
         try:
