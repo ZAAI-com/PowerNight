@@ -27,27 +27,39 @@ def _load_or_create_secret() -> str:
     """Load the persisted Flask secret, generating it on first run."""
     import secrets
 
-    data_path = os.environ.get('POWERNIGHT_DATA_PATH', 'data')
-    secret_file = os.path.join(data_path, '.flask_secret')
+    directory = Path(os.environ.get('POWERNIGHT_DATA_PATH', 'data'))
+    secret_file = directory / '.flask_secret'
     try:
-        if os.path.exists(secret_file):
-            os.chmod(secret_file, 0o600)
-            with open(secret_file) as f:
-                value = f.read().strip()
-            if value:
-                return value
-            raise OSError("Persisted Flask secret is empty")
-        value = secrets.token_hex(32)
-        os.makedirs(data_path, exist_ok=True)
-        if not write_private_file(Path(secret_file), value, exclusive=True):
-            # A concurrent process may have published the shared key first.
-            with open(secret_file) as stream:
-                previous = stream.read().strip()
+        if secret_file.exists():
+            secret_file.chmod(0o600)
+            previous = secret_file.read_text().strip()
             if previous:
                 return previous
-            raise OSError("Persisted Flask secret is empty")
-        return value
-    except OSError:
+        import fcntl
+
+        directory.mkdir(parents=True, exist_ok=True)
+        # Serialize initialization and empty-file repair across app workers.
+        # Keep this lock inode stable while the secret is atomically replaced.
+        descriptor = os.open(directory / '.flask_secret.lock',
+                             os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, 'r+') as lock:
+            os.fchmod(lock.fileno(), 0o600)
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            exists = secret_file.exists()
+            if exists:
+                secret_file.chmod(0o600)
+                previous = secret_file.read_text().strip()
+                if previous:
+                    return previous
+            value = secrets.token_hex(32)
+            if not write_private_file(secret_file, value, exclusive=not exists):
+                # Respect a key published by an older, non-locking process.
+                previous = secret_file.read_text().strip()
+                if previous:
+                    return previous
+                raise OSError("Persisted Flask secret is empty")
+            return value
+    except (OSError, ImportError):
         # Fall back to an ephemeral secret rather than refusing to start;
         # sessions will not survive restarts in this case
         logging.getLogger(__name__).warning(

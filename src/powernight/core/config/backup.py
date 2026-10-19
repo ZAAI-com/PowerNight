@@ -6,6 +6,7 @@ Handles automatic backup creation and recovery of configuration files.
 
 import os
 import logging
+import stat
 import time
 from typing import List, Optional, Dict, Any
 from pathlib import Path
@@ -100,8 +101,11 @@ class ConfigBackupManager:
             if backup.is_file() and not backup.is_symlink():
                 try:
                     os.chmod(backup, 0o600)
+                    if stat.S_IMODE(backup.stat().st_mode) != 0o600:
+                        raise PermissionError(f"Cannot secure existing backup: {backup}")
                 except OSError:
                     self.logger.warning("Cannot secure existing backup %s", backup, exc_info=True)
+                    raise
 
     def list_backups(self, config_path: Path) -> List[Path]:
         """
@@ -124,7 +128,8 @@ class ConfigBackupManager:
         config_stem = config_path.stem
         backup_pattern = f"{config_stem}_*{config_path.suffix}"
 
-        backup_files = list(backup_dir.glob(backup_pattern))
+        backup_files = [p for p in backup_dir.glob(backup_pattern)
+                        if not p.is_symlink() and p.is_file()]
 
         # Sort by modification time, newest first
         backup_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
@@ -151,15 +156,15 @@ class ConfigBackupManager:
                     return False
                 backup_path = backups[0]
 
-            if not backup_path.exists():
-                self.logger.error(f"Backup file does not exist: {backup_path}")
+            if backup_path.is_symlink() or not backup_path.is_file():
+                self.logger.error(f"Backup must be a regular file: {backup_path}")
                 return False
 
             # Create parent directory if needed
             config_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Restore the backup
-            write_private_file(config_path, backup_path.read_text())
+            write_private_file(config_path.resolve(), backup_path.read_text())
 
             self.logger.info(f"Restored configuration from backup: {backup_path} -> {config_path}")
             return True
@@ -226,7 +231,8 @@ class ConfigBackupManager:
         try:
             # Find all backup files for this config
             backup_pattern = f"{config_stem}_*"
-            backup_files = list(backup_dir.glob(backup_pattern))
+            backup_files = [p for p in backup_dir.glob(backup_pattern)
+                            if not p.is_symlink() and p.is_file()]
 
             # Sort by modification time, newest first
             backup_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)

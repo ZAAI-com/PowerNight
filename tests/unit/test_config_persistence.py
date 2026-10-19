@@ -126,3 +126,32 @@ def test_save_as_uses_supplied_config_not_original_baseline(manager, tmp_path):
     saved = yaml.safe_load(destination.read_text())
     assert saved == replacement.to_dict()
     assert yaml.safe_load(original.read_text())['powerwall']['tesla_email'] == 'owner@example.com'
+
+
+@pytest.mark.parametrize('suffix', ['yaml', 'json'])
+@pytest.mark.parametrize('file_key', [None, 'file-owned-key'])
+def test_save_as_filters_runtime_secrets_and_preserves_user_edits(
+        manager, tmp_path, monkeypatch, suffix, file_key):
+    original = tmp_path / 'original.yaml'
+    original.write_text(yaml.safe_dump({
+        'powerwall': {'tesla_email': 'owner@example.com'},
+        'web_interface': {'api_key': file_key, 'auth_enabled': False, 'port': 8020},
+    }))
+    monkeypatch.setenv('POWERNIGHT_API_KEY', 'runtime-only-secret')
+    monkeypatch.setenv('TESLA_EMAIL', 'environment@example.com')
+    monkeypatch.setenv('POWERNIGHT_WEB_PORT', '8123')
+    config = manager.load_config(original)
+    config.automation.timezone = 'Europe/Berlin'
+    destination = tmp_path / f'copy.{suffix}'
+    manager.save_config(PowerNightConfig.from_dict(config.to_dict()), destination)
+    manager.save_config()
+    saved = yaml.safe_load(destination.read_text())
+    assert saved['web_interface']['api_key'] == file_key
+    assert saved['web_interface']['port'] == 8020
+    assert saved['web_interface']['auth_enabled'] is bool(file_key)
+    assert saved['powerwall']['tesla_email'] == 'owner@example.com'
+    assert saved['automation']['timezone'] == 'Europe/Berlin'
+    assert manager.get_config().web_interface.api_key == 'runtime-only-secret'
+    for path in [original, destination, *(backup['path'] for backup in manager.list_backups())]:
+        assert 'runtime-only-secret' not in path.read_text()
+        assert 'environment@example.com' not in path.read_text()

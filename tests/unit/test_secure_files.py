@@ -87,13 +87,90 @@ def test_backup_retries_exclusive_publication_collision(tmp_path):
     assert result.name.endswith('_1.yaml')
 
 
-def test_flask_secret_persists_and_empty_file_does_not_overwrite_winner(tmp_path, monkeypatch, caplog):
+def test_flask_secret_persists_and_repairs_empty_file(tmp_path, monkeypatch):
     monkeypatch.setenv('POWERNIGHT_DATA_PATH', str(tmp_path))
     secret = _load_or_create_secret()
     assert _load_or_create_secret() == secret
     path = tmp_path / '.flask_secret'
     assert mode(path) == 0o600
     path.write_text('')
-    assert _load_or_create_secret()
-    assert path.read_text() == ''
+    repaired = _load_or_create_secret()
+    assert repaired and repaired != secret
+    assert path.read_text() == repaired
+    assert _load_or_create_secret() == repaired
+    assert mode(path) == 0o600
+
+
+def test_concurrent_empty_secret_repair_shares_one_key(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    monkeypatch.setenv('POWERNIGHT_DATA_PATH', str(tmp_path))
+    path = tmp_path / '.flask_secret'
+    path.touch()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        values = list(pool.map(lambda _: _load_or_create_secret(), range(8)))
+    assert len(set(values)) == 1
+    assert path.read_text() == values[0]
+
+
+def test_secret_write_failure_warns_and_uses_ephemeral_key(tmp_path, monkeypatch, caplog):
+    import logging
+    monkeypatch.setenv('POWERNIGHT_DATA_PATH', str(tmp_path))
+    logger = logging.getLogger('powernight.web.app')
+    monkeypatch.setattr(logger, 'handlers', [*logger.handlers, caplog.handler])
+    with patch('powernight.web.app.write_private_file', side_effect=PermissionError('denied')):
+        assert _load_or_create_secret()
+    assert not (tmp_path / '.flask_secret').exists()
     assert 'sessions will not survive restarts' in caplog.text
+
+
+def test_backup_links_are_not_listed_or_restored(tmp_path):
+    config = tmp_path / 'config.yaml'
+    config.write_text('original')
+    manager = ConfigBackupManager()
+    directory = manager.get_backup_dir(config)
+    directory.mkdir()
+    external = tmp_path / 'other.yaml'
+    external.write_text('untrusted')
+    link = directory / 'config_link.yaml'
+    link.symlink_to(external)
+    assert manager.list_backups(config) == []
+    assert not manager.restore_from_backup(config, link)
+    assert not manager.restore_from_backup(config)
+    assert config.read_text() == 'original'
+    assert external.read_text() == 'untrusted'
+
+
+def test_restore_preserves_config_symlink(tmp_path):
+    target = tmp_path / 'actual.yaml'
+    target.write_text('original')
+    config = tmp_path / 'config.yaml'
+    config.symlink_to(target)
+    manager = ConfigBackupManager()
+    backup = manager.create_backup(config)
+    target.write_text('changed')
+    assert manager.restore_from_backup(config, backup)
+    assert config.is_symlink()
+    assert target.read_text() == 'original'
+    assert mode(target) == 0o600
+
+
+def test_existing_backup_permissions_fail_closed(tmp_path):
+    config = tmp_path / 'config.yaml'
+    config.write_text('credential')
+    directory = tmp_path / '.backups'
+    directory.mkdir()
+    old = directory / 'config_old.yaml'
+    old.write_text('old credential')
+    real_chmod = os.chmod
+
+    def deny_old_backup(path, mode):
+        if path == old:
+            raise PermissionError('denied')
+        real_chmod(path, mode)
+
+    manager = ConfigBackupManager()
+    with patch('os.chmod', side_effect=deny_old_backup):
+        with pytest.raises(PermissionError):
+            manager.list_backups(config)
+        assert manager.create_backup(config) is None
+    assert list(directory.iterdir()) == [old]

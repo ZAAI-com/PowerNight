@@ -36,6 +36,13 @@ def write_private_file(path: Path, content: str, *, exclusive: bool = False) -> 
                 return False
         else:
             os.replace(temporary, path)
+        # Persist the published directory entry as well as the file contents.
+        Path(temporary).unlink(missing_ok=True)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
         return True
     finally:
         Path(temporary).unlink(missing_ok=True)

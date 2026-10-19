@@ -165,13 +165,16 @@ class ConfigManager:
                     raise ConfigurationError(error_msg)
 
                 config_dict = config.to_dict()
-                if (self._persisted_data is not None and self._runtime_data is not None
-                        and self._config_path is not None
-                        and config_path.resolve() == self._config_path.resolve()):
+                if self._persisted_data is not None and self._runtime_data is not None:
+                    persisted = self._persisted_data
+                    if self._config_path is None or config_path.resolve() != self._config_path.resolve():
+                        # Save As retains the supplied full configuration, but
+                        # still restores file-owned values for runtime overrides.
+                        persisted = PowerNightConfig.from_dict(persisted).to_dict()
                     # Persist only edits, not unchanged environment overrides or
                     # derived flags such as auth_enabled from an environment key.
                     config_dict = self._merge_config_changes(
-                        self._persisted_data, self._runtime_data, config_dict
+                        persisted, self._runtime_data, config_dict
                     )
 
                 runtime_config = PowerNightConfig.from_dict(
