@@ -1,0 +1,24 @@
+# Isolated disposable deployment used only by scripts/release_smoke.py.
+services:
+  PowerNight:
+    image: ${POWERNIGHT_TEST_IMAGE:-powernight-release:test}
+    ports:
+      - "127.0.0.1::8020"
+    environment:
+      POWERNIGHT_DATA_PATH: /data
+      POWERNIGHT_WEB_HOST: 0.0.0.0
+      POWERNIGHT_WEB_PORT: "8020"
+      POWERNIGHT_API_KEY: ${POWERNIGHT_TEST_API_KEY:-}
+      POWERNIGHT_AUTOMATION_ENABLED: "false"
+      TESLA_EMAIL: test@example.com
+    volumes:
+      - release-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  release-data:
