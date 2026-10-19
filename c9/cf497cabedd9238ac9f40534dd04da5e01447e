@@ -1,0 +1,23 @@
+.github/workflows/docker-health-test.yml
+  s_5c897049a131de::t_1383aa3319a23e 68
+.github/workflows/docker-publish.yml
+  s_5c897049a131de::t_1383aa3319a23e 72
+pyproject.toml
+  s_5c897049a131de::t_1383aa3319a23e 49-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c9cf497cabedd9238ac9f40534dd04da5e01447e",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
