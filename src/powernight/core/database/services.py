@@ -7,9 +7,10 @@ Data access services for tasks, task executions, and task presets.
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from .models import Task, TaskExecution, TaskPreset
-from .exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError
+from .exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError, PresetNameConflictError
 from .connection import get_db_session_context
 
 
@@ -581,8 +582,12 @@ class TaskPresetService:
                 session.commit()
                 session.refresh(preset)
                 return preset.to_dict()
+        except IntegrityError as e:
+            if self.preset_exists_by_name(name):
+                raise PresetNameConflictError("A preset with this name already exists") from e
+            raise DatabaseError("Failed to create preset") from e
         except Exception as e:
-            raise DatabaseError(f"Failed to create preset: {e}")
+            raise DatabaseError("Failed to create preset") from e
 
     def list_presets(self) -> List[Dict[str, Any]]:
         """List all presets, ordered by sort_order then name."""

@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from .connection import get_database_manager, initialize_database
 from .services import TaskPresetService
+from .exceptions import PresetNameConflictError
 
 logger = logging.getLogger(__name__)
 
@@ -211,8 +212,6 @@ def ensure_preset_name_unique_index() -> bool:
 
 def seed_builtin_presets() -> bool:
     """Seed built-in task presets if they don't already exist."""
-    from sqlalchemy.exc import IntegrityError
-
     try:
         logger.info("Starting built-in preset seeding")
         initialize_database()
@@ -227,7 +226,7 @@ def seed_builtin_presets() -> bool:
                         **preset_data
                     )
                     logger.info(f"Created built-in preset: {preset_data['name']}")
-            except IntegrityError:
+            except PresetNameConflictError:
                 # Another writer created it between check and insert; the
                 # unique index makes this a no-op rather than a duplicate.
                 logger.info(f"Preset already exists (concurrent seed): {preset_data['name']}")

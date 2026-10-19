@@ -33,3 +33,7 @@ class TaskNotFoundError(DatabaseError):
 class PresetNotFoundError(DatabaseError):
     """Raised when a requested preset is not found."""
     pass
+
+
+class PresetNameConflictError(DatabaseError):
+    """Raised when a preset name is already in use."""

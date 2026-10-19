@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any
 
 from ...core.database.services import TaskService, TaskExecutionService, TaskPresetService
-from ...core.database.exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError
+from ...core.database.exceptions import DatabaseError, TaskNotFoundError, PresetNotFoundError, PresetNameConflictError
 from ...core.planner import get_task_manager
 from ...core.powerwall.commands import CronCommand, CommandType
 from ...core.powerwall.exceptions import PowerwallError
@@ -774,12 +774,20 @@ def create_preset():
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 422
 
+    except PresetNameConflictError as e:
+        return jsonify({
+            'success': False,
+            'error': 'Conflict',
+            'message': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 409
+
     except Exception as e:
         current_app.logger.error(f"Failed to create preset: {e}")
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': f'Failed to create preset: {e}',
+            'message': 'Failed to create preset',
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
