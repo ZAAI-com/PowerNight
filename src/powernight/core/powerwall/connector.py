@@ -8,6 +8,7 @@ import time
 import json
 import threading
 import re
+from functools import wraps
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
@@ -35,6 +36,15 @@ from .reserve import (
     ReserveHistory,
     ReserveChangeResult
 )
+
+
+def _connection_operation(method):
+    """Keep the shared client stable through checks, rate limiting and dispatch."""
+    @wraps(method)
+    def serialized(self, *args, **kwargs):
+        with self._connection_lock:
+            return method(self, *args, **kwargs)
+    return serialized
 
 
 @dataclass
@@ -677,6 +687,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
             self.logger.error(f"Connection test failed: {e}")
             raise PowerwallUnavailableError(self.config.host, f"Connection test failed: {e}")
 
+    @_connection_operation
     def get_backup_reserve_percentage(self) -> float:
         """
         Get current backup reserve percentage with graceful degradation.
@@ -764,6 +775,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 self.config.host, f"Failed to get backup reserve: {e}"
             )
 
+    @_connection_operation
     def set_backup_reserve_percentage(self, percentage: float, reason: Optional[str] = None) -> ReserveChangeResult:
         """
         Set backup reserve percentage - Fast mode (matches pypowerwall CLI).
@@ -875,6 +887,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
             self._reserve_history.add_result(error_result)
             raise PowerwallUnavailableError(self.config.host, f"Failed to set backup reserve: {e}")
 
+    @_connection_operation
     def get_status(self) -> PowerwallStatus:
         """
         Get comprehensive Powerwall status with graceful degradation.
@@ -988,6 +1001,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         """Get the last cached status."""
         return self._last_status
 
+    @_connection_operation
     def get_system_info(self) -> PowerwallSystemInfo:
         """
         Get comprehensive system information with enhanced data parsing.
@@ -1074,6 +1088,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
 
     # PyPowerwall Command Wrappers for Task Planner
 
+    @_connection_operation
     def set_mode(self, mode: str) -> bool:
         """
         Set Powerwall operating mode.
@@ -1114,6 +1129,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
             )
             raise PowerwallAPIError(f"Failed to set mode: {e}")
 
+    @_connection_operation
     def set_grid_charging(self, enabled: bool) -> bool:
         """
         Enable or disable grid charging.
@@ -1154,6 +1170,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
             )
             raise PowerwallAPIError(f"Failed to set grid charging: {e}")
 
+    @_connection_operation
     def set_export_mode(self, mode: str) -> bool:
         """
         Set grid export mode.
@@ -1194,6 +1211,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
             )
             raise PowerwallAPIError(f"Failed to set export mode: {e}")
 
+    @_connection_operation
     def get_state_of_charge(self) -> Optional[float]:
         """
         Get current battery state of charge.

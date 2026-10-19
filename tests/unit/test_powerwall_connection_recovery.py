@@ -44,6 +44,54 @@ def test_cached_status_remains_responsive_during_network_request(tmp_path, monke
     assert connector.get_connection_status()['connected'] is True
 
 
+@pytest.mark.parametrize(('operation', 'args', 'client_method'), [
+    ('set_mode', ('self_consumption',), 'set_mode'),
+    ('set_grid_charging', (True,), 'grid_charging'),
+    ('set_export_mode', ('pv_only',), 'set_grid_export'),
+    ('set_backup_reserve_percentage', (40,), 'set_reserve'),
+    ('get_state_of_charge', (), 'level'),
+])
+def test_reconnect_waits_for_inflight_command(tmp_path, monkeypatch, operation, args, client_method):
+    monkeypatch.setenv('POWERNIGHT_DATA_PATH', str(tmp_path))
+    connector = make_connector(tmp_path)
+    powerwall = MagicMock()
+    connector._powerwall = powerwall
+    connector.ensure_connected = MagicMock(return_value=True)
+    entered = threading.Event()
+    release = threading.Event()
+    reconnect_started = threading.Event()
+    disconnected = threading.Event()
+
+    def rate_limit():
+        entered.set()
+        assert release.wait(3)
+
+    def reconnect():
+        reconnect_started.set()
+        connector.disconnect()
+        disconnected.set()
+        connector.connect()
+
+    connector._handle_rate_limit = rate_limit
+    replacement = MagicMock()
+    replacement.vitals.return_value = {'online': True}
+    with patch('powernight.core.powerwall.connector.pypowerwall.Powerwall', return_value=replacement):
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            command = workers.submit(getattr(connector, operation), *args)
+            try:
+                assert entered.wait(2)
+                connection = workers.submit(reconnect)
+                assert reconnect_started.wait(2)
+                assert not disconnected.wait(0.1)
+                assert connector._powerwall is powerwall
+            finally:
+                release.set()
+            command.result(timeout=2)
+            connection.result(timeout=2)
+    getattr(powerwall, client_method).assert_called_once_with(*args)
+    assert connector._powerwall is replacement
+
+
 def make_connector(tmp_path, auth_data=None):
     connector = PowerwallConnector(email='stale@example.com', rate_limit_delay=0)
     connector._oauth_manager = MagicMock()
