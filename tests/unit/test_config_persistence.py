@@ -111,3 +111,18 @@ def test_create_default_preserves_loaded_persistence_state(manager, tmp_path, mo
     assert 'runtime-only-secret' not in path.read_text()
     assert 'runtime-only-secret' not in (tmp_path / 'defaults.yaml').read_text()
     assert yaml.safe_load(path.read_text())['powerwall']['tesla_email'] == 'owner@example.com'
+
+
+def test_save_as_uses_supplied_config_not_original_baseline(manager, tmp_path):
+    original = tmp_path / 'original.yaml'
+    original.write_text('powerwall:\n  tesla_email: owner@example.com\n')
+    manager.load_config(original)
+    replacement = PowerNightConfig.from_dict({
+        'powerwall': {'tesla_email': 'different@example.com'},
+        'automation': {'timezone': 'America/New_York'},
+    })
+    destination = tmp_path / 'copy.yaml'
+    manager.save_config(replacement, destination)
+    saved = yaml.safe_load(destination.read_text())
+    assert saved == replacement.to_dict()
+    assert yaml.safe_load(original.read_text())['powerwall']['tesla_email'] == 'owner@example.com'

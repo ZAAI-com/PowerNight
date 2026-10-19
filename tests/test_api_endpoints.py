@@ -20,7 +20,6 @@ def config_manager(config_file, monkeypatch):
     through the ConfigManager singleton, not the Flask app config.
     """
     import powernight.core.config.manager as manager_module
-    from powernight.core.config.manager import ConfigManager
 
     for var in (
         "TESLA_EMAIL",
@@ -32,14 +31,14 @@ def config_manager(config_file, monkeypatch):
     ):
         monkeypatch.delenv(var, raising=False)
 
-    previous = ConfigManager._instance
-    ConfigManager._instance = None
+    previous = manager_module.ConfigManager._instance
+    manager_module.ConfigManager._instance = None
     # Reset the cached global too so get_config_manager() sees the new instance
     monkeypatch.setattr(manager_module, '_config_manager', None)
     manager = manager_module.get_config_manager()
     manager.load_config(config_file)
     yield manager
-    ConfigManager._instance = previous
+    manager_module.ConfigManager._instance = previous
 
 
 JSON_HEADERS = {'Content-Type': 'application/json'}

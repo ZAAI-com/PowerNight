@@ -5,6 +5,7 @@ Creates and configures the Flask application with blueprints and error handling.
 """
 
 import os
+import logging
 from typing import Optional
 
 from flask import Flask
@@ -18,6 +19,8 @@ from .api.config_api import config_blueprint
 from .api.logs_api import logs_blueprint
 from .api.tasks_api import tasks_blueprint
 from .middleware import configure_middleware
+from pathlib import Path
+from ..utils.secure_files import write_private_file
 
 
 def _load_or_create_secret() -> str:
@@ -28,19 +31,29 @@ def _load_or_create_secret() -> str:
     secret_file = os.path.join(data_path, '.flask_secret')
     try:
         if os.path.exists(secret_file):
+            os.chmod(secret_file, 0o600)
             with open(secret_file) as f:
                 value = f.read().strip()
             if value:
                 return value
+            raise OSError("Persisted Flask secret is empty")
         value = secrets.token_hex(32)
         os.makedirs(data_path, exist_ok=True)
-        with open(secret_file, 'w') as f:
-            f.write(value)
-        os.chmod(secret_file, 0o600)
+        if not write_private_file(Path(secret_file), value, exclusive=True):
+            # A concurrent process may have published the shared key first.
+            with open(secret_file) as stream:
+                previous = stream.read().strip()
+            if previous:
+                return previous
+            raise OSError("Persisted Flask secret is empty")
         return value
     except OSError:
         # Fall back to an ephemeral secret rather than refusing to start;
         # sessions will not survive restarts in this case
+        logging.getLogger(__name__).warning(
+            "Cannot use persisted Flask secret; sessions will not survive restarts",
+            exc_info=True,
+        )
         return secrets.token_hex(32)
 
 

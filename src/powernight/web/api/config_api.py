@@ -33,12 +33,7 @@ def get_app_config() -> Dict[str, Any]:
         Dictionary with app configuration
     """
     try:
-        try:
-            config = get_config()
-        except Exception:
-            # The web layer should not depend on startup order: load the
-            # configuration on demand if the singleton has none yet
-            config = get_config_manager().load_config()
+        config = get_config()
         return {
             'web': {
                 'host': config.web_interface.host,
@@ -57,7 +52,7 @@ def get_app_config() -> Dict[str, Any]:
             }
         }
     except Exception as e:
-        current_app.logger.error(f'Failed to load configuration: {e}')
+        current_app.logger.error(f'Failed to load configuration: {e}', exc_info=True)
         return {'error': 'Failed to load configuration'}
 
 
@@ -95,11 +90,16 @@ def update_config_api():
         current = config_manager.get_config().to_dict()
         merged = _deep_merge(current, updates)
         new_config = PowerNightConfig.from_dict(merged)
+        errors = new_config.validate()
+        if errors:
+            return jsonify({'success': False, 'error': 'Validation failed', 'details': errors}), 400
         config_manager.save_config(new_config)
 
         return jsonify({'success': True, 'message': 'Configuration updated successfully'})
-    except Exception as e:
-        current_app.logger.error(f"Failed to update configuration: {e}")
+    except (ValueError, TypeError) as e:
+        return jsonify({'success': False, 'error': 'Validation failed', 'details': [str(e)]}), 400
+    except Exception:
+        current_app.logger.exception("Failed to update configuration")
         return jsonify({'success': False, 'error': 'Failed to update configuration'}), 500
 
 
@@ -135,7 +135,7 @@ def get_timezone_api():
             }
         })
     except Exception as e:
-        current_app.logger.error(f'Unhandled error: {e}')
+        current_app.logger.error(f'Unhandled error: {e}', exc_info=True)
         return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 
@@ -174,7 +174,7 @@ def update_timezone_api():
             'data': {'timezone': new_timezone}
         })
     except Exception as e:
-        current_app.logger.error(f'Unhandled error: {e}')
+        current_app.logger.error(f'Unhandled error: {e}', exc_info=True)
         return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 
@@ -234,5 +234,5 @@ def get_timezones_api():
             }
         })
     except Exception as e:
-        current_app.logger.error(f'Unhandled error: {e}')
+        current_app.logger.error(f'Unhandled error: {e}', exc_info=True)
         return jsonify({'success': False, 'error': 'Internal server error'}), 500

@@ -146,6 +146,12 @@ class WebInterfaceSettings:
         # deployments that configure either supported credential type. This
         # lets trusted-LAN installs run without a key while preserving existing
         # protected deployments after an upgrade.
+        for field_name in ('username', 'password', 'api_key'):
+            value = getattr(self, field_name)
+            if value is not None and isinstance(value, (str, int, float, bool)):
+                setattr(self, field_name, str(value))
+            elif value is not None:
+                raise ValueError(f'{field_name} must be a scalar credential')
         has_api_key = bool(self.api_key and self.api_key.strip())
         has_basic_auth = bool(self.username and self.username.strip()) and bool(
             self.password and self.password.strip()
@@ -168,6 +174,10 @@ class WebInterfaceSettings:
         has_password = bool(self.password and self.password.strip())
         if has_username != has_password:
             errors.append("Both username and password are required for Basic authentication")
+
+        if self.auth_enabled and not (
+                (self.api_key and self.api_key.strip()) or (has_username and has_password)):
+            errors.append("Authentication is enabled but no usable credentials are configured")
 
         return errors
 

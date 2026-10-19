@@ -5,14 +5,13 @@ Handles automatic backup creation and recovery of configuration files.
 """
 
 import os
-import shutil
 import logging
 import time
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime, timedelta
 
-from .exceptions import ConfigurationError, BackupError
+from ...utils.secure_files import protect_directory, write_private_file
 
 
 class ConfigBackupManager:
@@ -68,7 +67,8 @@ class ConfigBackupManager:
 
         try:
             backup_dir = self.get_backup_dir(config_path)
-            backup_dir.mkdir(parents=True, exist_ok=True)
+            protect_directory(backup_dir)
+            self._protect_existing_backups(config_path)
 
             # Create timestamped backup filename; microseconds plus a
             # collision counter so rapid consecutive saves never overwrite
@@ -77,16 +77,10 @@ class ConfigBackupManager:
             backup_name = f"{config_path.stem}_{timestamp}{config_path.suffix}"
             backup_path = backup_dir / backup_name
             counter = 1
-            while backup_path.exists():
+            while not write_private_file(backup_path, config_path.read_text(), exclusive=True):
                 backup_name = f"{config_path.stem}_{timestamp}_{counter}{config_path.suffix}"
                 backup_path = backup_dir / backup_name
                 counter += 1
-
-            # Copy the configuration file
-            shutil.copy2(config_path, backup_path)
-
-            # Backups can contain credentials; keep them owner-only
-            os.chmod(backup_path, 0o600)
 
             self.logger.info(f"Created configuration backup: {backup_path}")
 
@@ -98,6 +92,16 @@ class ConfigBackupManager:
         except Exception as e:
             self.logger.error(f"Failed to create backup of {config_path}: {e}")
             return None
+
+    def _protect_existing_backups(self, config_path: Path) -> None:
+        """Harden only this configuration's existing regular backup files."""
+        directory = self.get_backup_dir(config_path)
+        for backup in directory.glob(f'{config_path.stem}_*{config_path.suffix}'):
+            if backup.is_file() and not backup.is_symlink():
+                try:
+                    os.chmod(backup, 0o600)
+                except OSError:
+                    self.logger.warning("Cannot secure existing backup %s", backup, exc_info=True)
 
     def list_backups(self, config_path: Path) -> List[Path]:
         """
@@ -113,6 +117,8 @@ class ConfigBackupManager:
 
         if not backup_dir.exists():
             return []
+
+        self._protect_existing_backups(config_path)
 
         # Find backup files matching the config file name
         config_stem = config_path.stem
@@ -153,7 +159,7 @@ class ConfigBackupManager:
             config_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Restore the backup
-            shutil.copy2(backup_path, config_path)
+            write_private_file(config_path, backup_path.read_text())
 
             self.logger.info(f"Restored configuration from backup: {backup_path} -> {config_path}")
             return True

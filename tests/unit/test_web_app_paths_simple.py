@@ -23,6 +23,13 @@ from powernight.core.config.schema import (
 )
 
 
+@pytest.fixture(autouse=True)
+def isolated_storage(tmp_path, monkeypatch):
+    for name in ('POWERNIGHT_STATIC_PATH', 'FLASK_SECRET_KEY', 'POWERNIGHT_CONFIG_PATH'):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv('POWERNIGHT_DATA_PATH', str(tmp_path / 'data'))
+
+
 def create_test_config():
     """Create a test configuration."""
     return PowerNightConfig(

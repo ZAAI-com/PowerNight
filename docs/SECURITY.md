@@ -5,7 +5,7 @@
 PowerNight is intended for **trusted local networks** and supports optional API authentication:
 
 - 🔐 **Credential-Driven Authentication**: With no configured credential, authentication is off. A nonempty `POWERNIGHT_API_KEY` or complete username/password pair automatically enables it. Explicitly enabling auth without usable credentials fails closed.
-- 🔑 **Sending Credentials**: When authentication is enabled, use an `X-API-Key` header or `Authorization: Bearer <key>`. Only `/health` and `/version` are public.
+- 🔑 **Sending Credentials**: When authentication is enabled, use an `X-API-Key` header, `Authorization: Bearer <key>`, or HTTP Basic authentication with the configured username/password pair. `/health`, `/version`, SPA/static assets, `GET /api/v1/version-info.json`, and `GET /api/v1/config/timezone` and `/api/v1/config/timezones` are public metadata. Detailed `/api/v1/health` stays protected. OAuth setup start/callback/complete require app authentication when enabled, except for tokenless first-time bootstrap from loopback; setup-status requires the session identifier. Do not use detailed health as an unauthenticated probe.
 - 🛡️ **Hardening Applied**: Security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Content-Security-Policy`) and rate limiting on auth/setup endpoints are applied in `web/middleware.py`. The Flask session secret is set from `FLASK_SECRET_KEY` or persisted under the data path.
 - ✅ **Intended Use**: Deploy within your home/private network behind a firewall
 - ❌ **NOT for Public Internet**: Do not expose PowerNight directly to the internet, even with the API key set

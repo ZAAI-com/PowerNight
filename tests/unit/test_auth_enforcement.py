@@ -16,6 +16,20 @@ from powernight.web.app import create_app
 API_KEY = "test-enforcement-key-1234567890"
 
 
+@pytest.fixture(autouse=True)
+def isolated_singleton(monkeypatch):
+    import powernight.core.config.manager as manager_mod
+    for name in ('POWERNIGHT_API_KEY', 'POWERNIGHT_AUTH_ENABLED', 'POWERNIGHT_WEB_PORT'):
+        monkeypatch.delenv(name, raising=False)
+    previous = manager_mod.ConfigManager._instance, manager_mod._config_manager
+    manager_mod.ConfigManager._instance = None
+    manager_mod._config_manager = None
+    try:
+        yield
+    finally:
+        manager_mod.ConfigManager._instance, manager_mod._config_manager = previous
+
+
 @pytest.fixture
 def auth_client(tmp_path, monkeypatch):
     monkeypatch.setenv("POWERNIGHT_DATA_PATH", str(tmp_path))
@@ -34,8 +48,6 @@ def auth_client(tmp_path, monkeypatch):
         f"  api_key: {API_KEY}\n"
     )
     import powernight.core.config.manager as manager_mod
-    manager_mod.ConfigManager._instance = None
-    manager_mod._config_manager = None
     config = manager_mod.get_config_manager().load_config(str(config_path))
 
     static_dir = tmp_path / "dist"
@@ -45,8 +57,6 @@ def auth_client(tmp_path, monkeypatch):
     app = create_app(config, testing=True)
     yield app.test_client()
 
-    manager_mod.ConfigManager._instance = None
-    manager_mod._config_manager = None
 
 
 @pytest.fixture
@@ -63,8 +73,6 @@ def open_client(tmp_path, monkeypatch):
         "  enabled: true\n"
     )
     import powernight.core.config.manager as manager_mod
-    manager_mod.ConfigManager._instance = None
-    manager_mod._config_manager = None
     config = manager_mod.get_config_manager().load_config(str(config_path))
 
     static_dir = tmp_path / "dist"
@@ -74,8 +82,6 @@ def open_client(tmp_path, monkeypatch):
     app = create_app(config, testing=True)
     yield app.test_client()
 
-    manager_mod.ConfigManager._instance = None
-    manager_mod._config_manager = None
 
 
 @pytest.mark.unit
@@ -102,14 +108,14 @@ class TestAuthEnforcement:
         resp = auth_client.get(path)
         assert resp.status_code == 401
 
-    @pytest.mark.parametrize("path", [
-        "/api/v1/status",
-        "/api/v1/auth/check",
-        "/api/v1/tasks",
+    @pytest.mark.parametrize(("path", "expected"), [
+        ("/api/v1/status", 200),
+        ("/api/v1/auth/check", 200),
+        ("/api/v1/tasks", 200),
     ])
-    def test_valid_api_key_grants_access(self, auth_client, path):
+    def test_valid_api_key_grants_access(self, auth_client, path, expected):
         resp = auth_client.get(path, headers={"X-API-Key": API_KEY})
-        assert resp.status_code != 401
+        assert resp.status_code == expected
 
     def test_wrong_api_key_rejected(self, auth_client):
         resp = auth_client.get("/api/v1/tasks", headers={"X-API-Key": "wrong"})
@@ -219,16 +225,11 @@ class TestFailClosedStartup:
             "  enabled: true\n"
             "  auth_enabled: true\n"
         )
-        import powernight.core.config.manager as manager_mod
-        manager_mod.ConfigManager._instance = None
-        manager_mod._config_manager = None
 
         from powernight.app import PowerNightApp
         app = PowerNightApp()
         assert app.initialize(str(config_path)) is False
 
-        manager_mod.ConfigManager._instance = None
-        manager_mod._config_manager = None
 
 
 @pytest.mark.unit
@@ -267,3 +268,42 @@ class TestCredentialDrivenConfiguration:
             "Both username and password" in error
             for error in config.validate()
         )
+
+
+@pytest.mark.parametrize('credential', ['password', 'api_key'])
+def test_numeric_yaml_credentials_are_normalized(credential):
+    web = {credential: 123456}
+    if credential == 'password':
+        web['username'] = 'operator'
+    config = PowerNightConfig.from_dict({'web_interface': web})
+    assert getattr(config.web_interface, credential) == '123456'
+    assert config.web_interface.auth_enabled
+    assert config.validate() == []
+
+
+def test_credentialless_auth_config_save_is_rejected(open_client):
+    response = open_client.post('/api/v1/config', json={'web_interface': {'auth_enabled': True}})
+    assert response.status_code == 400
+    assert open_client.get('/api/v1/auth/check').status_code == 200
+
+
+@pytest.mark.parametrize('update', [
+    {'automation': {'timezone': 'not/a-zone'}},
+    {'monitoring': {'health_check_interval': -1}},
+])
+def test_invalid_config_is_a_client_error(open_client, update):
+    assert open_client.post('/api/v1/config', json=update).status_code == 400
+
+
+def test_config_storage_failure_is_not_misclassified_as_bad_input(open_client, monkeypatch):
+    from powernight.core.config.manager import get_config_manager
+    from powernight.core.config.exceptions import ConfigurationError
+
+    def fail(*args):
+        raise ConfigurationError('private storage detail')
+
+    monkeypatch.setattr(get_config_manager(), 'save_config', fail)
+    response = open_client.post('/api/v1/config', json={'automation': {'timezone': 'UTC'}})
+    assert response.status_code == 500
+    assert response.json['error'] == 'Failed to update configuration'
+    assert 'private storage detail' not in response.get_data(as_text=True)

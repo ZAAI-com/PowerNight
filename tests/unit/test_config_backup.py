@@ -62,14 +62,7 @@ class TestConfigBackupManager:
         assert backup_path is None
 
     def test_list_backups(self):
-        """Test listing backup files.
-
-        KNOWN FAILURE documenting a real bug: create_backup names backups with
-        second-resolution timestamps (backup.py), so two backups created within
-        the same second collide on the same filename and the second silently
-        overwrites the first. Do not work around this in the test; the fix
-        belongs in ConfigBackupManager.create_backup (unique filenames).
-        """
+        """Test creating and listing backups with unique names."""
         config_file = self.temp_dir / 'config.json'
 
         with open(config_file, 'w') as f:

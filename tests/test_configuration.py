@@ -6,7 +6,6 @@ Tests configuration loading, validation, updates, and persistence.
 import pytest
 import tempfile
 import os
-from pathlib import Path
 
 import yaml
 

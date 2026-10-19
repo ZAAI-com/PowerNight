@@ -165,7 +165,9 @@ class ConfigManager:
                     raise ConfigurationError(error_msg)
 
                 config_dict = config.to_dict()
-                if self._persisted_data is not None and self._runtime_data is not None:
+                if (self._persisted_data is not None and self._runtime_data is not None
+                        and self._config_path is not None
+                        and config_path.resolve() == self._config_path.resolve()):
                     # Persist only edits, not unchanged environment overrides or
                     # derived flags such as auth_enabled from an environment key.
                     config_dict = self._merge_config_changes(

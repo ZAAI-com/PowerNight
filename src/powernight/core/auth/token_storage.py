@@ -12,6 +12,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 
 from ...utils.logging import get_logger
+from ...utils.secure_files import protect_directory, write_private_file
 
 
 class PyPowerwallAuthStorage:
@@ -37,11 +38,11 @@ class PyPowerwallAuthStorage:
         self.logger = get_logger()
 
         # Ensure storage directory exists, owner-only: it holds Tesla tokens
-        self.storage_path.mkdir(parents=True, exist_ok=True)
-        try:
-            os.chmod(self.storage_path, 0o700)
-        except OSError:
-            pass
+        protect_directory(self.storage_path)
+        for name in ('.pypowerwall.auth', '.pypowerwall.site'):
+            existing = self.storage_path / name
+            if existing.exists():
+                os.chmod(existing, 0o600)
     
     def store_auth_data(self, email: str, tokens: Dict[str, Any], site: Dict[str, Any]) -> None:
         """
@@ -74,11 +75,7 @@ class PyPowerwallAuthStorage:
             # at rest would break the Tesla cloud connection. Protection is
             # owner-only file and directory permissions instead.
             auth_file = self.storage_path / ".pypowerwall.auth"
-            with open(auth_file, 'w') as f:
-                json.dump(cache_data, f, indent=2)
-
-            # Owner-only permissions: tokens grant full Powerwall control
-            os.chmod(auth_file, 0o600)
+            write_private_file(auth_file, json.dumps(cache_data, indent=2))
 
             # Store site ID in separate file
             site_file = self.storage_path / ".pypowerwall.site"
@@ -86,8 +83,7 @@ class PyPowerwallAuthStorage:
             if site_id is None:
                 self.logger.warning("Site ID is None, not storing site file")
             else:
-                site_file.write_text(str(site_id))
-                os.chmod(site_file, 0o600)
+                write_private_file(site_file, str(site_id))
 
             self.logger.info(f"pypowerwall auth data stored for {email} (teslapy format)")
 

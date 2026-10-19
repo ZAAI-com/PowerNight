@@ -12,7 +12,6 @@ import pytest
 import yaml
 
 from powernight.core.config.exceptions import ConfigurationError
-from powernight.core.config.manager import ConfigManager
 import powernight.core.config.manager as manager_module
 
 
@@ -28,7 +27,7 @@ VALID_CONFIG = {
 
 CORRUPT_YAML = "powerwall: [unclosed\n  ::: definitely not yaml {{{\n"
 
-# Env vars that ConfigManager._apply_env_overrides consults; cleared so the
+# Env vars that manager_module.ConfigManager._apply_env_overrides consults; cleared so the
 # host environment cannot leak into assertions.
 OVERRIDE_ENV_VARS = [
     "POWERNIGHT_LOG_LEVEL",
@@ -50,7 +49,7 @@ def reset_singleton(monkeypatch):
         monkeypatch.delenv(var, raising=False)
 
     def _reset():
-        ConfigManager._instance = None
+        manager_module.ConfigManager._instance = None
         manager_module._config_manager = None
 
     _reset()
@@ -64,7 +63,7 @@ def test_corrupt_config_without_backups_raises_and_preserves_file(tmp_path, rese
     corrupt_bytes = CORRUPT_YAML.encode()
     config_path.write_bytes(corrupt_bytes)
 
-    manager = ConfigManager()
+    manager = manager_module.ConfigManager()
     with pytest.raises(ConfigurationError):
         manager.load_config(config_path)
 
@@ -83,7 +82,7 @@ def test_corrupt_config_recovers_from_valid_backup(tmp_path, reset_singleton):
     with open(config_path, "w") as f:
         yaml.dump(VALID_CONFIG, f)
 
-    manager = ConfigManager()
+    manager = manager_module.ConfigManager()
     loaded = manager.load_config(config_path)
     assert loaded.powerwall.tesla_email == ORIGINAL_EMAIL
 
@@ -98,7 +97,7 @@ def test_corrupt_config_recovers_from_valid_backup(tmp_path, reset_singleton):
 
     # A fresh manager (new process simulation) must recover via the backup.
     reset_singleton()
-    recovered_manager = ConfigManager()
+    recovered_manager = manager_module.ConfigManager()
     recovered = recovered_manager.load_config(config_path)
 
     # Recovery must restore the user's real settings, not fabricate defaults.
