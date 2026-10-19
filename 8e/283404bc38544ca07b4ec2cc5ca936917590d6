@@ -1,0 +1,29 @@
+src/powernight/core/database/migration.py
+  s_5c897049a131de::t_27d04e4b7b3a23 13,229,264
+src/powernight/core/database/services.py
+  s_5c897049a131de::t_27d04e4b7b3a23 10,13,585-588,590
+tests/unit/test_task_presets.py
+  s_5c897049a131de::t_39274ca9030813 1-93
+src/powernight/core/database/exceptions.py
+  s_5c897049a131de::t_27d04e4b7b3a23 36-39
+src/powernight/core/database/__init__.py
+  s_5c897049a131de::t_f66ef4cce1f4c0 9,20
+src/powernight/web/api/tasks_api.py
+  s_5c897049a131de::t_27d04e4b7b3a23 12,777-784,790
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8e283404bc38544ca07b4ec2cc5ca936917590d6",
+  "prompts": {},
+  "sessions": {
+    "s_5c897049a131de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a154ee-8b0d-7832-9867-5d82df05b2da",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
