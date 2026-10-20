@@ -280,7 +280,7 @@ def process_callback():
     Body:
         {
             "session_id": "session-id",
-            "callback_url": "https://auth.tesla.com/void/callback?code=...&state=..."
+            "callback_url": "tesla://auth/callback?code=...&state=..."
         }
         
     Returns:
@@ -319,6 +319,61 @@ def process_callback():
         
     except Exception as e:
         logger.log_error(ComponentType.WEB, "Failed to process callback", e)
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+
+@auth_blueprint.route('/setup/tokens', methods=['POST'])
+def import_tokens():
+    """
+    Start Tesla setup from tokens created by ``python -m pypowerwall authtoken``.
+
+    Body:
+        {
+            "email": "user@tesla.com",
+            "refresh_token": "...",
+            "access_token": "..."
+        }
+
+    Returns:
+        JSON response with session ID and sites list
+    """
+    if not _setup_allowed():
+        return _setup_denied_response()
+    try:
+        data = request.get_json(silent=True) or {}
+        email = str(data.get('email') or '').strip()
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required',
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }), 400
+
+        oauth_manager.cleanup_expired_sessions()
+        result = oauth_manager.import_tokens(
+            email, data.get('refresh_token'), data.get('access_token')
+        )
+
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'session_id': result['session_id'],
+                'sites': result['sites'],
+                'expires_at': safe_format_datetime(result.get('expires_at')),
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            })
+        return jsonify({
+            'success': False,
+            'error': result.get('error', 'Failed to import tokens'),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 400
+
+    except Exception as e:
+        logger.log_error(ComponentType.WEB, "Failed to import Tesla tokens", e)
         return jsonify({
             'success': False,
             'error': 'Internal server error',

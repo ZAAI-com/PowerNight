@@ -1,5 +1,5 @@
 # Core Tesla Powerwall API
-pypowerwall>=0.18.2
+pypowerwall>=0.21.0
 
 # Web Framework
 Flask>=3.1.3

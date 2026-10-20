@@ -176,6 +176,7 @@ class TestTeslaOAuthManagerPKCE:
         assert params["response_type"] == ["code"]
         assert params["code_challenge_method"] == ["S256"]
         assert params["login_hint"] == [EMAIL]
+        assert params["redirect_uri"] == ["tesla://auth/callback"]
         assert params["state"] == [session["state"]]
         # The challenge in the URL must be derived from the stored verifier
         assert params["code_challenge"] == [
@@ -202,7 +203,7 @@ class TestTeslaOAuthManagerCallbackExchange:
         manager = TeslaOAuthManager(storage_path=str(tmp_path))
 
         result = manager.exchange_code_from_callback_url(
-            "does-not-exist", "https://auth.tesla.com/void/callback?code=x&state=y"
+            "does-not-exist", "tesla://auth/callback?code=x&state=y"
         )
 
         assert result["success"] is False
@@ -212,7 +213,7 @@ class TestTeslaOAuthManagerCallbackExchange:
         manager = TeslaOAuthManager(storage_path=str(tmp_path))
         session_id = manager.generate_auth_url(EMAIL)["session_id"]
 
-        callback = "https://auth.tesla.com/void/callback?code=abc&state=wrong-state"
+        callback = "tesla://auth/callback?code=abc&state=wrong-state"
         result = manager.exchange_code_from_callback_url(session_id, callback)
 
         assert result["success"] is False
@@ -222,7 +223,7 @@ class TestTeslaOAuthManagerCallbackExchange:
         manager = TeslaOAuthManager(storage_path=str(tmp_path))
         session_id = manager.generate_auth_url(EMAIL)["session_id"]
 
-        callback = "https://auth.tesla.com/void/callback?error=login_cancelled"
+        callback = "tesla://auth/callback?error=login_cancelled"
         result = manager.exchange_code_from_callback_url(session_id, callback)
 
         assert result["success"] is False
@@ -233,9 +234,7 @@ class TestTeslaOAuthManagerCallbackExchange:
         session_id = manager.generate_auth_url(EMAIL)["session_id"]
         state = manager._active_sessions[session_id]["state"]
 
-        token_response = Mock()
-        token_response.status_code = 200
-        token_response.json.return_value = {
+        token_response = {
             "access_token": "new-access-token",
             "refresh_token": "new-refresh-token",
             "id_token": "id-token",
@@ -258,12 +257,12 @@ class TestTeslaOAuthManagerCallbackExchange:
             ]
         }
 
-        callback = f"https://auth.tesla.com/void/callback?code=auth-code&state={state}"
+        callback = f"tesla://auth/callback?code=auth-code&state={state}"
 
         with patch(
-            "powernight.core.auth.tesla_oauth.requests.post",
+            "powernight.core.auth.tesla_oauth.tesla_auth._exchange_code",
             return_value=token_response,
-        ) as mock_post, patch(
+        ) as mock_exchange, patch(
             "powernight.core.auth.tesla_oauth.requests.get",
             return_value=products_response,
         ):
@@ -280,16 +279,97 @@ class TestTeslaOAuthManagerCallbackExchange:
             }
         ]
 
-        # Token request must carry the PKCE verifier for this session
-        post_data = mock_post.call_args.kwargs.get("data") or mock_post.call_args[1]["data"]
-        assert post_data["grant_type"] == "authorization_code"
-        assert post_data["code"] == "auth-code"
-        assert post_data["code_verifier"] == manager._active_sessions[session_id]["code_verifier"]
+        # Token exchange (via pypowerwall, HTTP/2) must use this session's verifier
+        mock_exchange.assert_called_once_with(
+            "auth-code", manager._active_sessions[session_id]["code_verifier"]
+        )
 
         session = manager._active_sessions[session_id]
         assert session["step"] == "selecting_site"
         assert session["access_token"] == "new-access-token"
         assert session["refresh_token"] == "new-refresh-token"
+
+
+    def test_callback_parsing_accepts_pasted_console_line(self):
+        line = (
+            "Failed to launch 'tesla://auth/callback?code=abc%2F123&state=st-1&issuer=x' "
+            "because the scheme does not have a registered handler."
+        )
+        params = TeslaOAuthManager._parse_callback_params(line)
+        assert params == {"code": "abc/123", "state": "st-1"}
+
+
+def make_jwt(exp):
+    payload = base64.urlsafe_b64encode(json.dumps({"exp": exp}).encode()).decode().rstrip("=")
+    return f"header.{payload}.signature"
+
+
+class TestTeslaOAuthManagerTokenImport:
+    """Tests for importing tokens from `python -m pypowerwall authtoken`."""
+
+    SITES = [{"id": 111222, "name": "Home", "type": "battery"}]
+
+    def test_import_creates_setup_session_with_jwt_expiry(self, tmp_path):
+        manager = TeslaOAuthManager(storage_path=str(tmp_path))
+        exp = int(time.time()) + 7200
+        with patch.object(manager, "get_energy_sites", return_value=self.SITES) as sites:
+            result = manager.import_tokens(EMAIL, " rt ", make_jwt(exp))
+
+        assert result["success"] is True
+        assert result["sites"] == self.SITES
+        sites.assert_called_once_with(make_jwt(exp))
+        session = manager._active_sessions[result["session_id"]]
+        assert session["refresh_token"] == "rt"
+        assert session["step"] == "selecting_site"
+        assert manager.auth_storage._convert_expires_at(session["expires_at"]) == exp
+
+        completed = manager.complete_setup(result["session_id"], "111222")
+        assert completed["success"] is True
+        stored = manager.auth_storage.load_auth_data()
+        assert stored["access_token"] == make_jwt(exp)
+        assert stored["refresh_token"] == "rt"
+
+    def test_import_requires_both_tokens(self, tmp_path):
+        manager = TeslaOAuthManager(storage_path=str(tmp_path))
+        result = manager.import_tokens(EMAIL, "rt", "  ")
+        assert result["success"] is False
+        assert "access token" in result["error"]
+
+    def test_import_rejects_expired_access_token(self, tmp_path):
+        manager = TeslaOAuthManager(storage_path=str(tmp_path))
+        with patch.object(manager, "get_energy_sites") as sites:
+            result = manager.import_tokens(EMAIL, "rt", make_jwt(int(time.time()) - 60))
+        assert result["success"] is False
+        assert "expired" in result["error"]
+        sites.assert_not_called()
+
+    def test_import_reports_rejected_access_token(self, tmp_path):
+        manager = TeslaOAuthManager(storage_path=str(tmp_path))
+        with patch.object(manager, "get_energy_sites", side_effect=Exception("403")):
+            result = manager.import_tokens(EMAIL, "rt", make_jwt(int(time.time()) + 600))
+        assert result["success"] is False
+        assert "rejected" in result["error"]
+        assert manager._active_sessions == {}
+
+
+class TestTeslaOAuthManagerSignOut:
+    def test_sign_out_clears_local_tokens_when_revocation_fails(self, tmp_path):
+        import requests as real_requests
+        manager = TeslaOAuthManager(storage_path=str(tmp_path))
+        manager.auth_storage.store_auth_data(EMAIL, make_tokens(), make_site())
+        with patch(
+            "powernight.core.auth.tesla_oauth.requests.post",
+            side_effect=real_requests.ConnectionError("offline"),
+        ):
+            assert manager.revoke_tokens() is True
+        assert manager.auth_storage.load_auth_data() is None
+
+    def test_sign_out_reports_failure_when_files_remain(self, tmp_path):
+        manager = TeslaOAuthManager(storage_path=str(tmp_path))
+        manager.auth_storage.store_auth_data(EMAIL, make_tokens(), make_site())
+        with patch("powernight.core.auth.tesla_oauth.requests.post"), \
+                patch("pathlib.Path.unlink", side_effect=PermissionError("denied")):
+            assert manager.revoke_tokens() is False
 
 
 class TestTeslaOAuthManagerTokens:

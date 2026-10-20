@@ -185,6 +185,7 @@ class PyPowerwallAuthStorage:
 
         except Exception as e:
             self.logger.error(f"Failed to clear pypowerwall auth data: {e}")
+            raise
     
     def has_auth_data(self) -> bool:
         """Check if pypowerwall auth data is stored."""

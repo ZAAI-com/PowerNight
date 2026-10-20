@@ -149,4 +149,62 @@ describe('Settings', () => {
     expect((await screen.findAllByText(expected)).length).toBeGreaterThan(0);
     expect(authenticatedFetch).toHaveBeenCalledWith('/api/auth/tesla/test-connection', { method: 'POST' });
   });
+
+  it('signs out of Tesla after confirmation and returns to the sign-in form', async () => {
+    let signedIn = true;
+    authenticatedFetch.mockImplementation(async (input) => {
+      const url = input.toString();
+      if (url.endsWith('/api/auth/tesla/info')) {
+        return { ok: true, json: async () => ({ success: true, data: signedIn
+          ? { authenticated: true, email: 'owner@example.com', token_expired: false, connected: false, connection_status: 'disconnected' }
+          : { authenticated: false } }) } as Response;
+      }
+      if (url.endsWith('/api/auth/tesla/logout')) {
+        signedIn = false;
+        return { ok: true, json: async () => ({ success: true }) } as Response;
+      }
+      return { ok: true, json: async () => ({ application: 'PowerNight', version: '2.0.0', backend_dependencies: {}, frontend_dependencies: {} }) } as Response;
+    });
+
+    render(<Settings />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign Out of Tesla' }));
+    expect(authenticatedFetch).not.toHaveBeenCalledWith('/api/auth/tesla/logout', { method: 'POST' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Sign Out' }));
+
+    expect(await screen.findByLabelText('Tesla Account Email')).toBeInTheDocument();
+    expect(authenticatedFetch).toHaveBeenCalledWith('/api/auth/tesla/logout', { method: 'POST' });
+  });
+
+  it('signs in with tokens from pypowerwall and completes setup with the first site', async () => {
+    authenticatedFetch.mockImplementation(async (input) => {
+      const url = input.toString();
+      if (url.endsWith('/api/auth/tesla/info')) {
+        return { ok: true, json: async () => ({ success: true, data: { authenticated: false } }) } as Response;
+      }
+      if (url.endsWith('/api/auth/setup/tokens')) {
+        return { ok: true, json: async () => ({ success: true, session_id: 'session-9', sites: [{ id: '42', name: 'Home', type: 'battery', state: 'online' }] }) } as Response;
+      }
+      if (url.endsWith('/api/auth/setup/complete')) {
+        return { ok: true, json: async () => ({ success: true }) } as Response;
+      }
+      return { ok: true, json: async () => ({ application: 'PowerNight', version: '2.0.0', backend_dependencies: {}, frontend_dependencies: {} }) } as Response;
+    });
+
+    render(<Settings />);
+    fireEvent.change(await screen.findByLabelText('Tesla Account Email'), { target: { value: 'owner@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Or sign in with tokens from pypowerwall' }));
+    fireEvent.change(screen.getByLabelText('Refresh Token'), { target: { value: ' rt ' } });
+    fireEvent.change(screen.getByLabelText('Access Token'), { target: { value: 'at' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Tokens' }));
+
+    await waitFor(() => {
+      expect(authenticatedFetch).toHaveBeenCalledWith('/api/auth/setup/complete', expect.objectContaining({
+        body: JSON.stringify({ session_id: 'session-9', site_id: '42' }),
+      }));
+    });
+    expect(authenticatedFetch).toHaveBeenCalledWith('/api/auth/setup/tokens', expect.objectContaining({
+      body: JSON.stringify({ email: 'owner@example.com', refresh_token: 'rt', access_token: 'at' }),
+    }));
+  });
 });
