@@ -174,3 +174,18 @@ def test_existing_backup_permissions_fail_closed(tmp_path):
             manager.list_backups(config)
         assert manager.create_backup(config) is None
     assert list(directory.iterdir()) == [old]
+
+
+def test_foreign_owned_data_directory_warns_instead_of_crashing(tmp_path, caplog):
+    """Synology-style bind mounts are writable but owned by a host user."""
+    import logging
+    directory = tmp_path / 'auth'
+    directory.mkdir()
+    (directory / '.pypowerwall.auth').write_text('{}')
+    logger = logging.getLogger('powernight.utils.secure_files')
+    with patch('os.chmod', side_effect=PermissionError(1, 'Operation not permitted')), \
+            patch('os.geteuid', return_value=os.getuid() + 1), \
+            patch.object(logger, 'handlers', [caplog.handler]):
+        storage = PyPowerwallAuthStorage(directory)
+    assert storage.storage_path == directory
+    assert 'Cannot restrict permissions' in caplog.text

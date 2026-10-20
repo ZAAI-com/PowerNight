@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 
 from ...utils.logging import get_logger
-from ...utils.secure_files import protect_directory, write_private_file
+from ...utils.secure_files import protect_directory, restrict_mode, write_private_file
 
 
 class PyPowerwallAuthStorage:
@@ -42,7 +42,7 @@ class PyPowerwallAuthStorage:
         for name in ('.pypowerwall.auth', '.pypowerwall.site'):
             existing = self.storage_path / name
             if existing.exists():
-                os.chmod(existing, 0o600)
+                restrict_mode(existing, 0o600)
     
     def store_auth_data(self, email: str, tokens: Dict[str, Any], site: Dict[str, Any]) -> None:
         """

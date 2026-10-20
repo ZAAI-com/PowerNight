@@ -1,17 +1,40 @@
 """Atomic, owner-only writes for credential-bearing application files."""
 
+import logging
 import os
 from pathlib import Path
 import stat
 import tempfile
 
 
+def restrict_mode(path: Path, mode: int) -> bool:
+    """Apply an owner-only mode; return False if another user owns ``path``.
+
+    Only the owner may chmod. Bind mounts (e.g. Synology shares granted via
+    ACLs) are often owned by a host user, so a foreign owner is reported
+    loudly but tolerated. Failures on paths we own still raise.
+    """
+    try:
+        os.chmod(path, mode)
+    except PermissionError:
+        owner = Path(path).stat().st_uid
+        if owner == os.geteuid():
+            raise
+        logging.getLogger(__name__).warning(
+            "Cannot restrict permissions on %s: owned by uid %s, but PowerNight "
+            "runs as uid %s. Change its owner to uid %s to protect stored "
+            "credentials.", path, owner, os.geteuid(), os.geteuid(),
+        )
+        return False
+    if stat.S_IMODE(Path(path).stat().st_mode) != mode:
+        raise PermissionError(f"Cannot secure credential path: {path}")
+    return True
+
+
 def protect_directory(path: Path) -> None:
-    """Require owner-only directory access; never silently weaken protection."""
+    """Require owner-only access on directories this process owns."""
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    os.chmod(path, 0o700)
-    if stat.S_IMODE(path.stat().st_mode) != 0o700:
-        raise PermissionError(f"Cannot secure credential directory: {path}")
+    restrict_mode(path, 0o700)
 
 
 def write_private_file(path: Path, content: str, *, exclusive: bool = False) -> bool:

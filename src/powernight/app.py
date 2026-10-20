@@ -201,7 +201,7 @@ class PowerNightApp:
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to start web interface: {e}")
+            self.logger.error(f"Failed to start web interface: {e}", exc_info=True)
             return False
 
     def stop_web_interface(self) -> None:

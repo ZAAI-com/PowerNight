@@ -187,6 +187,7 @@ Optimized for Synology DSM Docker integration:
     - GHCR requires manual pull via SSH
     - Use Synology Task Scheduler to check for image updates (see [Update notifications](#update-notifications))
     - Consider DSM Firewall rules for access control
+    - PowerNight restricts `/data` to owner-only permissions. A folder shared via DSM ACLs is owned by a DSM user, so PowerNight logs a `Cannot restrict permissions` warning and continues. To silence it and keep Tesla tokens private, change the folder owner to the container user (`docker run --rm --entrypoint id zaaicom/powernight` shows its uid), e.g. `sudo chown -R <uid>:<gid> /volume1/docker/PowerNight-Data`
 
 #### Update notifications
 
