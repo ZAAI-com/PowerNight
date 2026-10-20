@@ -1,0 +1,25 @@
+.claude/skills/powernight-release/SKILL.md
+  s_0701a7b4581af0::t_d8cf59d08dc389 1-48
+.codex/skills/powernight-release/SKILL.md
+  s_0701a7b4581af0::t_55681b55242771 1-48
+.gitignore
+  s_0701a7b4581af0::t_738147b788939d 401-403
+CLAUDE.md
+  s_0701a7b4581af0::t_91035d3a44b258 314-315
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "075be5043bf02e460d29f5cc6fe6a1582a2911bd",
+  "prompts": {},
+  "sessions": {
+    "s_0701a7b4581af0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42bbf9ed-1919-44d2-a1c3-a3e02063ede3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
