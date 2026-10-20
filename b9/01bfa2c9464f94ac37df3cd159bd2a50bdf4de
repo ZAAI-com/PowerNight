@@ -1,0 +1,19 @@
+src/powernight/core/powerwall/connector.py
+  s_6b892c0aac9768::t_63773ca5113fb1 90-91,93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b901bfa2c9464f94ac37df3cd159bd2a50bdf4de",
+  "prompts": {},
+  "sessions": {
+    "s_6b892c0aac9768": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84a8b23b-085f-44fc-a19b-4c5142cca3c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
