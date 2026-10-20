@@ -1,0 +1,42 @@
+src/powernight/__init__.py
+  s_2e9bf396448f4c::t_b1ee4c8a267e91 16
+Dockerfile
+  s_2e9bf396448f4c::t_b1ee4c8a267e91 81
+docs/FAQ.md
+  s_2e9bf396448f4c::t_b1ee4c8a267e91 196
+docs/README.md
+  s_2e9bf396448f4c::t_42f516c0b41707 244
+  s_2e9bf396448f4c::t_b1ee4c8a267e91 109,111,150,157,166,176
+docker-compose.yml
+  s_2e9bf396448f4c::t_b1ee4c8a267e91 70
+compose.release.yml
+  s_2e9bf396448f4c::t_b1ee4c8a267e91 4
+package.json
+  s_2e9bf396448f4c::t_b1ee4c8a267e91 3
+.github/workflows/README.md
+  s_2e9bf396448f4c::t_b1ee4c8a267e91 182-183,399-400,403-404
+pyproject.toml
+  s_2e9bf396448f4c::t_b1ee4c8a267e91 7
+tests/unit/test_release_version.py
+  s_2e9bf396448f4c::t_b1ee4c8a267e91 15
+CLAUDE.md
+  s_2e9bf396448f4c::t_b1ee4c8a267e91 755,758
+package-lock.json
+  s_2e9bf396448f4c::t_a991bf9d03b121 3,9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "116b6c477b8cc7157f0ba1b406b32887eae52807",
+  "prompts": {},
+  "sessions": {
+    "s_2e9bf396448f4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3e40c4de-6950-4c4b-ac60-c90ab9601a43",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
