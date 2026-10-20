@@ -1,0 +1,37 @@
+tests/unit/test_tesla_oauth.py
+  s_6b892c0aac9768::t_9f0f5815aadfab 179,206,216,226,237,260,263,265,282-285,293-372
+  s_6b892c0aac9768::t_8b166caae64718 373-374
+requirements.txt
+  s_6b892c0aac9768::t_e9265f2a31a823 2
+src/powernight/core/auth/token_storage.py
+  s_6b892c0aac9768::t_966a5ae2ec5063 188
+src/powernight/web/test/pages/Settings.test.tsx
+  s_6b892c0aac9768::t_475301bc8d4f5e 152-209
+src/powernight/web/api/auth_api.py
+  s_6b892c0aac9768::t_966a5ae2ec5063 283,329-378,380
+  s_6b892c0aac9768::t_869a5c41da898c 379,381-383
+src/powernight/web/src/pages/Settings.tsx
+  s_6b892c0aac9768::t_c9152ee9152a78 67-71,97-99,146,173,185-258,264,465-519,525-537,543,551,561-568,813-837,839-843
+src/powernight/core/auth/tesla_oauth.py
+  s_6b892c0aac9768::t_18dd26747ebe7b 11-12,16,45-51,79,96,123-124,135-138,180-251,306-311,314,562-579
+tests/unit/test_auth_connection_api.py
+  s_6b892c0aac9768::t_b55b9a8141cd6d 138-186
+pyproject.toml
+  s_6b892c0aac9768::t_e9265f2a31a823 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e6114d617f8d3b6868e03e085a8fda571fac3d73",
+  "prompts": {},
+  "sessions": {
+    "s_6b892c0aac9768": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84a8b23b-085f-44fc-a19b-4c5142cca3c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
