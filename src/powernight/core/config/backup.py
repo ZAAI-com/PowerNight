@@ -10,7 +10,7 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime, timedelta
 
-from ...utils.secure_files import protect_directory, restrict_mode, write_private_file
+from ...utils.secure_files import protect_directory, protect_existing_file, write_private_file
 
 
 class ConfigBackupManager:
@@ -98,7 +98,7 @@ class ConfigBackupManager:
         for backup in directory.glob(f'{config_path.stem}_*{config_path.suffix}'):
             if backup.is_file() and not backup.is_symlink():
                 try:
-                    restrict_mode(backup, 0o600)
+                    protect_existing_file(backup)
                 except OSError:
                     self.logger.warning("Cannot secure existing backup %s", backup, exc_info=True)
                     raise

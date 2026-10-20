@@ -37,6 +37,30 @@ def protect_directory(path: Path) -> None:
     restrict_mode(path, 0o700)
 
 
+def protect_existing_file(path: Path) -> None:
+    """Make an existing credential file owner-only, even if another user owns it.
+
+    A foreign owner cannot be chmodded, so a group- or world-accessible file is
+    atomically replaced by a private copy owned by this process. Anything that
+    prevents securing the file raises rather than leaving credentials exposed.
+    """
+    try:
+        os.chmod(path, 0o600)
+    except PermissionError:
+        info = path.stat()
+        if info.st_uid == os.geteuid():
+            raise
+        if stat.S_IMODE(info.st_mode) & 0o077:
+            write_private_file(path, path.read_text(encoding='utf-8'))
+            logging.getLogger(__name__).warning(
+                "Replaced %s (owned by uid %s) with a private copy owned by uid %s",
+                path, info.st_uid, os.geteuid(),
+            )
+        return
+    if stat.S_IMODE(path.stat().st_mode) != 0o600:
+        raise PermissionError(f"Cannot secure credential file: {path}")
+
+
 def write_private_file(path: Path, content: str, *, exclusive: bool = False) -> bool:
     """Publish complete UTF-8 contents atomically, with mode 0600 from creation.
 
