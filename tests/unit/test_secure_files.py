@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from powernight.utils.secure_files import protect_directory, write_private_file
+from powernight.utils.secure_files import protect_directory, protect_existing_file, write_private_file
 from powernight.core.auth.token_storage import PyPowerwallAuthStorage
 from powernight.core.config.backup import ConfigBackupManager
 from powernight.web.app import _load_or_create_secret
@@ -174,3 +174,47 @@ def test_existing_backup_permissions_fail_closed(tmp_path):
             manager.list_backups(config)
         assert manager.create_backup(config) is None
     assert list(directory.iterdir()) == [old]
+
+
+def test_foreign_owned_data_directory_warns_instead_of_crashing(tmp_path, caplog):
+    """Synology-style bind mounts are writable but owned by a host user."""
+    import logging
+    directory = tmp_path / 'auth'
+    directory.mkdir()
+    auth = directory / '.pypowerwall.auth'
+    auth.write_text('{"tokens": 1}')
+    auth.chmod(0o644)
+    logger = logging.getLogger('powernight.utils.secure_files')
+    with patch('os.chmod', side_effect=PermissionError(1, 'Operation not permitted')), \
+            patch('os.geteuid', return_value=os.getuid() + 1), \
+            patch.object(logger, 'handlers', [caplog.handler]):
+        storage = PyPowerwallAuthStorage(directory)
+    assert storage.storage_path == directory
+    assert 'Cannot restrict permissions' in caplog.text
+    # The readable foreign token file is replaced by a private copy we own.
+    assert auth.read_text() == '{"tokens": 1}'
+    assert mode(auth) == 0o600
+    assert 'private copy' in caplog.text
+
+
+def test_foreign_owned_private_file_is_left_alone(tmp_path):
+    path = tmp_path / '.pypowerwall.site'
+    path.write_text('123')
+    path.chmod(0o600)
+    inode = path.stat().st_ino
+    with patch('os.chmod', side_effect=PermissionError('denied')), \
+            patch('os.geteuid', return_value=os.getuid() + 1):
+        protect_existing_file(path)
+    assert path.stat().st_ino == inode
+
+
+def test_exposed_foreign_file_fails_closed_when_it_cannot_be_replaced(tmp_path):
+    path = tmp_path / '.pypowerwall.auth'
+    path.write_text('{}')
+    path.chmod(0o644)
+    with patch('os.chmod', side_effect=PermissionError('denied')), \
+            patch('os.geteuid', return_value=os.getuid() + 1), \
+            patch('os.replace', side_effect=PermissionError('sticky directory')):
+        with pytest.raises(PermissionError):
+            protect_existing_file(path)
+    assert mode(path) == 0o644
