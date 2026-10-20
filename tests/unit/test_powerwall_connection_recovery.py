@@ -244,5 +244,37 @@ def test_cloud_session_reuses_live_session(tmp_path):
     live.vitals.return_value = {'ok': True}
 
     with patch.object(connector, 'connect') as connect:
-        assert connector.cloud_session() is live
+        with connector.cloud_session() as pw:
+            assert pw is live
     connect.assert_not_called()
+
+
+def test_cloud_session_holds_connection_lock_for_whole_block(tmp_path):
+    connector = make_connector(tmp_path)
+    connector._powerwall = MagicMock()
+    connector._powerwall.vitals.return_value = {'ok': True}
+    acquired_elsewhere = []
+
+    def try_lock():
+        got = connector._connection_lock.acquire(timeout=0.2)
+        acquired_elsewhere.append(got)
+        if got:
+            connector._connection_lock.release()
+
+    with connector.cloud_session():
+        other = threading.Thread(target=try_lock)
+        other.start()
+        other.join()
+    assert acquired_elsewhere == [False]
+
+    # Released afterwards, so scheduled commands can proceed
+    try_lock()
+    assert acquired_elsewhere == [False, True]
+
+
+def test_cloud_session_fails_clearly_without_a_session(tmp_path):
+    connector = make_connector(tmp_path)
+    with patch.object(connector, 'ensure_connected', return_value=False):
+        with pytest.raises(PowerwallConnectionError):
+            with connector.cloud_session():
+                pass

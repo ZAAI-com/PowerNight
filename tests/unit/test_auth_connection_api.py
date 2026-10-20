@@ -185,3 +185,44 @@ def test_sign_out_clears_tokens_and_disconnects(client, mock_powerwall_connector
     assert response.status_code == 200
     assert response.json['success'] is True
     mock_powerwall_connector.disconnect.assert_called_once()
+
+
+@pytest.mark.unit
+def test_site_details_reads_inside_the_shared_session(client, monkeypatch):
+    from contextlib import contextmanager
+    from powernight.web.api import auth_api
+
+    monkeypatch.setattr(auth_api.oauth_manager.auth_storage, 'load_auth_data', lambda: {
+        'email': 'owner@example.com',
+        'refresh_token': 'rt',
+        'site': {'id': 123, 'name': 'Home'},
+    })
+    class FakeSession:
+        """pypowerwall stand-in: unknown calls return None like an empty reply."""
+        mode = 'cloud'
+        cloudmode = True
+
+        def __getattr__(self, name):
+            return lambda *args, **kwargs: None
+
+        def level(self):
+            return 81.5
+
+    pw = FakeSession()
+    events = []
+
+    @contextmanager
+    def session():
+        events.append('enter')
+        yield pw
+        events.append('exit')
+
+    monkeypatch.setattr(auth_api, '_shared_cloud_session', session)
+    pw.get_reserve = lambda: events.append('read') or 20
+
+    response = client.get('/api/auth/site-details')
+
+    assert response.status_code == 200
+    assert response.json['data']['battery_level'] == 81.5
+    assert response.json['data']['site_id'] == 123
+    assert events == ['enter', 'read', 'exit']

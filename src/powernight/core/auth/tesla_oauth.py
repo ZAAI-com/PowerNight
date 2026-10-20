@@ -309,9 +309,15 @@ class TeslaOAuthManager:
         Tesla's token endpoint now requires and uses the tesla:// redirect.
         """
         token_response = tesla_auth._exchange_code(code, code_verifier)
+        # pypowerwall only checks for a refresh token; reject anything else
+        # unusable here with a clear message instead of a KeyError/TypeError
+        if not isinstance(token_response, dict) or not token_response.get('access_token'):
+            raise ValueError("Tesla token exchange failed: no access token in the response")
         
         # Calculate expiration time
         expires_in = token_response.get('expires_in', self.DEFAULT_ACCESS_TOKEN_LIFETIME)
+        if isinstance(expires_in, bool) or not isinstance(expires_in, (int, float)) or expires_in <= 0:
+            raise ValueError("Tesla token exchange failed: invalid token lifetime in the response")
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
         
         return {

@@ -16,6 +16,8 @@ import time
 import urllib.parse
 from unittest.mock import Mock, patch
 
+import pytest
+
 from powernight.core.auth.tesla_oauth import TeslaOAuthManager
 from powernight.core.auth.token_storage import PyPowerwallAuthStorage
 
@@ -289,6 +291,29 @@ class TestTeslaOAuthManagerCallbackExchange:
         assert session["access_token"] == "new-access-token"
         assert session["refresh_token"] == "new-refresh-token"
 
+
+    @pytest.mark.parametrize("token_response, message", [
+        ({"refresh_token": "rt"}, "no access token"),
+        ("not-a-dict", "no access token"),
+        ({"refresh_token": "rt", "access_token": "at", "expires_in": "soon"}, "invalid token lifetime"),
+        ({"refresh_token": "rt", "access_token": "at", "expires_in": 0}, "invalid token lifetime"),
+    ])
+    def test_unusable_token_response_fails_clearly(self, tmp_path, token_response, message):
+        manager = TeslaOAuthManager(storage_path=str(tmp_path))
+        session_id = manager.generate_auth_url(EMAIL)["session_id"]
+        state = manager._active_sessions[session_id]["state"]
+
+        with patch(
+            "powernight.core.auth.tesla_oauth.tesla_auth._exchange_code",
+            return_value=token_response,
+        ), patch.object(manager, "get_energy_sites") as sites:
+            result = manager.exchange_code_from_callback_url(
+                session_id, f"tesla://auth/callback?code=c&state={state}"
+            )
+
+        assert result["success"] is False
+        assert message in result["error"]
+        sites.assert_not_called()
 
     def test_callback_parsing_accepts_pasted_console_line(self):
         line = (

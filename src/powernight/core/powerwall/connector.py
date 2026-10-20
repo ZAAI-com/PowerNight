@@ -9,8 +9,9 @@ import json
 import threading
 import re
 from functools import wraps
+from contextlib import AbstractContextManager, contextmanager
 from types import TracebackType
-from typing import Any, Callable, Concatenate, Dict, List, Optional, ParamSpec, Type, TypeVar, cast
+from typing import Any, Callable, Concatenate, Dict, Iterator, List, Optional, ParamSpec, Type, TypeVar, cast
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -87,8 +88,8 @@ class PowerwallConnectorInterface(ABC):
         pass
 
     @abstractmethod
-    def cloud_session(self) -> pypowerwall.Powerwall:
-        """Return the shared pypowerwall session, connecting only if needed."""
+    def cloud_session(self) -> AbstractContextManager[Any]:
+        """Use the shared pypowerwall session, connecting only if needed."""
         pass
 
     @abstractmethod
@@ -650,17 +651,19 @@ class PowerwallConnector(PowerwallConnectorInterface):
             raise PowerwallConnectionError(self.config.email, "Tesla cloud session unavailable")
         return self._powerwall
 
-    def cloud_session(self) -> pypowerwall.Powerwall:
-        """Return the shared pypowerwall session, connecting only if needed.
+    @contextmanager
+    def cloud_session(self) -> Iterator[Any]:
+        """Use the shared pypowerwall session, connecting only if needed.
 
         Callers must reuse this session instead of opening their own: a new
         session needs a fresh Tesla login token once the first one expires.
+        The connection lock is held for the whole block, so web requests and
+        scheduled commands never use the client concurrently and a reconnect
+        cannot swap it out mid-request.
         """
         with self._connection_lock:
             self.ensure_connected()
-            if self._powerwall is None:
-                raise PowerwallConnectionError(self.config.email, "Tesla cloud session unavailable")
-            return self._powerwall
+            yield self._session()
 
     def ensure_connected(self) -> bool:
         """Probe the live session and reconnect once when it is unavailable."""
