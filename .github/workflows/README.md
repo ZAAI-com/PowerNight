@@ -179,8 +179,8 @@ must not dispatch either publishing or promotion.
 1. Complete CI and Docker Compose persistence/migration tests for the release commit.
    `python scripts/release_smoke.py --image powernight-release:test` runs the same
    isolated smoke checks used by Docker Health Test, with no Tesla access.
-2. Verify all version identifiers using `python scripts/check_release_version.py 2.0.2`.
-3. Merge to `main` and tag the verified commit as `2.0.2` (no `v` prefix).
+2. Verify all version identifiers using `python scripts/check_release_version.py 2.1.0`.
+3. Merge to `main` and tag the verified commit as `2.1.0` (no `v` prefix).
    Pushing the tag triggers Docker Publish. Manual publication must also select
    the release tag as its ref. Only commits contained in `main` are publishable.
 4. Record the image digest from the publish summary. Verify both registries have
@@ -396,12 +396,12 @@ To add a new architecture (e.g., `linux/riscv64`):
 5. **Test staged images before promoting latest**
    ```bash
    # After version publication, test in isolated Compose projects (no Tesla access)
-   docker pull ghcr.io/zaai-com/powernight:2.0.2
-   python scripts/release_smoke.py --image ghcr.io/zaai-com/powernight:2.0.2
+   docker pull ghcr.io/zaai-com/powernight:2.1.0
+   python scripts/release_smoke.py --image ghcr.io/zaai-com/powernight:2.1.0
 
    # Or test Docker Hub image (mirror)
-   docker pull zaaicom/powernight:2.0.2
-   python scripts/release_smoke.py --image zaaicom/powernight:2.0.2
+   docker pull zaaicom/powernight:2.1.0
+   python scripts/release_smoke.py --image zaaicom/powernight:2.1.0
    ```
 
 ---

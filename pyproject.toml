@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "powernight"
-version = "2.0.2"
+version = "2.1.0"
 description = "Docker container to control Tesla Powerwall 2 backup reserve percentage during nighttime hours"
 readme = "README.md"
 license = {file = "LICENSE.md"}
