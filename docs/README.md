@@ -173,7 +173,7 @@ Optimized for Synology DSM Docker integration:
 
 2. **Create Folder** `/docker/PowerNight-Data` via File Station and add Read&Write permission to 'SYSTEM' user
 
-3. **Pull image** from Docker Hub **via Synology DSM UI**: Go to Registry tab → Search for `zaaicom/powernight` → Download `2.0.0` after publication and configure the persistent YAML as described in the release runbook
+3. **Pull image** from Docker Hub **via Synology DSM UI**: Go to Registry tab → Search for `zaaicom/powernight` → Download `2.0.0` after publication and configure the persistent YAML as described in the release runbook. Pin a version tag for controlled upgrades, or pull `latest` instead if you want Container Manager to show update notifications (version tags never change, so they never show an update)
 
 4. **Create container** with:
    - **Port Settings**: Local Port 8020 → Container Port 8020
@@ -185,8 +185,24 @@ Optimized for Synology DSM Docker integration:
 6. **Additional Synology Notes**
     - Docker Hub recommended (native DSM UI integration)
     - GHCR requires manual pull via SSH
-    - Use Synology Task Scheduler for automatic updates
+    - Use Synology Task Scheduler to check for image updates (see [Update notifications](#update-notifications))
     - Consider DSM Firewall rules for access control
+
+#### Update notifications
+
+Container Manager checks for newer images only occasionally, and only for the tag you pulled. The `latest` tag moves to each new release; version tags such as `2.0.0` never change. To force a daily check:
+
+1. Open **Control Panel > Task Scheduler > Create > Scheduled Task > User-defined script**
+2. **General**: set **User** to `root` (required; as a regular user the task ends with "Interrupted (255)")
+3. **Schedule**: daily, for example 06:00
+4. **Task Settings > Run command**:
+   ```
+   /var/packages/ContainerManager/target/tool/image_upgradable_checker
+   ```
+
+The tool prints no output. After it runs, refresh **Container Manager > Image**: images with a newer upstream version show an update, which you can apply from there. Your config, database, and Tesla tokens are kept because they live in the `/data` volume.
+
+Note: `image_upgradable_checker` is an internal DSM tool, tested on DSM 7.3. Its path may change in future DSM versions.
 
 ### Local Development
 
