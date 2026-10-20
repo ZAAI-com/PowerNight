@@ -6,9 +6,10 @@ Creates and configures the Flask application with blueprints and error handling.
 
 import os
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from flask import Flask
+from flask.typing import ResponseReturnValue
 
 from ..core.config import PowerNightConfig as Config
 from ..core.powerwall import PowerwallConnector
@@ -69,11 +70,19 @@ def _load_or_create_secret() -> str:
         return secrets.token_hex(32)
 
 
+class PowerNightFlask(Flask):
+    """Flask app carrying the shared components used by the API blueprints."""
+
+    powerwall_connector: Optional[PowerwallConnector] = None
+    planner: Any = None
+    config_manager: Any = None
+
+
 def create_app(
         config: Config,
         testing: bool = False,
         powerwall_connector: Optional[PowerwallConnector] = None
-) -> Flask:
+) -> PowerNightFlask:
     """
     Create and configure the Flask application.
     """
@@ -96,7 +105,7 @@ def create_app(
     # Note: template_folder is not needed since we're serving React SPA only
     # static_folder points to React build output (dist/)
     # static_url_path is left as default so static files work correctly
-    app = Flask(
+    app = PowerNightFlask(
         __name__,
         static_folder=static_folder
     )
@@ -119,7 +128,7 @@ def create_app(
     from .api.errors import AuthenticationError, AuthorizationError
 
     @app.errorhandler(AuthenticationError)
-    def handle_authentication_error(error):
+    def handle_authentication_error(error: AuthenticationError) -> ResponseReturnValue:
         return {
             'success': False,
             'error': 'Authentication required',
@@ -127,7 +136,7 @@ def create_app(
         }, 401
 
     @app.errorhandler(AuthorizationError)
-    def handle_authorization_error(error):
+    def handle_authorization_error(error: AuthorizationError) -> ResponseReturnValue:
         return {
             'success': False,
             'error': 'Forbidden',

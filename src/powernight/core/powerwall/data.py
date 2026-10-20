@@ -21,7 +21,7 @@ class PowerwallReserveInfo:
     last_changed: Optional[datetime]
     is_adjusting: bool = False
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not 0 <= self.current_percentage <= 100:
             raise PowerwallValidationError(
                 "current_percentage",

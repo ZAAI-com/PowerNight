@@ -5,11 +5,14 @@ Maps UI command selections to PyPowerwall operations.
 """
 
 from enum import Enum
-from typing import Dict, Any, Optional, Callable
+from typing import TYPE_CHECKING, Dict, Any, List, Optional, Callable
 from dataclasses import dataclass
 import logging
 
 from .exceptions import PowerwallValidationError
+
+if TYPE_CHECKING:
+    from .connector import PowerwallConnector
 
 
 class CommandType(str, Enum):
@@ -81,8 +84,8 @@ class CronCommand:
         Returns:
             CommandValidationResult with validation status and messages
         """
-        errors = []
-        warnings = []
+        errors: List[str] = []
+        warnings: List[str] = []
         
         # Validate based on command type
         if self.command_enum == CommandType.MODE:
@@ -184,7 +187,7 @@ class CronCommand:
         
         return errors
     
-    def execute(self, powerwall_connector) -> Dict[str, Any]:
+    def execute(self, powerwall_connector: "PowerwallConnector") -> Dict[str, Any]:
         """
         Execute the command using the provided powerwall connector.
         
@@ -238,7 +241,7 @@ class CronCommand:
             self.logger.error(f"Command execution failed: {e}")
             raise
     
-    def _execute_mode(self, connector) -> Dict[str, Any]:
+    def _execute_mode(self, connector: "PowerwallConnector") -> Dict[str, Any]:
         """Execute mode change command."""
         mode = self.params['mode']
         
@@ -253,7 +256,7 @@ class CronCommand:
             'message': f"Powerwall mode set to {mode}"
         }
     
-    def _execute_reserve(self, connector) -> Dict[str, Any]:
+    def _execute_reserve(self, connector: "PowerwallConnector") -> Dict[str, Any]:
         """Execute reserve change command."""
         reserve_percentage = float(self.params['reserve'])
         
@@ -279,7 +282,7 @@ class CronCommand:
             'message': f"Battery reserve set to {actual}%"
         }
     
-    def _execute_current(self, connector) -> Dict[str, Any]:
+    def _execute_current(self, connector: "PowerwallConnector") -> Dict[str, Any]:
         """Execute current reserve command (set reserve to current charge level)."""
         # Get current battery level/charge
         # Note: This would require getting the current battery percentage
@@ -297,7 +300,7 @@ class CronCommand:
             'message': f"Battery reserve set to current charge level: {current_level}%"
         }
     
-    def _execute_grid_charging(self, connector) -> Dict[str, Any]:
+    def _execute_grid_charging(self, connector: "PowerwallConnector") -> Dict[str, Any]:
         """Execute grid charging command."""
         enabled = self.params['enabled']
         
@@ -311,7 +314,7 @@ class CronCommand:
             'message': f"Grid charging {'enabled' if enabled else 'disabled'}"
         }
     
-    def _execute_grid_export(self, connector) -> Dict[str, Any]:
+    def _execute_grid_export(self, connector: "PowerwallConnector") -> Dict[str, Any]:
         """Execute grid export command."""
         mode = self.params['mode']
         

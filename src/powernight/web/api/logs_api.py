@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 from flask import Blueprint, request, jsonify, current_app
+from flask.typing import ResponseReturnValue
 
 from ...utils.logging import get_logger, ComponentType, OperationType, LogLevel
 from ...core.database.services import TaskExecutionService
@@ -23,7 +24,7 @@ logs_blueprint = Blueprint('logs', __name__, url_prefix='/api/v1/logs')
 
 @logs_blueprint.route('/executions', methods=['GET'])
 @require_auth
-def get_task_execution_logs():
+def get_task_execution_logs() -> ResponseReturnValue:
     """
     Get task execution logs with filtering and pagination.
 

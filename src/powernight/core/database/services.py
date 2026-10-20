@@ -4,6 +4,7 @@ Database services for PowerNight.
 Data access services for tasks, task executions, and task presets.
 """
 
+from contextlib import AbstractContextManager
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
@@ -20,7 +21,7 @@ class TaskService:
     def __init__(self, session: Optional[Session] = None):
         self.session = session
     
-    def _get_session(self) -> Session:
+    def _get_session(self) -> AbstractContextManager[Session]:
         """Get database session."""
         if self.session:
             return self.session
@@ -125,7 +126,7 @@ class TaskService:
     def update_task(
         self,
         task_id: str,
-        **kwargs
+        **kwargs: Any
     ) -> Dict[str, Any]:
         """
         Update a task entry.
@@ -264,7 +265,7 @@ class TaskExecutionService:
     def __init__(self, session: Optional[Session] = None):
         self.session = session
     
-    def _get_session(self) -> Session:
+    def _get_session(self) -> AbstractContextManager[Session]:
         """Get database session."""
         if self.session:
             return self.session
@@ -552,7 +553,7 @@ class TaskPresetService:
     def __init__(self, session: Optional[Session] = None):
         self.session = session
 
-    def _get_session(self) -> Session:
+    def _get_session(self) -> AbstractContextManager[Session]:
         """Get database session."""
         if self.session:
             return self.session

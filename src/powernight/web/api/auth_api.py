@@ -4,7 +4,10 @@ Tesla OAuth authentication API endpoints.
 Handles web-based OAuth flow, token management, and Powerwall discovery.
 """
 
-from flask import Blueprint, current_app, request, jsonify, session
+from typing import Any, Dict, Optional
+
+from flask import Blueprint, Flask, current_app, request, jsonify, session
+from flask.typing import ResponseReturnValue
 from datetime import datetime, timezone
 
 from ...core.auth.tesla_oauth import TeslaOAuthManager
@@ -18,10 +21,10 @@ auth_blueprint = Blueprint('auth', __name__, url_prefix='/api/auth')
 logger = get_logger()
 
 # Global OAuth manager instance
-oauth_manager: TeslaOAuthManager = None
+oauth_manager: TeslaOAuthManager = None  # type: ignore[assignment]  # set by init_auth_api() at startup
 
 
-def init_auth_api(app):
+def init_auth_api(app: Flask) -> None:
     """Initialize OAuth API with Flask app."""
     global oauth_manager
     # Use persistent data path from environment, fallback to local data directory
@@ -31,12 +34,12 @@ def init_auth_api(app):
     app.register_blueprint(auth_blueprint)
 
 
-def _shared_connector():
+def _shared_connector() -> Any:
     """Return the application's long-lived Powerwall connector, when available."""
     return getattr(current_app, 'powerwall_connector', None)
 
 
-def _shared_connection_status():
+def _shared_connection_status() -> Dict[str, Any]:
     """Return a JSON-safe snapshot of live Tesla connection state."""
     connector = _shared_connector()
     if connector is None or not hasattr(connector, 'get_connection_status'):
@@ -63,7 +66,7 @@ def _shared_connection_status():
     }
 
 
-def _shared_cloud_session():
+def _shared_cloud_session() -> Any:
     """Return the shared connector's live pypowerwall session."""
     connector = _shared_connector()
     if connector is None:
@@ -71,7 +74,7 @@ def _shared_cloud_session():
     return connector.cloud_session()
 
 
-def _connect_shared_connector(force=False):
+def _connect_shared_connector(force: bool = False) -> Dict[str, Any]:
     """Connect the shared connector used by the scheduler and manual commands."""
     connector = _shared_connector()
     if connector is None:
@@ -84,7 +87,7 @@ def _connect_shared_connector(force=False):
 
 @auth_blueprint.route('/tesla/status', methods=['GET'])
 @require_auth
-def get_auth_status():
+def get_auth_status() -> ResponseReturnValue:
     """
     Get current Tesla authentication status.
     
@@ -111,7 +114,7 @@ def get_auth_status():
 
 @auth_blueprint.route('/tesla/info', methods=['GET'])
 @require_auth
-def get_auth_info():
+def get_auth_info() -> ResponseReturnValue:
     """
     Get detailed Tesla authentication information for display on settings page.
     
@@ -135,7 +138,7 @@ def get_auth_info():
             })
         
         # Get detailed auth data
-        auth_data = oauth_manager.auth_storage.load_auth_data()
+        auth_data = oauth_manager.auth_storage.load_auth_data() or {}
         storage_info = oauth_manager.auth_storage.get_storage_info()
         
         # Prepare response with masked sensitive data
@@ -171,7 +174,7 @@ def get_auth_info():
         }), 500
 
 
-def _mask_token(token) -> str:
+def _mask_token(token: Optional[str]) -> str:
     """
     Mask sensitive token data for display.
     
@@ -193,7 +196,7 @@ def _mask_token(token) -> str:
 
 # New Auth Setup Endpoints
 
-def _setup_allowed():
+def _setup_allowed() -> bool:
     """
     Decide whether an OAuth setup request may proceed.
 
@@ -218,7 +221,7 @@ def _setup_allowed():
         return False
 
 
-def _setup_denied_response():
+def _setup_denied_response() -> ResponseReturnValue:
     """Standard 401 response for blocked setup requests."""
     return jsonify({
         'success': False,
@@ -229,7 +232,7 @@ def _setup_denied_response():
 
 
 @auth_blueprint.route('/setup/start', methods=['POST'])
-def start_auth_setup():
+def start_auth_setup() -> ResponseReturnValue:
     """
     Start Tesla OAuth setup flow.
     
@@ -281,7 +284,7 @@ def start_auth_setup():
 
 
 @auth_blueprint.route('/setup/callback', methods=['POST'])
-def process_callback():
+def process_callback() -> ResponseReturnValue:
     """
     Process Tesla OAuth callback URL.
     
@@ -335,7 +338,7 @@ def process_callback():
 
 
 @auth_blueprint.route('/setup/tokens', methods=['POST'])
-def import_tokens():
+def import_tokens() -> ResponseReturnValue:
     """
     Start Tesla setup from tokens created by ``python -m pypowerwall authtoken``.
 
@@ -363,7 +366,7 @@ def import_tokens():
 
         oauth_manager.cleanup_expired_sessions()
         result = oauth_manager.import_tokens(
-            email, data.get('refresh_token'), data.get('access_token')
+            email, str(data.get('refresh_token') or ''), str(data.get('access_token') or '')
         )
 
         if result['success']:
@@ -390,7 +393,7 @@ def import_tokens():
 
 
 @auth_blueprint.route('/setup/complete', methods=['POST'])
-def complete_auth_setup():
+def complete_auth_setup() -> ResponseReturnValue:
     """
     Complete Tesla OAuth setup with site selection.
     
@@ -471,7 +474,7 @@ def complete_auth_setup():
 
 @auth_blueprint.route('/setup/status/<session_id>', methods=['GET'])
 @require_auth
-def get_setup_status(session_id):
+def get_setup_status(session_id: str) -> ResponseReturnValue:
     """
     Get status of an auth setup session.
     
@@ -503,7 +506,7 @@ def get_setup_status(session_id):
 
 @auth_blueprint.route('/tesla/logout', methods=['POST'])
 @require_auth
-def logout():
+def logout() -> ResponseReturnValue:
     """
     Logout and revoke Tesla tokens.
     
@@ -543,7 +546,7 @@ def logout():
 
 @auth_blueprint.route('/tesla/powerwalls', methods=['GET'])
 @require_auth
-def get_powerwalls():
+def get_powerwalls() -> ResponseReturnValue:
     """
     Test pypowerwall connection and get basic Powerwall info.
     
@@ -597,7 +600,7 @@ def get_powerwalls():
 
 @auth_blueprint.route('/tesla/test-connection', methods=['POST'])
 @require_auth
-def test_connection():
+def test_connection() -> ResponseReturnValue:
     """
     Test pypowerwall cloud mode connection.
     
@@ -652,7 +655,7 @@ def test_connection():
 
 @auth_blueprint.route('/site-details', methods=['GET'])
 @require_auth
-def get_site_details():
+def get_site_details() -> ResponseReturnValue:
     """
     Get detailed information for the authenticated energy site using pypowerwall.
 

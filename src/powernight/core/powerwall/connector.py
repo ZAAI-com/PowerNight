@@ -9,7 +9,8 @@ import json
 import threading
 import re
 from functools import wraps
-from typing import Optional, Dict, Any, List
+from types import TracebackType
+from typing import Any, Callable, Concatenate, Dict, List, Optional, ParamSpec, Type, TypeVar, cast
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -38,10 +39,15 @@ from .reserve import (
 )
 
 
-def _connection_operation(method):
+P = ParamSpec('P')
+R = TypeVar('R')
+_C = TypeVar('_C', bound='PowerwallConnector')
+
+
+def _connection_operation(method: Callable[Concatenate[_C, P], R]) -> Callable[Concatenate[_C, P], R]:
     """Keep the shared client stable through checks, rate limiting and dispatch."""
     @wraps(method)
-    def serialized(self, *args, **kwargs):
+    def serialized(self: _C, *args: P.args, **kwargs: P.kwargs) -> R:
         with self._connection_lock:
             return method(self, *args, **kwargs)
     return serialized
@@ -56,7 +62,7 @@ class PowerwallStatus:
     is_grid_connected: bool
     last_updated: float
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.last_updated = time.time()
 
 
@@ -111,7 +117,9 @@ class PowerwallConnectorInterface(ABC):
         pass
 
     @abstractmethod
-    def set_backup_reserve_percentage(self, percentage: float) -> bool:
+    def set_backup_reserve_percentage(
+        self, percentage: float, reason: Optional[str] = None
+    ) -> ReserveChangeResult:
         """Set backup reserve percentage."""
         pass
 
@@ -124,7 +132,7 @@ class PowerwallConnectorInterface(ABC):
 class CloudConnectionConfig:
     """Configuration for cloud-based Powerwall connection."""
 
-    def __init__(self, email: str, powerwall_id: Optional[str] = None, **kwargs):
+    def __init__(self, email: str, powerwall_id: Optional[str] = None, **kwargs: Any) -> None:
         """
         Initialize cloud connection configuration.
 
@@ -152,7 +160,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
     for communicating with Tesla Powerwall devices exclusively through pypowerwall cloud mode.
     """
 
-    def __init__(self, email: str, powerwall_id: Optional[str] = None, **kwargs) -> None:
+    def __init__(self, email: str, powerwall_id: Optional[str] = None, **kwargs: Any) -> None:
         """
         Initialize Powerwall connector for cloud mode.
 
@@ -203,7 +211,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         self._circuit_breaker = get_circuit_breaker(f"cloud_powerwall_{email}", circuit_config)
 
         # Set up health check function for the circuit breaker
-        def health_check():
+        def health_check() -> bool:
             """Simple health check for circuit breaker recovery."""
             try:
                 # Try a simple vitals call
@@ -232,7 +240,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         # Set up degradation state change callback
         from ..scheduler.degradation import ServiceState
 
-        def on_degradation_state_change(old_state: "ServiceState", new_state: "ServiceState"):
+        def on_degradation_state_change(old_state: "ServiceState", new_state: "ServiceState") -> None:
             self.logger.log_powerwall_operation(
                 "degradation_state_change", True,
                 metadata={
@@ -277,7 +285,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         def sanitize_recursive(obj: Any, path: str = "") -> Any:
             """Recursively sanitize nested objects."""
             if isinstance(obj, dict):
-                sanitized = {}
+                sanitized: Dict[str, Any] = {}
                 for k, v in obj.items():
                     current_path = f"{path}.{k}" if path else k
                     sanitized[k] = sanitize_recursive(sanitize_value(k, v), current_path)
@@ -313,7 +321,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
                     "truncated": True
                 }
             
-            return sanitized
+            return cast(Dict[str, Any], sanitized)
             
         except Exception as e:
             return {
@@ -322,7 +330,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
             }
 
     def _log_api_response(self, operation: str, response: Any, success: bool = True, 
-                         error_details: Optional[str] = None, **kwargs) -> None:
+                         error_details: Optional[str] = None, **kwargs: Any) -> None:
         """
         Log API response with full response data.
         
@@ -519,7 +527,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         """
         from ..scheduler.circuit_breaker import CircuitBreakerOpenException
 
-        def _connect_operation():
+        def _connect_operation() -> bool:
             start_time = time.time()
 
             auth_data = self.reload_credentials()
@@ -636,6 +644,12 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 )
                 raise wrapped from error
 
+    def _session(self) -> Any:
+        """Return the live pypowerwall session or fail clearly if there is none."""
+        if self._powerwall is None:
+            raise PowerwallConnectionError(self.config.email, "Tesla cloud session unavailable")
+        return self._powerwall
+
     def cloud_session(self) -> pypowerwall.Powerwall:
         """Return the shared pypowerwall session, connecting only if needed.
 
@@ -723,15 +737,15 @@ class PowerwallConnector(PowerwallConnectorInterface):
         """
         cache_key = "backup_reserve_percentage"
 
-        def _primary_operation():
+        def _primary_operation() -> float:
             """Primary operation to get backup reserve."""
             self.ensure_connected()
 
             self._handle_rate_limit()
 
             # Get backup reserve from Powerwall through circuit breaker
-            def _get_reserve_api_call():
-                reserve = self._powerwall.get_reserve()
+            def _get_reserve_api_call() -> float:
+                reserve = self._session().get_reserve()
                 percentage = self._data_parser.parse_reserve_percentage(reserve)
                 self.logger.debug(f"Retrieved backup reserve: {percentage}%")
                 
@@ -749,7 +763,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
             self._data_cache.set(cache_key, result)
             return result
 
-        def _fallback_operation():
+        def _fallback_operation() -> float:
             """Fallback using cached data when the Powerwall is unreachable."""
             # Fresh cache first, then stale cache: stale data beats no data
             # for a read-only value
@@ -769,7 +783,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
                         'stale': source == 'stale_cache'
                     }
                 )
-                return cached
+                return cast(float, cached)
 
             raise PowerwallUnavailableError(
                 self.config.host,
@@ -825,7 +839,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         # Ensure connected
         self.ensure_connected()
 
-        def _set_reserve_operation():
+        def _set_reserve_operation() -> ReserveChangeResult:
             self._handle_rate_limit()
 
             self.logger.log_powerwall_operation(
@@ -837,7 +851,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
             )
 
             # JUST SET - NO VERIFICATION
-            api_result = self._powerwall.set_reserve(percentage)
+            api_result = self._session().set_reserve(percentage)
 
             if not api_result:
                 raise PowerwallAPIError("Failed to set backup reserve percentage")
@@ -923,7 +937,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         """
         cache_key = "powerwall_status"
 
-        def _primary_operation():
+        def _primary_operation() -> PowerwallStatus:
             """Primary operation to get Powerwall status."""
             self.ensure_connected()
 
@@ -931,16 +945,17 @@ class PowerwallConnector(PowerwallConnectorInterface):
 
             # Get comprehensive status from Powerwall through circuit breaker
             reserve_is_fresh = True
-            def _get_status_api_call():
+            def _get_status_api_call() -> PowerwallStatus:
                 nonlocal reserve_is_fresh
-                vitals = self._powerwall.vitals()
+                vitals = self._session().vitals()
                 if not vitals:
                     raise PowerwallAPIError("Failed to retrieve Powerwall status")
 
                 # Already inside the breaker: never re-enter its non-reentrant lock.
                 self._handle_rate_limit()
+                backup_reserve: Optional[float]
                 try:
-                    reserve = self._powerwall.get_reserve()
+                    reserve = self._session().get_reserve()
                     backup_reserve = self._data_parser.parse_reserve_percentage(reserve)
                 except Exception:
                     backup_reserve = self._data_cache.get('backup_reserve_percentage')
@@ -986,7 +1001,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 self._data_cache.set('backup_reserve_percentage', result.backup_reserve_percentage)
             return result
 
-        def _fallback_operation():
+        def _fallback_operation() -> PowerwallStatus:
             """Fallback using cached or last-known status when unreachable."""
             # Fresh cache, then stale cache, then last known in-memory status
             cached_status = self._data_cache.get(cache_key)
@@ -1056,7 +1071,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         cache_key = "system_info"
         cached_info = self._data_cache.get(cache_key)
         if cached_info is not None:
-            return cached_info
+            return cast(PowerwallSystemInfo, cached_info)
 
         self.ensure_connected()
 
@@ -1064,7 +1079,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
             self._handle_rate_limit()
 
             # Get vitals and reserve data
-            vitals = self._powerwall.vitals()
+            vitals = self._session().vitals()
             reserve_percentage = self.get_backup_reserve_percentage()
 
             if not vitals:
@@ -1146,7 +1161,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         self._handle_rate_limit()
 
         try:
-            result = self._powerwall.set_mode(mode)
+            result = self._session().set_mode(mode)
             
             # Log full set_mode response
             self._log_api_response(
@@ -1156,7 +1171,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 mode=mode
             )
             
-            return result
+            return cast(bool, result)
         except Exception as e:
             # Log error response
             self._log_api_response(
@@ -1187,7 +1202,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         self._handle_rate_limit()
 
         try:
-            result = self._powerwall.grid_charging(enabled)
+            result = self._session().grid_charging(enabled)
             
             # Log full grid_charging response
             self._log_api_response(
@@ -1197,7 +1212,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 enabled=enabled
             )
             
-            return result
+            return cast(bool, result)
         except Exception as e:
             # Log error response
             self._log_api_response(
@@ -1228,7 +1243,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         self._handle_rate_limit()
 
         try:
-            result = self._powerwall.set_grid_export(mode)
+            result = self._session().set_grid_export(mode)
             
             # Log full set_grid_export response
             self._log_api_response(
@@ -1238,7 +1253,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 mode=mode
             )
             
-            return result
+            return cast(bool, result)
         except Exception as e:
             # Log error response
             self._log_api_response(
@@ -1266,7 +1281,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
         self._handle_rate_limit()
 
         try:
-            level = self._powerwall.level()
+            level = self._session().level()
             
             # Log full level response
             self._log_api_response(
@@ -1276,7 +1291,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 level=level
             )
             
-            return level
+            return cast(Optional[float], level)
         except Exception as e:
             # Log error response
             self._log_api_response(
@@ -1287,12 +1302,17 @@ class PowerwallConnector(PowerwallConnectorInterface):
             )
             raise PowerwallAPIError(f"Failed to get state of charge: {e}")
 
-    def __enter__(self):
+    def __enter__(self) -> "PowerwallConnector":
         """Context manager entry."""
         self.connect()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         """Context manager exit."""
         self.disconnect()
 

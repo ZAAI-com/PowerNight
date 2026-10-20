@@ -23,7 +23,7 @@ class ReserveChangeRequest:
     max_wait_time: float = 300.0  # 5 minutes
     tolerance: float = 0.5  # Acceptable difference in %
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not 0 <= self.target_percentage <= 100:
             raise PowerwallValidationError(
                 "target_percentage",
@@ -49,7 +49,7 @@ class ReserveChangeResult:
     error_message: Optional[str] = None
     timestamp: Optional[datetime] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.timestamp is None:
             self.timestamp = datetime.now()
 
@@ -215,7 +215,7 @@ class ReserveScheduler:
 
         # Add to schedule
         self._scheduled_changes.append(request)
-        self._scheduled_changes.sort(key=lambda x: x.scheduled_time)
+        self._scheduled_changes.sort(key=lambda x: x.scheduled_time or datetime.min)
 
         self.logger.info(
             f"Scheduled reserve change to {request.target_percentage}% "
@@ -237,7 +237,7 @@ class ReserveScheduler:
 
         return [
             change for change in self._scheduled_changes
-            if change.scheduled_time <= before_time
+            if change.scheduled_time is not None and change.scheduled_time <= before_time
         ]
 
     def remove_completed_change(self, request: ReserveChangeRequest) -> None:

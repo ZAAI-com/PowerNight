@@ -4,6 +4,8 @@ Tesla Powerwall Connection Module
 Handles communication with Tesla Powerwall devices using pypowerwall library.
 """
 
+from typing import Any
+
 from .connector import PowerwallConnector
 from .exceptions import (
     PowerwallError,
@@ -27,7 +29,7 @@ from .commands import (
 _powerwall_connector_instance: PowerwallConnector | None = None
 
 
-def initialize_powerwall_connector(config) -> PowerwallConnector:
+def initialize_powerwall_connector(config: Any) -> PowerwallConnector:
     """
     Create and configure the singleton PowerwallConnector instance.
     Should be called once at application startup.
@@ -48,11 +50,11 @@ def initialize_powerwall_connector(config) -> PowerwallConnector:
             
             if oauth_manager.auth_storage.has_auth_data():
                 try:
-                    auth_data = oauth_manager.auth_storage.load_auth_data()
+                    auth_data = oauth_manager.auth_storage.load_auth_data() or {}
                     if auth_data.get('email'):
                         email = auth_data['email']
                         print(f"Using authenticated Tesla email: {email}")
-                    if auth_data.get('site', {}).get('id'):
+                    if (auth_data.get('site') or {}).get('id'):
                         powerwall_id = str(auth_data['site']['id'])
                         print(f"Using authenticated Powerwall site ID: {powerwall_id}")
                 except Exception as e:

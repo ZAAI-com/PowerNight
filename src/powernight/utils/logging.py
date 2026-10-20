@@ -13,7 +13,7 @@ import sys
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, Optional, List, Union, cast
 from dataclasses import dataclass, asdict
 from enum import Enum
 
@@ -214,7 +214,7 @@ class PowerNightLogger:
             logger.propagate = True  # Propagate to main logger
             self._loggers[component_name] = logger
 
-    def apply_log_level(self, level) -> None:
+    def apply_log_level(self, level: Any) -> None:
         """
         Apply a new minimum log level to all PowerNight loggers and handlers.
 
@@ -345,7 +345,7 @@ class PowerNightLogger:
                     "truncated": True
                 }
             
-            return sanitized
+            return cast(Dict[str, Any], sanitized)
             
         except Exception as e:
             return {
@@ -363,7 +363,7 @@ class PowerNightLogger:
                      metadata: Optional[Dict[str, Any]] = None,
                      api_response: Optional[Dict[str, Any]] = None,
                      response_size_bytes: Optional[int] = None,
-                     **kwargs) -> None:
+                     **kwargs: Any) -> None:
         """
         Log an operation with structured data.
 
@@ -507,7 +507,7 @@ class PowerNightLogger:
         Returns:
             List of recent LogEntry objects
         """
-        entries = []
+        entries: List[LogEntry] = []
         json_log_file = self.log_dir / "powernight.jsonl"
 
         if not json_log_file.exists():
@@ -565,7 +565,7 @@ class PowerNightLogger:
         """Get logging statistics."""
         entries = self.get_recent_logs(limit=1000)
 
-        stats = {
+        stats: Dict[str, Any] = {
             'total_entries': len(entries),
             'by_component': {},
             'by_level': {},
@@ -615,23 +615,23 @@ class PowerNightLogger:
             handler.close()
     
     # Standard logging methods for compatibility
-    def debug(self, message: str, *args, **kwargs) -> None:
+    def debug(self, message: str, *args: Any, **kwargs: Any) -> None:
         """Log a debug message."""
         self.main_logger.debug(message, *args, **kwargs)
     
-    def info(self, message: str, *args, **kwargs) -> None:
+    def info(self, message: str, *args: Any, **kwargs: Any) -> None:
         """Log an info message."""
         self.main_logger.info(message, *args, **kwargs)
     
-    def warning(self, message: str, *args, **kwargs) -> None:
+    def warning(self, message: str, *args: Any, **kwargs: Any) -> None:
         """Log a warning message."""
         self.main_logger.warning(message, *args, **kwargs)
     
-    def error(self, message: str, *args, **kwargs) -> None:
+    def error(self, message: str, *args: Any, **kwargs: Any) -> None:
         """Log an error message."""
         self.main_logger.error(message, *args, **kwargs)
     
-    def critical(self, message: str, *args, **kwargs) -> None:
+    def critical(self, message: str, *args: Any, **kwargs: Any) -> None:
         """Log a critical message."""
         self.main_logger.critical(message, *args, **kwargs)
 
@@ -639,7 +639,7 @@ class PowerNightLogger:
 class JSONFormatter(logging.Formatter):
     """Custom JSON formatter for structured logging."""
 
-    def format(self, record) -> str:
+    def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON."""
         log_data = {
             'timestamp': datetime.now(timezone.utc).isoformat(),
@@ -664,7 +664,7 @@ class JSONFormatter(logging.Formatter):
 
         return json.dumps(log_data, default=self._json_serializer)
 
-    def _json_serializer(self, obj):
+    def _json_serializer(self, obj: Any) -> Any:
         """Custom JSON serializer for non-serializable objects."""
         from pathlib import Path
         from datetime import datetime
@@ -691,7 +691,7 @@ def get_logger() -> PowerNightLogger:
 
 def setup_logging(log_dir: Optional[Path] = None,
                  log_level: LogLevel = LogLevel.INFO,
-                 **kwargs) -> PowerNightLogger:
+                 **kwargs: Any) -> PowerNightLogger:
     """Setup and configure the global PowerNight logger."""
     global _powernight_logger
     _powernight_logger = PowerNightLogger(log_dir=log_dir, log_level=log_level, **kwargs)

@@ -278,7 +278,7 @@ PowerNight uses automated GitHub Actions workflows for continuous integration an
 - **Purpose:** Runs the test/lint gate on every change:
   - **Backend:** `pip install -e ".[dev]"`, `ruff check` (syntax/undefined-name selectors), `pytest -m "not slow"` with coverage
   - **Frontend:** `npm ci`, `npm run lint`, `npm run type-check`, `npm run test:run` (vitest), `npm run build`
-  - **mypy:** backend type check (informational; `continue-on-error`)
+  - **mypy:** backend type check (`mypy src/`, blocking; must report no issues)
 
 ### Workflow Documentation
 

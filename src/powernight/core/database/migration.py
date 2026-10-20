@@ -5,6 +5,7 @@ Provides functions for initializing and migrating the database.
 """
 
 import logging
+from typing import Any, Dict, List
 
 from sqlalchemy import text
 
@@ -37,7 +38,7 @@ def drop_legacy_schedule_entries_table() -> bool:
         return False
 
 
-def upgrade():
+def upgrade() -> None:
     """Run database migration."""
     if not run_migration():
         logger.warning("Database migration completed with failures; check migration logs")
@@ -67,7 +68,8 @@ def migrate_task_executions_table() -> bool:
                 WHERE name IN ('execution_type', 'task_name', 'command', 'command_params', 'api_response')
             """))
             
-            existing_columns = result.fetchone()[0]
+            row = result.fetchone()
+            existing_columns = row[0] if row is not None else 0
             
             if existing_columns >= 5:
                 logger.info("Task execution columns already exist, skipping migration")
@@ -129,7 +131,7 @@ def migrate_task_executions_table() -> bool:
         return False
 
 
-BUILTIN_PRESETS = [
+BUILTIN_PRESETS: List[Dict[str, Any]] = [
     {
         "name": "Night Charge to 100%",
         "command": "reserve",

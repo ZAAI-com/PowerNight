@@ -21,7 +21,7 @@ class PowerwallCredentials:
     password: str
     email: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.host:
             raise PowerwallValidationError("host", self.host, "Host cannot be empty")
         if not self.password:
@@ -176,6 +176,7 @@ class PowerwallAuthManager:
         try:
             # Create temporary connector for testing
             connector = PowerwallConnector(
+                email=credentials.email or "",
                 host=credentials.host,
                 password=credentials.password,
                 timeout=10.0

@@ -6,7 +6,7 @@ Defines the configuration structure and validation rules for PowerNight.
 
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
-from datetime import time, datetime
+from datetime import time as dt_time, datetime
 
 from .validators import (
     validate_percentage,
@@ -83,7 +83,7 @@ class ScheduleEntry:
 
         return errors
 
-    def get_time_object(self) -> time:
+    def get_time_object(self) -> dt_time:
         """Get time as datetime.time object."""
         return datetime.strptime(self.time, "%H:%M").time()
 
@@ -140,7 +140,7 @@ class WebInterfaceSettings:
     api_key: Optional[str] = None
     cors_origins: List[str] = field(default_factory=lambda: ["*"])
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Post-initialization processing."""
         # Keep the legacy auth_required flag working, and automatically protect
         # deployments that configure either supported credential type. This

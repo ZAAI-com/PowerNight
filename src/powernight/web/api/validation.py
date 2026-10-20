@@ -5,11 +5,11 @@ Request data validation functions and schemas.
 """
 
 import re
-from typing import Dict, List, Any, Optional
+from typing import List, Any, Optional
 from datetime import datetime
 
 
-def validate_config_data(data: Dict[str, Any]) -> List[str]:
+def validate_config_data(data: Any) -> List[str]:
     """
     Validate configuration data.
 
@@ -49,7 +49,7 @@ def validate_config_data(data: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def validate_backup_reserve_data(data: Dict[str, Any]) -> List[str]:
+def validate_backup_reserve_data(data: Any) -> List[str]:
     """
     Validate backup reserve data.
 
@@ -80,7 +80,7 @@ def validate_backup_reserve_data(data: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def _validate_powerwall_config(config: Dict[str, Any]) -> List[str]:
+def _validate_powerwall_config(config: Any) -> List[str]:
     """Validate Powerwall configuration section."""
     errors = []
 
@@ -135,7 +135,7 @@ def _validate_powerwall_config(config: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def _validate_automation_config(config: Dict[str, Any]) -> List[str]:
+def _validate_automation_config(config: Any) -> List[str]:
     """Validate automation configuration section."""
     errors = []
 
@@ -170,7 +170,7 @@ def _validate_automation_config(config: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def _validate_schedule_entry(entry: Dict[str, Any]) -> List[str]:
+def _validate_schedule_entry(entry: Any) -> List[str]:
     """Validate a single schedule entry."""
     errors = []
 
@@ -213,7 +213,7 @@ def _validate_schedule_entry(entry: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def _validate_web_config(config: Dict[str, Any]) -> List[str]:
+def _validate_web_config(config: Any) -> List[str]:
     """Validate web configuration section."""
     errors = []
 
@@ -254,7 +254,7 @@ def _validate_web_config(config: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def _validate_logging_config(config: Dict[str, Any]) -> List[str]:
+def _validate_logging_config(config: Any) -> List[str]:
     """Validate logging configuration section."""
     errors = []
 

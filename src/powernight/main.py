@@ -8,6 +8,7 @@ Handles both CLI and application startup.
 import sys
 import os
 from pathlib import Path
+from typing import Any
 
 # Add src to Python path for imports
 src_path = Path(__file__).parent.parent
@@ -19,7 +20,7 @@ from powernight.app import PowerNightApp
 from powernight.utils.logging import setup_logging, get_logger
 
 
-def main():
+def main() -> Any:
     """Main entry point for PowerNight application."""
     # Setup logging first
     setup_logging()

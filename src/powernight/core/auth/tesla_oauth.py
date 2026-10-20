@@ -10,7 +10,7 @@ import hashlib
 import base64
 import json
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone, timedelta
 import requests
 from pypowerwall import tesla_auth
@@ -50,7 +50,7 @@ class TeslaOAuthManager:
     # Code-exchange access tokens are valid for about 8 hours
     DEFAULT_ACCESS_TOKEN_LIFETIME = 28800
     
-    def __init__(self, storage_path: str = None):
+    def __init__(self, storage_path: Optional[str] = None) -> None:
         """
         Initialize Tesla OAuth manager.
         

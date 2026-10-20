@@ -8,14 +8,17 @@ import base64
 import hmac
 import os
 from functools import wraps
-from typing import Optional
+from typing import Callable, Optional, ParamSpec, TypeVar
 from flask import request, current_app
 
 from .errors import AuthenticationError, AuthorizationError
 from ...core.config import get_config
 
+P = ParamSpec('P')
+R = TypeVar('R')
 
-def require_auth(f):
+
+def require_auth(f: Callable[P, R]) -> Callable[P, R]:
     """
     Decorator to require authentication for API endpoints.
 
@@ -25,7 +28,7 @@ def require_auth(f):
     - Optional authentication (can be disabled in config)
     """
     @wraps(f)
-    def decorated_function(*args, **kwargs):
+    def decorated_function(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
             config = get_config()
 
@@ -268,16 +271,16 @@ def get_current_user() -> Optional[str]:
         return None
 
 
-def require_role(role: str):
+def require_role(role: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator to require specific role for API endpoints.
 
     Args:
         role: Required role (currently only 'admin' is supported)
     """
-    def decorator(f):
+    def decorator(f: Callable[P, R]) -> Callable[P, R]:
         @wraps(f)
-        def decorated_function(*args, **kwargs):
+        def decorated_function(*args: P.args, **kwargs: P.kwargs) -> R:
             current_user = get_current_user()
             if not current_user:
                 raise AuthenticationError("Authentication required")
