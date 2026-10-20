@@ -1,0 +1,131 @@
+src/powernight/web/api/monitoring.py
+  s_6b892c0aac9768::t_f1b1329bc6ab47 125,154,489,491,493,526,531
+  s_6b892c0aac9768::t_34a1641caabe36 189-190
+  s_6b892c0aac9768::t_723632880c6a72 20
+  s_6b892c0aac9768::t_52cfd6c11964f9 101,105,132-134,309,350,355,399,420-421,424,436,522
+CLAUDE.md
+  s_6b892c0aac9768::t_f2d227d01f4e0b 281
+src/powernight/app.py
+  s_6b892c0aac9768::t_6bced4646fae56 35,38,100-101,106
+  s_6b892c0aac9768::t_723632880c6a72 5
+  s_6b892c0aac9768::t_d558c793e5e7b2 6-7,15-17,34,181,186,189-190,195,205-207
+  s_6b892c0aac9768::t_f1b1329bc6ab47 28,44,193
+  s_6b892c0aac9768::t_80b7ef7fd1854a 18
+src/powernight/core/powerwall/commands.py
+  s_6b892c0aac9768::t_bbaac39fd4c7ed 87-88
+  s_6b892c0aac9768::t_f1b1329bc6ab47 14-15,190,244,259,285,303,317
+  s_6b892c0aac9768::t_65bc29bc50888a 8
+  s_6b892c0aac9768::t_af50a5eb38a9e3 16
+src/powernight/core/planner/planner.py
+  s_6b892c0aac9768::t_bbaac39fd4c7ed 238-239
+src/powernight/core/database/connection.py
+  s_6b892c0aac9768::t_f180ed93fd8f5d 11,31-32
+src/powernight/web/api/api.py
+  s_6b892c0aac9768::t_2b6a97808847a9 378,794,810,821
+  s_6b892c0aac9768::t_2ed6c2c654f65f 527
+  s_6b892c0aac9768::t_6d550c99338348 8,30,107,189,297,504,618,707,715
+  s_6b892c0aac9768::t_1918c382ce9a6b 10
+src/powernight/core/powerwall/__init__.py
+  s_6b892c0aac9768::t_bbaac39fd4c7ed 53,57
+  s_6b892c0aac9768::t_723632880c6a72 7-8
+  s_6b892c0aac9768::t_f1b1329bc6ab47 32
+src/powernight/core/powerwall/connector.py
+  s_6b892c0aac9768::t_242714d350af14 45-46
+  s_6b892c0aac9768::t_4b1312a54c269e 47,50
+  s_6b892c0aac9768::t_0988a0a8301744 324,786,1074,1174,1215,1256,1294
+  s_6b892c0aac9768::t_477a7f4d5410ee 42-44
+  s_6b892c0aac9768::t_dff1e74e948da3 12-13,65,120-122,135,163,214,243,288,333,530,647-652,740,747-748,766,842,854,940,948,950,956,958,1004,1082,1164,1205,1246,1284,1305,1310-1315
+src/powernight/web/api/auth_api.py
+  s_6b892c0aac9768::t_6d550c99338348 10,90,117,235,287,341,396,509,549,603,658
+  s_6b892c0aac9768::t_8d785a9a69b204 24,141,369,477
+  s_6b892c0aac9768::t_f1b1329bc6ab47 27,37,42,69,77,177,199,224
+  s_6b892c0aac9768::t_723632880c6a72 7-9
+src/powernight/web/api/config_api.py
+  s_6b892c0aac9768::t_6d550c99338348 2,62,74,108,145,183
+  s_6b892c0aac9768::t_5d58a9a5aaffed 192,207-208
+  s_6b892c0aac9768::t_45876c1cbde6f6 5
+src/powernight/web/api/schemas.py
+  s_6b892c0aac9768::t_2ed6c2c654f65f 200,248
+  s_6b892c0aac9768::t_f1b1329bc6ab47 101
+src/powernight/web/api/auth.py
+  s_6b892c0aac9768::t_4b1312a54c269e 11,17-18,20-21,31,274,281,283
+src/powernight/web/api/validation.py
+  s_6b892c0aac9768::t_f2d227d01f4e0b 8
+  s_6b892c0aac9768::t_34609b9dac0651 12,52,83,138,173,216,257
+src/powernight/web/api/tasks_api.py
+  s_6b892c0aac9768::t_6d550c99338348 8,33,70,117,216,315,363,418,470,520,561,643,687,714,799
+src/powernight/core/scheduler/circuit_breaker.py
+  s_6b892c0aac9768::t_02e80811f77894 7,13-15,45,49,67,77,87
+pyproject.toml
+  s_6b892c0aac9768::t_9ea2ec4c856d82 63-65
+src/powernight/main.py
+  s_6b892c0aac9768::t_723632880c6a72 11
+  s_6b892c0aac9768::t_f1b1329bc6ab47 23
+.github/workflows/ci.yml
+  s_6b892c0aac9768::t_f2d227d01f4e0b 63
+src/powernight/web/app.py
+  s_6b892c0aac9768::t_d558c793e5e7b2 9,73-80,85,108,131,139
+  s_6b892c0aac9768::t_6d550c99338348 12
+src/powernight/core/database/migration.py
+  s_6b892c0aac9768::t_f1b1329bc6ab47 41
+  s_6b892c0aac9768::t_f180ed93fd8f5d 8,71-72,134
+src/powernight/web/api/routes.py
+  s_6b892c0aac9768::t_6d550c99338348 9,33,42,67,110
+  s_6b892c0aac9768::t_56cdff80b6b462 14
+  s_6b892c0aac9768::t_8d785a9a69b204 24-31,37,73-74,98,102,120,135
+src/powernight/core/powerwall/reserve.py
+  s_6b892c0aac9768::t_bbaac39fd4c7ed 218,240
+  s_6b892c0aac9768::t_f1b1329bc6ab47 26,52
+src/powernight/core/scheduler/degradation.py
+  s_6b892c0aac9768::t_02e80811f77894 7,12-15,50,52,56,64,74,93-99,125
+src/powernight/core/powerwall/auth.py
+  s_6b892c0aac9768::t_f1b1329bc6ab47 24
+  s_6b892c0aac9768::t_bbaac39fd4c7ed 179
+src/powernight/utils/logging.py
+  s_6b892c0aac9768::t_2ed6c2c654f65f 348,510
+  s_6b892c0aac9768::t_f1b1329bc6ab47 217,366,618,622,626,630,634,642,667,694
+  s_6b892c0aac9768::t_5d58a9a5aaffed 16,568
+src/powernight/core/powerwall/exceptions.py
+  s_6b892c0aac9768::t_65bc29bc50888a 7
+  s_6b892c0aac9768::t_bbaac39fd4c7ed 62
+src/powernight/core/config/schema.py
+  s_6b892c0aac9768::t_bbaac39fd4c7ed 9,86
+  s_6b892c0aac9768::t_f1b1329bc6ab47 143
+src/powernight/core/auth/token_storage.py
+  s_6b892c0aac9768::t_bbaac39fd4c7ed 26,94
+src/powernight/core/config/manager.py
+  s_6b892c0aac9768::t_723632880c6a72 13-16
+  s_6b892c0aac9768::t_bbaac39fd4c7ed 53-54,583
+  s_6b892c0aac9768::t_f1b1329bc6ab47 59,66
+src/powernight/web/api/logs_api.py
+  s_6b892c0aac9768::t_6d550c99338348 12,27
+src/powernight/core/database/services.py
+  s_6b892c0aac9768::t_f1b1329bc6ab47 129
+  s_6b892c0aac9768::t_f180ed93fd8f5d 7,24,268,556
+src/powernight/web/middleware.py
+  s_6b892c0aac9768::t_8d785a9a69b204 8,31,75
+  s_6b892c0aac9768::t_723632880c6a72 9-11
+  s_6b892c0aac9768::t_f1b1329bc6ab47 63,78,99
+src/powernight/core/powerwall/data.py
+  s_6b892c0aac9768::t_f1b1329bc6ab47 24
+src/powernight/core/database/models.py
+  s_6b892c0aac9768::t_cff27969e2b42e 7-8,12,15,20-21,29-40,65-73,95-101,103-109
+src/powernight/core/auth/tesla_oauth.py
+  s_6b892c0aac9768::t_bbaac39fd4c7ed 13,53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "573495a6309e92637ff4e5a5dd4018c16a4a845b",
+  "prompts": {},
+  "sessions": {
+    "s_6b892c0aac9768": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84a8b23b-085f-44fc-a19b-4c5142cca3c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
