@@ -1,0 +1,43 @@
+tests/unit/test_release_version.py
+  s_6b892c0aac9768::t_89f19e142edbd0 15
+docs/releases/2.0.2.md
+  s_6b892c0aac9768::t_89f19e142edbd0 1-49
+package.json
+  s_6b892c0aac9768::t_89f19e142edbd0 3
+.github/workflows/README.md
+  s_6b892c0aac9768::t_89f19e142edbd0 182-183,399-400,403-404
+pyproject.toml
+  s_6b892c0aac9768::t_89f19e142edbd0 7
+docs/README.md
+  s_6b892c0aac9768::t_89f19e142edbd0 109,111,150,157,166,176,244
+src/powernight/__init__.py
+  s_6b892c0aac9768::t_89f19e142edbd0 16
+compose.release.yml
+  s_6b892c0aac9768::t_89f19e142edbd0 4
+Dockerfile
+  s_6b892c0aac9768::t_89f19e142edbd0 81
+docker-compose.yml
+  s_6b892c0aac9768::t_89f19e142edbd0 70
+CLAUDE.md
+  s_6b892c0aac9768::t_89f19e142edbd0 755,758
+docs/FAQ.md
+  s_6b892c0aac9768::t_89f19e142edbd0 196
+package-lock.json
+  s_6b892c0aac9768::t_615111e9b7932d 3,9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b2a822f5c1558535f193dc9011360b7766a17b87",
+  "prompts": {},
+  "sessions": {
+    "s_6b892c0aac9768": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84a8b23b-085f-44fc-a19b-4c5142cca3c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
