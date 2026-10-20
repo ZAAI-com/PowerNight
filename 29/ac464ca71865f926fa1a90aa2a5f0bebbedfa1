@@ -1,0 +1,62 @@
+tests/unit/test_auth_enforcement.py
+  s_6b892c0aac9768::t_43f15086e5a02d 156,166,169-170,174-176,192
+  s_6b892c0aac9768::t_df63e5cdf2998f 164,167
+tests/unit/test_powerwall_response_logging.py
+  s_6b892c0aac9768::t_4b54afc14403e8 287,312
+tests/unit/test_tesla_oauth.py
+  s_6b892c0aac9768::t_4b54afc14403e8 376,378,380,382,387,389-390,392-394
+src/powernight/core/powerwall/connector.py
+  s_6b892c0aac9768::t_8a248376bb5e37 84,87,425-430,540-543,639-649
+  s_6b892c0aac9768::t_a690fff6880807 650
+tests/unit/test_powerwall_connection_recovery.py
+  s_6b892c0aac9768::t_4b54afc14403e8 103,185,227-248
+src/powernight/core/auth/tesla_oauth.py
+  s_6b892c0aac9768::t_8a248376bb5e37 390-395,398,400,402,405
+  s_6b892c0aac9768::t_ed4750c77bf119 13
+src/powernight/web/api/auth_api.py
+  s_6b892c0aac9768::t_9dc9fba3da3fd4 66-73,565-570,622-624,663,681-691
+tests/unit/test_auth_connection_api.py
+  s_6b892c0aac9768::t_4b54afc14403e8 71-72
+tests/unit/test_release_version.py
+  s_6b892c0aac9768::t_89f19e142edbd0 15
+docs/releases/2.0.2.md
+  s_6b892c0aac9768::t_89f19e142edbd0 1-49
+package.json
+  s_6b892c0aac9768::t_89f19e142edbd0 3
+.github/workflows/README.md
+  s_6b892c0aac9768::t_89f19e142edbd0 182-183,399-400,403-404
+pyproject.toml
+  s_6b892c0aac9768::t_89f19e142edbd0 7
+docs/README.md
+  s_6b892c0aac9768::t_89f19e142edbd0 109,111,150,157,166,176,244
+src/powernight/__init__.py
+  s_6b892c0aac9768::t_89f19e142edbd0 16
+compose.release.yml
+  s_6b892c0aac9768::t_89f19e142edbd0 4
+Dockerfile
+  s_6b892c0aac9768::t_89f19e142edbd0 81
+docker-compose.yml
+  s_6b892c0aac9768::t_89f19e142edbd0 70
+CLAUDE.md
+  s_6b892c0aac9768::t_89f19e142edbd0 755,758
+docs/FAQ.md
+  s_6b892c0aac9768::t_89f19e142edbd0 196
+package-lock.json
+  s_6b892c0aac9768::t_615111e9b7932d 3,9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "29ac464ca71865f926fa1a90aa2a5f0bebbedfa1",
+  "prompts": {},
+  "sessions": {
+    "s_6b892c0aac9768": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84a8b23b-085f-44fc-a19b-4c5142cca3c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
