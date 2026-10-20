@@ -398,8 +398,9 @@ secrets/
 tasks.json
 tasks/
 
-# Claude AI
-.claude/
+# Claude AI (shared skills are committed)
+.claude/*
+!.claude/skills/
 .claude/settings.local.json
 
 # Kiro AI

@@ -311,8 +311,8 @@ Creating a new PowerNight release triggers automated multi-architecture Docker b
 
 4. **Automated Build:** GitHub Actions automatically:
    - Builds multi-arch images (amd64, arm64, arm/v7)
-   - Publishes to GHCR and Docker Hub
-   - Updates `latest` tag
+   - Publishes the version tag to GHCR and Docker Hub
+   - Does NOT update `latest`: run the Docker Promote workflow after a canary (see `.claude/skills/powernight-release/SKILL.md`)
    - Typical build time: 15-20 minutes
 
 5. **Verify Publication:**
