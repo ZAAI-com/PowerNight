@@ -1,0 +1,19 @@
+docs/README.md
+  s_0701a7b4581af0::t_e79f2f9c9f7ba4 176,188,191-206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "08fa81da2ec6aceae8542d732bc7718662cdf448",
+  "prompts": {},
+  "sessions": {
+    "s_0701a7b4581af0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42bbf9ed-1919-44d2-a1c3-a3e02063ede3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
