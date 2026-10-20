@@ -1,0 +1,29 @@
+tests/unit/test_secure_files.py
+  s_6b892c0aac9768::t_25dfacd5ed1043 177-191
+src/powernight/core/auth/token_storage.py
+  s_6b892c0aac9768::t_83727dd734def5 15,45
+src/powernight/core/config/backup.py
+  s_6b892c0aac9768::t_83727dd734def5 13,101
+docs/README.md
+  s_6b892c0aac9768::t_94dfd575a05037 190
+src/powernight/utils/secure_files.py
+  s_6b892c0aac9768::t_83727dd734def5 3,10-33,35,37
+src/powernight/app.py
+  s_6b892c0aac9768::t_83727dd734def5 204
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9d260ff011377e67ece0884c4f0a7bdf6ae89cbe",
+  "prompts": {},
+  "sessions": {
+    "s_6b892c0aac9768": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84a8b23b-085f-44fc-a19b-4c5142cca3c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
