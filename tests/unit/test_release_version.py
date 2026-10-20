@@ -12,7 +12,7 @@ check_version = runpy.run_path(str(ROOT / 'scripts/check_release_version.py'))['
 
 
 def test_current_release_versions_agree():
-    check_version('2.0.1', ROOT)
+    check_version('2.0.2', ROOT)
 
 
 @pytest.mark.parametrize('version', ['v2.0.0', '2.0.0-rc.1', '02.0.0', '2.0', '2.0.0\nunsafe'])

@@ -752,10 +752,10 @@ class LogEntry:
 {
   "status": "healthy",
   "timestamp": "2026-01-01T10:00:00Z",
-  "version": "2.0.1"
+  "version": "2.0.2"
 }
 ```
-(`version` is read from `__version__`, currently `2.0.1`. `/health` returns `503` with `status: "unhealthy"` on error.)
+(`version` is read from `__version__`, currently `2.0.2`. `/health` returns `503` with `status: "unhealthy"` on error.)
 
 **Status Endpoint:** `GET /api/v1/status` (requires auth)
 - Comprehensive system status
