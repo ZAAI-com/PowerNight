@@ -284,7 +284,7 @@ class TestApiResponseIntegration:
         
         # Mock OAuth manager
         with patch('src.powernight.core.auth.tesla_oauth.TeslaOAuthManager') as mock_oauth:
-            mock_oauth.return_value.get_valid_access_token.return_value = "test_token"
+            mock_oauth.return_value.has_credentials.return_value = True
             
             connector = PowerwallConnector(email="test@example.com")
             
@@ -309,7 +309,7 @@ class TestApiResponseIntegration:
         
         # Mock OAuth manager
         with patch('src.powernight.core.auth.tesla_oauth.TeslaOAuthManager') as mock_oauth:
-            mock_oauth.return_value.get_valid_access_token.return_value = "test_token"
+            mock_oauth.return_value.has_credentials.return_value = True
             
             connector = PowerwallConnector(email="test@example.com")
             

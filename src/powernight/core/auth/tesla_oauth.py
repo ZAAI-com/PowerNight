@@ -10,7 +10,7 @@ import hashlib
 import base64
 import json
 import re
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any, List
 from datetime import datetime, timezone, timedelta
 import requests
 from pypowerwall import tesla_auth
@@ -387,123 +387,30 @@ class TeslaOAuthManager:
                 'error': str(e)
             }
     
-    def get_valid_access_token(self) -> Optional[str]:
-        """
-        Get a valid access token from stored auth data.
-        
-        Returns:
-            Valid access token or None if unavailable
+    def has_credentials(self) -> bool:
+        """Return True when a Tesla login is stored.
+
+        PowerNight never refreshes tokens itself: Tesla's owner API rejects
+        access tokens minted by a refresh on a new session (HTTP 403), so the
+        token lifecycle is left to pypowerwall's long-lived cloud session.
         """
         auth_data = self.auth_storage.load_auth_data()
-        if not auth_data:
-            return None
-        
-        # Check if token is expired
-        if self.auth_storage.is_token_expired(auth_data):
-            self.logger.info("Access token expired, attempting refresh")
-            if not self.refresh_access_token():
-                return None
-            
-            # Reload auth data after refresh
-            auth_data = self.auth_storage.load_auth_data()
-        
-        return auth_data.get('access_token') if auth_data else None
+        return bool(auth_data and (auth_data.get('refresh_token') or auth_data.get('access_token')))
 
-    def refresh_access_token(self) -> bool:
+    def describe_powerwall(self, pw: Any) -> Dict[str, Any]:
         """
-        Refresh access token using refresh token.
-        
-        Returns:
-            True if refresh successful, False otherwise
-        """
-        try:
-            auth_data = self.auth_storage.load_auth_data()
-            if not auth_data or 'refresh_token' not in auth_data:
-                self.logger.warning("No refresh token available")
-                return False
-            
-            data = {
-                'grant_type': 'refresh_token',
-                'client_id': self.CLIENT_ID,
-                'refresh_token': auth_data['refresh_token']
-            }
-            
-            headers = {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'PowerNight/1.0'
-            }
-            
-            response = requests.post(
-                self.TOKEN_URL,
-                data=data,
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code != 200:
-                self.logger.error(f"Token refresh failed: {response.status_code} - {response.text}")
-                return False
-            
-            token_response = response.json()
-            
-            # Update tokens
-            expires_in = token_response.get('expires_in', 3600)
-            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
-            
-            updated_tokens = {
-                'access_token': token_response['access_token'],
-                'refresh_token': token_response.get('refresh_token', auth_data['refresh_token']),
-                'expires_at': expires_at.isoformat(),
-                'token_type': 'Bearer'
-            }
-            
-            # Update stored auth data
-            existing_site = auth_data.get('site') or {}
-            self.auth_storage.store_auth_data(
-                email=auth_data['email'],
-                tokens=updated_tokens,
-                site={
-                    'id': existing_site.get('id'),
-                    'name': existing_site.get('name'),
-                    'type': existing_site.get('type')
-                }
-            )
-            
-            self.logger.info("Access token refreshed successfully")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Failed to refresh access token: {e}")
-            return False
-    
-    def test_pypowerwall_connection(self, email: str) -> Dict[str, Any]:
-        """
-        Test pypowerwall cloud mode connection and get basic Powerwall info.
+        Summarize the Powerwall reachable through an existing pypowerwall session.
         
         Args:
-            email: Tesla account email (for compatibility, but uses stored auth data)
+            pw: Connected pypowerwall cloud session (the shared connector's)
             
         Returns:
             Dictionary with connection test result and basic Powerwall info
         """
         try:
-            import pypowerwall
-            
-            # Get auth data
             auth_data = self.auth_storage.load_auth_data()
             if not auth_data:
                 raise Exception("No authentication data found. Please complete setup first.")
-            
-            # Test connection using pypowerwall cloud mode with stored auth
-            pw = pypowerwall.Powerwall(
-                email=auth_data['email'],
-                cloudmode=True,
-                authmode="token",
-                authpath=str(self.auth_storage.storage_path) + "/",
-                timeout=30,
-                siteid=(auth_data.get('site') or {}).get('id'),
-                failover=False,
-            )
             
             # Test basic connectivity by getting site info
             site_info = pw.site()

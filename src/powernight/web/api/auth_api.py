@@ -63,6 +63,14 @@ def _shared_connection_status():
     }
 
 
+def _shared_cloud_session():
+    """Return the shared connector's live pypowerwall session."""
+    connector = _shared_connector()
+    if connector is None:
+        raise RuntimeError('Powerwall connector is not available')
+    return connector.cloud_session()
+
+
 def _connect_shared_connector(force=False):
     """Connect the shared connector used by the scheduler and manual commands."""
     connector = _shared_connector()
@@ -493,40 +501,6 @@ def get_setup_status(session_id):
 
 
 
-@auth_blueprint.route('/tesla/refresh', methods=['POST'])
-@require_auth
-def refresh_access_token():
-    """
-    Refresh Tesla access token.
-    
-    Returns:
-        JSON response with refresh result
-    """
-    try:
-        success = oauth_manager.refresh_access_token()
-        
-        if success:
-            return jsonify({
-                'success': True,
-                'message': 'Token refreshed successfully',
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to refresh token',
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 400
-        
-    except Exception as e:
-        logger.log_error(ComponentType.WEB, "Token refresh error", e)
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }), 500
-
-
 @auth_blueprint.route('/tesla/logout', methods=['POST'])
 @require_auth
 def logout():
@@ -588,8 +562,12 @@ def get_powerwalls():
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 503
 
-        # Test pypowerwall connection using stored auth data
-        result = oauth_manager.test_pypowerwall_connection("")
+        # Reuse the shared session: a new one would need a fresh Tesla login
+        try:
+            result = oauth_manager.describe_powerwall(_shared_cloud_session())
+        except Exception as connection_error:
+            result = {'success': False, 'error': _shared_connection_status().get('connection_error')
+                      or f'Tesla cloud connection failed ({type(connection_error).__name__})'}
 
         if result['success']:
             return jsonify({
@@ -641,7 +619,9 @@ def test_connection():
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 503
 
-        connection_status = _connect_shared_connector(force=True)
+        # Do not force a reconnect: dropping a healthy session would need a
+        # fresh Tesla login token to start a new one
+        connection_status = _connect_shared_connector()
         return jsonify({
             'success': True,
             'message': 'Tesla cloud connection successful',
@@ -680,11 +660,7 @@ def get_site_details():
         JSON response with comprehensive site details from multiple pypowerwall methods
     """
     try:
-        import pypowerwall
-
-        # Get valid access token
-        access_token = oauth_manager.get_valid_access_token()
-        if not access_token:
+        if not oauth_manager.has_credentials():
             return jsonify({
                 'success': False,
                 'error': 'No valid authentication token available',
@@ -702,17 +678,17 @@ def get_site_details():
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 404
 
-        # Create pypowerwall Cloud instance using the same method as test_connection
-        # This uses the stored auth data and authpath for proper authentication
-        pw = pypowerwall.Powerwall(
-            email=auth_data['email'],
-            cloudmode=True,
-            authmode="token",
-            authpath=str(oauth_manager.auth_storage.storage_path) + "/",
-            timeout=30,
-            siteid=auth_data['site'].get('id'),
-            failover=False,
-        )
+        # Reuse the shared session: a new one would need a fresh Tesla login
+        try:
+            pw = _shared_cloud_session()
+        except Exception as connection_error:
+            logger.log_error(ComponentType.WEB, "Tesla cloud session unavailable for site details", connection_error)
+            return jsonify({
+                'success': False,
+                'error': _shared_connection_status().get('connection_error')
+                or 'Tesla cloud connection failed. Check Settings and the container logs.',
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }), 502
 
         # Get comprehensive site data using multiple pypowerwall methods
         site_data = {}

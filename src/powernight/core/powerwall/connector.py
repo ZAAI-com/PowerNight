@@ -81,6 +81,11 @@ class PowerwallConnectorInterface(ABC):
         pass
 
     @abstractmethod
+    def cloud_session(self) -> pypowerwall.Powerwall:
+        """Return the shared pypowerwall session, connecting only if needed."""
+        pass
+
+    @abstractmethod
     def ensure_connected(self) -> bool:
         """Return an existing healthy connection or establish a new one."""
         pass
@@ -417,8 +422,13 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 'no_response',
                 'Tesla cloud did not return Powerwall data. Check authentication and network access.'
             )
+        if isinstance(error, PyPowerwallCloudTeslaNotConnected):
+            return (
+                'tesla_rejected',
+                'Tesla cloud refused the connection. If this keeps happening, sign out of '
+                'Tesla in Settings and sign in again.'
+            )
         if isinstance(error, (
-            PyPowerwallCloudTeslaNotConnected,
             PyPowerwallCloudNotImplemented,
             PyPowerwallCloudInvalidPayload,
         )):
@@ -527,10 +537,10 @@ class PowerwallConnector(PowerwallConnectorInterface):
             # Handle rate limiting
             self._handle_rate_limit()
 
-            # Get valid access token
-            access_token = self._oauth_manager.get_valid_access_token()
-            if not access_token:
-                raise PowerwallAuthenticationError("No valid access token available")
+            # Never refresh here: pypowerwall owns the token lifecycle, and
+            # Tesla rejects refreshed access tokens on a new session (403)
+            if not self._oauth_manager.has_credentials():
+                raise PowerwallAuthenticationError("No Tesla credentials stored")
 
             # Initialize pypowerwall cloud connection
             self._powerwall = pypowerwall.Powerwall(
@@ -625,6 +635,18 @@ class PowerwallConnector(PowerwallConnectorInterface):
                     metadata={'host': self.config.host}
                 )
                 raise wrapped from error
+
+    def cloud_session(self) -> pypowerwall.Powerwall:
+        """Return the shared pypowerwall session, connecting only if needed.
+
+        Callers must reuse this session instead of opening their own: a new
+        session needs a fresh Tesla login token once the first one expires.
+        """
+        with self._connection_lock:
+            self.ensure_connected()
+            if self._powerwall is None:
+                raise PowerwallConnectionError(self.config.email, "Tesla cloud session unavailable")
+            return self._powerwall
 
     def ensure_connected(self) -> bool:
         """Probe the live session and reconnect once when it is unavailable."""

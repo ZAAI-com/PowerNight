@@ -68,7 +68,8 @@ def test_connection_test_uses_shared_connector_and_returns_502(
     assert response.status_code == 502
     assert response.json['data']['connected'] is False
     assert response.json['error'].startswith('Tesla cloud is unreachable')
-    mock_powerwall_connector.disconnect.assert_called_once()
+    # Retrying must not drop a healthy session (a new one needs a fresh login)
+    mock_powerwall_connector.disconnect.assert_not_called()
     mock_powerwall_connector.ensure_connected.assert_called_once()
 
 

@@ -373,93 +373,25 @@ class TestTeslaOAuthManagerSignOut:
 
 
 class TestTeslaOAuthManagerTokens:
-    """Tests for stored-token access and refresh logic."""
+    """PowerNight never refreshes Tesla tokens itself (Tesla rejects them)."""
 
-    def test_get_valid_access_token_without_auth_data(self, tmp_path):
+    def test_has_credentials_without_auth_data(self, tmp_path):
         manager = TeslaOAuthManager(storage_path=str(tmp_path))
-        assert manager.get_valid_access_token() is None
+        assert manager.has_credentials() is False
 
-    def test_get_valid_access_token_returns_fresh_token(self, tmp_path):
-        manager = TeslaOAuthManager(storage_path=str(tmp_path))
-        manager.auth_storage.store_auth_data(EMAIL, make_tokens(), make_site())
-
-        assert manager.get_valid_access_token() == "access-token-1234567890"
-
-    def test_get_valid_access_token_refreshes_expired_token(self, tmp_path):
+    def test_expired_access_token_is_left_for_pypowerwall(self, tmp_path):
         manager = TeslaOAuthManager(storage_path=str(tmp_path))
         manager.auth_storage.store_auth_data(
             EMAIL, make_tokens(expires_at=time.time() - 60), make_site()
         )
+        before = (tmp_path / ".pypowerwall.auth").read_text()
 
-        def fake_refresh():
-            tokens = make_tokens()
-            tokens["access_token"] = "refreshed-access-token"
-            manager.auth_storage.store_auth_data(EMAIL, tokens, make_site())
-            return True
+        with patch("powernight.core.auth.tesla_oauth.requests.post") as post:
+            assert manager.has_credentials() is True
 
-        with patch.object(manager, "refresh_access_token", side_effect=fake_refresh) as mock_refresh:
-            token = manager.get_valid_access_token()
-
-        assert token == "refreshed-access-token"
-        mock_refresh.assert_called_once()
-
-    def test_get_valid_access_token_returns_none_when_refresh_fails(self, tmp_path):
-        manager = TeslaOAuthManager(storage_path=str(tmp_path))
-        manager.auth_storage.store_auth_data(
-            EMAIL, make_tokens(expires_at=time.time() - 60), make_site()
-        )
-
-        with patch.object(manager, "refresh_access_token", return_value=False):
-            assert manager.get_valid_access_token() is None
-
-    def test_refresh_access_token_without_auth_data_returns_false(self, tmp_path):
-        manager = TeslaOAuthManager(storage_path=str(tmp_path))
-        assert manager.refresh_access_token() is False
-
-    def test_refresh_access_token_success_updates_storage(self, tmp_path):
-        manager = TeslaOAuthManager(storage_path=str(tmp_path))
-        manager.auth_storage.store_auth_data(
-            EMAIL, make_tokens(expires_at=time.time() - 60), make_site()
-        )
-
-        refresh_response = Mock()
-        refresh_response.status_code = 200
-        refresh_response.json.return_value = {
-            "access_token": "refreshed-access-token",
-            "refresh_token": "refreshed-refresh-token",
-            "expires_in": 3600,
-        }
-
-        with patch(
-            "powernight.core.auth.tesla_oauth.requests.post",
-            return_value=refresh_response,
-        ) as mock_post:
-            assert manager.refresh_access_token() is True
-
-        post_data = mock_post.call_args.kwargs.get("data") or mock_post.call_args[1]["data"]
-        assert post_data["grant_type"] == "refresh_token"
-        assert post_data["refresh_token"] == "refresh-token-0987654321"
-
-        reloaded = manager.auth_storage.load_auth_data()
-        assert reloaded["access_token"] == "refreshed-access-token"
-        assert reloaded["refresh_token"] == "refreshed-refresh-token"
-        assert reloaded["site"] == {"id": 123456}
-        assert (tmp_path / ".pypowerwall.site").read_text().strip() == "123456"
-        assert manager.auth_storage.is_token_expired(reloaded) is False
-
-    def test_refresh_access_token_http_failure_returns_false(self, tmp_path):
-        manager = TeslaOAuthManager(storage_path=str(tmp_path))
-        manager.auth_storage.store_auth_data(EMAIL, make_tokens(), make_site())
-
-        error_response = Mock()
-        error_response.status_code = 401
-        error_response.text = "unauthorized"
-
-        with patch(
-            "powernight.core.auth.tesla_oauth.requests.post",
-            return_value=error_response,
-        ):
-            assert manager.refresh_access_token() is False
+        post.assert_not_called()
+        assert not hasattr(manager, "refresh_access_token")
+        assert (tmp_path / ".pypowerwall.auth").read_text() == before
 
 
 class TestTeslaOAuthManagerCompletion:
