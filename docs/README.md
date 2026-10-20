@@ -106,9 +106,9 @@ powernight status
 
 1. **Install & Run PowerNight with Docker Compose**
 
-   After 2.0.0 is published, obtain `docker-compose.yml`, `compose.release.yml`,
+   After 2.0.1 is published, obtain `docker-compose.yml`, `compose.release.yml`,
    `.env.example`, and `config.example.yaml` from the tagged repository (or the
-   release assets with `SHA256SUMS`). The release override pins **2.0.0** and
+   release assets with `SHA256SUMS`). The release override pins **2.0.1** and
    persists settings under `/data`; the base file alone still uses unchanged `latest`.
    Follow [the release runbook](releases/2.0.0.md#persistent-release-configuration)
    to seed a fresh config or preserve an upgrade config and verify permissions.
@@ -147,14 +147,14 @@ powernight status
 
 ### Docker Hub (Recommended)
 
-Use `docker-compose.yml` together with `compose.release.yml` after 2.0.0 is
+Use `docker-compose.yml` together with `compose.release.yml` after 2.0.1 is
 published. Both commands in Quick Start include the override so an unchanged
 `latest` cannot be launched accidentally. Keep `PowerNight-Data`, `.env`, and
 both Compose files together. Follow the persistent-config steps in the runbook.
 
 ### GitHub CR (Container Registry)
 
-After publication, the same release is mirrored at `ghcr.io/zaai-com/powernight:2.0.0`. To use GHCR,
+After publication, the same release is mirrored at `ghcr.io/zaai-com/powernight:2.0.1`. To use GHCR,
 change only the service image in the Compose file; preserve the existing `/data`
 mount and environment settings.
 
@@ -163,7 +163,7 @@ mount and environment settings.
 **Recommended for production deployments** - ensures persistent volumes are always configured.
 
 Use the version-pinned Quick Start and persistent-config runbook above. Do not
-run the base file alone for a staged 2.0.0 install.
+run the base file alone for a staged 2.0.1 install.
 
 ### Synology NAS
 
@@ -173,7 +173,7 @@ Optimized for Synology DSM Docker integration:
 
 2. **Create Folder** `/docker/PowerNight-Data` via File Station and add Read&Write permission to 'SYSTEM' user
 
-3. **Pull image** from Docker Hub **via Synology DSM UI**: Go to Registry tab → Search for `zaaicom/powernight` → Download `2.0.0` after publication and configure the persistent YAML as described in the release runbook. Pin a version tag for controlled upgrades, or pull `latest` instead if you want Container Manager to show update notifications (version tags never change, so they never show an update)
+3. **Pull image** from Docker Hub **via Synology DSM UI**: Go to Registry tab → Search for `zaaicom/powernight` → Download `2.0.1` after publication and configure the persistent YAML as described in the release runbook. Pin a version tag for controlled upgrades, or pull `latest` instead if you want Container Manager to show update notifications (version tags never change, so they never show an update)
 
 4. **Create container** with:
    - **Port Settings**: Local Port 8020 → Container Port 8020
@@ -241,7 +241,7 @@ This Vite configuration reads the shell environment, not `.env` files.
 
 ## Releases
 
-See [2.0.0 release notes, upgrade checks, and rollback](releases/2.0.0.md).
+See [2.0.1 release notes](releases/2.0.1.md) and [2.0.0 release notes, upgrade checks, and rollback](releases/2.0.0.md).
 Version tags are staged before `latest`; local testing is not a live canary.
 
 ## Security

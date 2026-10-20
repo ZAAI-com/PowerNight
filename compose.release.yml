@@ -1,6 +1,6 @@
 # Combine with docker-compose.yml; never start this override on its own.
 services:
   PowerNight:
-    image: zaaicom/powernight:2.0.0
+    image: zaaicom/powernight:2.0.1
     environment:
       POWERNIGHT_CONFIG_PATH: /data/config.yaml
