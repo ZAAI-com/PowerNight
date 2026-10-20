@@ -8,7 +8,7 @@ import os
 import threading
 from typing import Optional, Generator
 from contextlib import contextmanager
-from sqlalchemy import create_engine, text
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.exc import SQLAlchemyError
@@ -28,8 +28,8 @@ class DatabaseManager:
             database_url: Database connection URL. If None, will use config.
         """
         self.database_url = database_url or self._get_database_url()
-        self.engine = None
-        self.SessionLocal = None
+        self.engine: Optional[Engine] = None
+        self.SessionLocal: Optional[sessionmaker[Session]] = None
         self._initialized = False
     
     def _get_database_url(self) -> str:

@@ -235,7 +235,8 @@ class Planner:
         if task_id in self._registered_tasks:
             # Execute registered task
             executor = self._registered_tasks[task_id]['executor']
-            return executor.execute()
+            result: Dict[str, Any] = executor.execute()
+            return result
         else:
             # Load from database and execute
             from .task_executor import TaskExecutor

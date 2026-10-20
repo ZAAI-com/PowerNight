@@ -4,7 +4,11 @@ Tesla OAuth authentication API endpoints.
 Handles web-based OAuth flow, token management, and Powerwall discovery.
 """
 
-from flask import Blueprint, current_app, request, jsonify, session
+from contextlib import contextmanager
+from typing import Any, Dict, Iterator, Optional
+
+from flask import Blueprint, Flask, current_app, request, jsonify, session
+from flask.typing import ResponseReturnValue
 from datetime import datetime, timezone
 
 from ...core.auth.tesla_oauth import TeslaOAuthManager
@@ -18,10 +22,10 @@ auth_blueprint = Blueprint('auth', __name__, url_prefix='/api/auth')
 logger = get_logger()
 
 # Global OAuth manager instance
-oauth_manager: TeslaOAuthManager = None
+oauth_manager: TeslaOAuthManager = None  # type: ignore[assignment]  # set by init_auth_api() at startup
 
 
-def init_auth_api(app):
+def init_auth_api(app: Flask) -> None:
     """Initialize OAuth API with Flask app."""
     global oauth_manager
     # Use persistent data path from environment, fallback to local data directory
@@ -31,12 +35,12 @@ def init_auth_api(app):
     app.register_blueprint(auth_blueprint)
 
 
-def _shared_connector():
+def _shared_connector() -> Any:
     """Return the application's long-lived Powerwall connector, when available."""
     return getattr(current_app, 'powerwall_connector', None)
 
 
-def _shared_connection_status():
+def _shared_connection_status() -> Dict[str, Any]:
     """Return a JSON-safe snapshot of live Tesla connection state."""
     connector = _shared_connector()
     if connector is None or not hasattr(connector, 'get_connection_status'):
@@ -63,7 +67,17 @@ def _shared_connection_status():
     }
 
 
-def _connect_shared_connector(force=False):
+@contextmanager
+def _shared_cloud_session() -> Iterator[Any]:
+    """Use the shared connector's live pypowerwall session under its lock."""
+    connector = _shared_connector()
+    if connector is None:
+        raise RuntimeError('Powerwall connector is not available')
+    with connector.cloud_session() as pw:
+        yield pw
+
+
+def _connect_shared_connector(force: bool = False) -> Dict[str, Any]:
     """Connect the shared connector used by the scheduler and manual commands."""
     connector = _shared_connector()
     if connector is None:
@@ -76,7 +90,7 @@ def _connect_shared_connector(force=False):
 
 @auth_blueprint.route('/tesla/status', methods=['GET'])
 @require_auth
-def get_auth_status():
+def get_auth_status() -> ResponseReturnValue:
     """
     Get current Tesla authentication status.
     
@@ -103,7 +117,7 @@ def get_auth_status():
 
 @auth_blueprint.route('/tesla/info', methods=['GET'])
 @require_auth
-def get_auth_info():
+def get_auth_info() -> ResponseReturnValue:
     """
     Get detailed Tesla authentication information for display on settings page.
     
@@ -127,7 +141,7 @@ def get_auth_info():
             })
         
         # Get detailed auth data
-        auth_data = oauth_manager.auth_storage.load_auth_data()
+        auth_data = oauth_manager.auth_storage.load_auth_data() or {}
         storage_info = oauth_manager.auth_storage.get_storage_info()
         
         # Prepare response with masked sensitive data
@@ -163,7 +177,7 @@ def get_auth_info():
         }), 500
 
 
-def _mask_token(token) -> str:
+def _mask_token(token: Optional[str]) -> str:
     """
     Mask sensitive token data for display.
     
@@ -185,7 +199,7 @@ def _mask_token(token) -> str:
 
 # New Auth Setup Endpoints
 
-def _setup_allowed():
+def _setup_allowed() -> bool:
     """
     Decide whether an OAuth setup request may proceed.
 
@@ -210,7 +224,7 @@ def _setup_allowed():
         return False
 
 
-def _setup_denied_response():
+def _setup_denied_response() -> ResponseReturnValue:
     """Standard 401 response for blocked setup requests."""
     return jsonify({
         'success': False,
@@ -221,7 +235,7 @@ def _setup_denied_response():
 
 
 @auth_blueprint.route('/setup/start', methods=['POST'])
-def start_auth_setup():
+def start_auth_setup() -> ResponseReturnValue:
     """
     Start Tesla OAuth setup flow.
     
@@ -273,14 +287,14 @@ def start_auth_setup():
 
 
 @auth_blueprint.route('/setup/callback', methods=['POST'])
-def process_callback():
+def process_callback() -> ResponseReturnValue:
     """
     Process Tesla OAuth callback URL.
     
     Body:
         {
             "session_id": "session-id",
-            "callback_url": "https://auth.tesla.com/void/callback?code=...&state=..."
+            "callback_url": "tesla://auth/callback?code=...&state=..."
         }
         
     Returns:
@@ -326,8 +340,63 @@ def process_callback():
         }), 500
 
 
+@auth_blueprint.route('/setup/tokens', methods=['POST'])
+def import_tokens() -> ResponseReturnValue:
+    """
+    Start Tesla setup from tokens created by ``python -m pypowerwall authtoken``.
+
+    Body:
+        {
+            "email": "user@tesla.com",
+            "refresh_token": "...",
+            "access_token": "..."
+        }
+
+    Returns:
+        JSON response with session ID and sites list
+    """
+    if not _setup_allowed():
+        return _setup_denied_response()
+    try:
+        data = request.get_json(silent=True) or {}
+        email = str(data.get('email') or '').strip()
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required',
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }), 400
+
+        oauth_manager.cleanup_expired_sessions()
+        result = oauth_manager.import_tokens(
+            email, str(data.get('refresh_token') or ''), str(data.get('access_token') or '')
+        )
+
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'session_id': result['session_id'],
+                'sites': result['sites'],
+                'expires_at': safe_format_datetime(result.get('expires_at')),
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            })
+        return jsonify({
+            'success': False,
+            'error': result.get('error', 'Failed to import tokens'),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 400
+
+    except Exception as e:
+        logger.log_error(ComponentType.WEB, "Failed to import Tesla tokens", e)
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+
 @auth_blueprint.route('/setup/complete', methods=['POST'])
-def complete_auth_setup():
+def complete_auth_setup() -> ResponseReturnValue:
     """
     Complete Tesla OAuth setup with site selection.
     
@@ -408,7 +477,7 @@ def complete_auth_setup():
 
 @auth_blueprint.route('/setup/status/<session_id>', methods=['GET'])
 @require_auth
-def get_setup_status(session_id):
+def get_setup_status(session_id: str) -> ResponseReturnValue:
     """
     Get status of an auth setup session.
     
@@ -438,43 +507,9 @@ def get_setup_status(session_id):
 
 
 
-@auth_blueprint.route('/tesla/refresh', methods=['POST'])
-@require_auth
-def refresh_access_token():
-    """
-    Refresh Tesla access token.
-    
-    Returns:
-        JSON response with refresh result
-    """
-    try:
-        success = oauth_manager.refresh_access_token()
-        
-        if success:
-            return jsonify({
-                'success': True,
-                'message': 'Token refreshed successfully',
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to refresh token',
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 400
-        
-    except Exception as e:
-        logger.log_error(ComponentType.WEB, "Token refresh error", e)
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }), 500
-
-
 @auth_blueprint.route('/tesla/logout', methods=['POST'])
 @require_auth
-def logout():
+def logout() -> ResponseReturnValue:
     """
     Logout and revoke Tesla tokens.
     
@@ -514,7 +549,7 @@ def logout():
 
 @auth_blueprint.route('/tesla/powerwalls', methods=['GET'])
 @require_auth
-def get_powerwalls():
+def get_powerwalls() -> ResponseReturnValue:
     """
     Test pypowerwall connection and get basic Powerwall info.
     
@@ -533,8 +568,13 @@ def get_powerwalls():
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 503
 
-        # Test pypowerwall connection using stored auth data
-        result = oauth_manager.test_pypowerwall_connection("")
+        # Reuse the shared session: a new one would need a fresh Tesla login
+        try:
+            with _shared_cloud_session() as pw:
+                result = oauth_manager.describe_powerwall(pw)
+        except Exception as connection_error:
+            result = {'success': False, 'error': _shared_connection_status().get('connection_error')
+                      or f'Tesla cloud connection failed ({type(connection_error).__name__})'}
 
         if result['success']:
             return jsonify({
@@ -564,7 +604,7 @@ def get_powerwalls():
 
 @auth_blueprint.route('/tesla/test-connection', methods=['POST'])
 @require_auth
-def test_connection():
+def test_connection() -> ResponseReturnValue:
     """
     Test pypowerwall cloud mode connection.
     
@@ -586,7 +626,9 @@ def test_connection():
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 503
 
-        connection_status = _connect_shared_connector(force=True)
+        # Do not force a reconnect: dropping a healthy session would need a
+        # fresh Tesla login token to start a new one
+        connection_status = _connect_shared_connector()
         return jsonify({
             'success': True,
             'message': 'Tesla cloud connection successful',
@@ -615,9 +657,202 @@ def test_connection():
         }), 502
 
 
+def _site_details_response(pw: Any, auth_data: Dict[str, Any]) -> ResponseReturnValue:
+    """Collect site details from a live pypowerwall session."""
+    # Get comprehensive site data using multiple pypowerwall methods
+    site_data: Dict[str, Any] = {}
+    
+    try:
+        # Log pypowerwall instance info
+        logger.log_system_event(OperationType.INFO, "pypowerwall_debug", metadata={
+            "mode": pw.mode,
+            "cloudmode": pw.cloudmode,
+            "is_connected": pw.is_connected(),
+            "version": pw.version(),
+            "din": pw.din(),
+            "site_name": pw.site_name(),
+            "uptime": pw.uptime()
+        })
+        
+        # Get basic status information
+        try:
+            status_data = pw.status()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_status", metadata={"data": status_data})
+            if status_data:
+                site_data.update(status_data)
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.status() failed: {e}", e)
+        
+        # Get power information
+        try:
+            power_data = pw.power()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_power", metadata={"data": power_data})
+            if power_data:
+                site_data.update(power_data)
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.power() failed: {e}", e)
+        
+        # Get battery level
+        try:
+            battery_level = pw.level()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_level", metadata={"data": battery_level})
+            if battery_level is not None:
+                site_data['battery_level'] = battery_level
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.level() failed: {e}", e)
+        
+        # Get mode information (mode is a property, not a method)
+        try:
+            mode_data = pw.mode
+            logger.log_system_event(OperationType.INFO, "pypowerwall_mode", metadata={"data": mode_data})
+            if mode_data:
+                site_data['mode'] = mode_data
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.mode failed: {e}", e)
+        
+        # Get reserve percentage
+        try:
+            reserve = pw.get_reserve()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_get_reserve", metadata={"data": reserve})
+            if reserve is not None:
+                site_data['reserve'] = reserve
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.get_reserve() failed: {e}", e)
+        
+        # Get grid charging status
+        try:
+            grid_charging = pw.get_grid_charging()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_get_grid_charging", metadata={"data": grid_charging})
+            if grid_charging is not None:
+                site_data['grid_charging'] = grid_charging
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.get_grid_charging() failed: {e}", e)
+        
+        # Get grid export mode
+        try:
+            grid_export = pw.get_grid_export()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_get_grid_export", metadata={"data": grid_export})
+            if grid_export is not None:
+                site_data['grid_export_mode'] = grid_export
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.get_grid_export() failed: {e}", e)
+        
+        # Additional pypowerwall API calls for comprehensive logging
+        try:
+            alerts_data = pw.alerts()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_alerts", metadata={"data": alerts_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.alerts() failed: {e}", e)
+        
+        try:
+            battery_data = pw.battery()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_battery", metadata={"data": battery_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.battery() failed: {e}", e)
+        
+        try:
+            grid_data = pw.grid()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_grid", metadata={"data": grid_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.grid() failed: {e}", e)
+        
+        try:
+            home_data = pw.home()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_home", metadata={"data": home_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.home() failed: {e}", e)
+        
+        try:
+            solar_data = pw.solar()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_solar", metadata={"data": solar_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.solar() failed: {e}", e)
+        
+        try:
+            load_data = pw.load()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_load", metadata={"data": load_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.load() failed: {e}", e)
+        
+        try:
+            site_data_raw = pw.site()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_site", metadata={"data": site_data_raw})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.site() failed: {e}", e)
+        
+        try:
+            vitals_data = pw.vitals()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_vitals", metadata={"data": vitals_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.vitals() failed: {e}", e)
+        
+        try:
+            system_status_data = pw.system_status()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_system_status", metadata={"data": system_status_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.system_status() failed: {e}", e)
+        
+        try:
+            grid_status_data = pw.grid_status()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_grid_status", metadata={"data": grid_status_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.grid_status() failed: {e}", e)
+        
+        try:
+            temps_data = pw.temps()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_temps", metadata={"data": temps_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.temps() failed: {e}", e)
+        
+        try:
+            strings_data = pw.strings()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_strings", metadata={"data": strings_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.strings() failed: {e}", e)
+        
+        try:
+            battery_blocks_data = pw.battery_blocks()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_battery_blocks", metadata={"data": battery_blocks_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.battery_blocks() failed: {e}", e)
+        
+        try:
+            get_mode_data = pw.get_mode()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_get_mode", metadata={"data": get_mode_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.get_mode() failed: {e}", e)
+        
+        try:
+            get_time_remaining_data = pw.get_time_remaining()
+            logger.log_system_event(OperationType.INFO, "pypowerwall_get_time_remaining", metadata={"data": get_time_remaining_data})
+        except Exception as e:
+            logger.log_error(ComponentType.WEB, f"pw.get_time_remaining() failed: {e}", e)
+        
+        # Add site information from auth data
+        site_data['site_name'] = auth_data['site'].get('name', 'Unknown')
+        site_data['site_id'] = auth_data['site'].get('id', 'Unknown')
+        
+        # Add current timestamp
+        site_data['timestamp'] = format_datetime_for_display(datetime.now(timezone.utc))
+        
+        return jsonify({
+            'success': True,
+            'data': site_data,
+            'timestamp': format_datetime_for_display(datetime.now(timezone.utc))
+        })
+        
+    except Exception as data_error:
+        logger.log_error(ComponentType.WEB, "Failed to fetch specific site data", data_error)
+        return jsonify({
+            'success': False,
+            'error': f'Failed to fetch site details: {str(data_error)}',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+
 @auth_blueprint.route('/site-details', methods=['GET'])
 @require_auth
-def get_site_details():
+def get_site_details() -> ResponseReturnValue:
     """
     Get detailed information for the authenticated energy site using pypowerwall.
 
@@ -625,11 +860,7 @@ def get_site_details():
         JSON response with comprehensive site details from multiple pypowerwall methods
     """
     try:
-        import pypowerwall
-
-        # Get valid access token
-        access_token = oauth_manager.get_valid_access_token()
-        if not access_token:
+        if not oauth_manager.has_credentials():
             return jsonify({
                 'success': False,
                 'error': 'No valid authentication token available',
@@ -647,207 +878,21 @@ def get_site_details():
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 404
 
-        # Create pypowerwall Cloud instance using the same method as test_connection
-        # This uses the stored auth data and authpath for proper authentication
-        pw = pypowerwall.Powerwall(
-            email=auth_data['email'],
-            cloudmode=True,
-            authmode="token",
-            authpath=str(oauth_manager.auth_storage.storage_path) + "/",
-            timeout=30,
-            siteid=auth_data['site'].get('id'),
-            failover=False,
-        )
-
-        # Get comprehensive site data using multiple pypowerwall methods
-        site_data = {}
-        
+        # Reuse the shared session (a new one would need a fresh Tesla login)
+        # and hold it for the whole request so scheduled commands never run
+        # on the same client concurrently. The helper handles its own errors,
+        # so anything caught here comes from acquiring the session.
         try:
-            # Log pypowerwall instance info
-            logger.log_system_event(OperationType.INFO, "pypowerwall_debug", metadata={
-                "mode": pw.mode,
-                "cloudmode": pw.cloudmode,
-                "is_connected": pw.is_connected(),
-                "version": pw.version(),
-                "din": pw.din(),
-                "site_name": pw.site_name(),
-                "uptime": pw.uptime()
-            })
-            
-            # Get basic status information
-            try:
-                status_data = pw.status()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_status", metadata={"data": status_data})
-                if status_data:
-                    site_data.update(status_data)
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.status() failed: {e}", e)
-            
-            # Get power information
-            try:
-                power_data = pw.power()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_power", metadata={"data": power_data})
-                if power_data:
-                    site_data.update(power_data)
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.power() failed: {e}", e)
-            
-            # Get battery level
-            try:
-                battery_level = pw.level()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_level", metadata={"data": battery_level})
-                if battery_level is not None:
-                    site_data['battery_level'] = battery_level
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.level() failed: {e}", e)
-            
-            # Get mode information (mode is a property, not a method)
-            try:
-                mode_data = pw.mode
-                logger.log_system_event(OperationType.INFO, "pypowerwall_mode", metadata={"data": mode_data})
-                if mode_data:
-                    site_data['mode'] = mode_data
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.mode failed: {e}", e)
-            
-            # Get reserve percentage
-            try:
-                reserve = pw.get_reserve()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_get_reserve", metadata={"data": reserve})
-                if reserve is not None:
-                    site_data['reserve'] = reserve
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.get_reserve() failed: {e}", e)
-            
-            # Get grid charging status
-            try:
-                grid_charging = pw.get_grid_charging()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_get_grid_charging", metadata={"data": grid_charging})
-                if grid_charging is not None:
-                    site_data['grid_charging'] = grid_charging
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.get_grid_charging() failed: {e}", e)
-            
-            # Get grid export mode
-            try:
-                grid_export = pw.get_grid_export()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_get_grid_export", metadata={"data": grid_export})
-                if grid_export is not None:
-                    site_data['grid_export_mode'] = grid_export
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.get_grid_export() failed: {e}", e)
-            
-            # Additional pypowerwall API calls for comprehensive logging
-            try:
-                alerts_data = pw.alerts()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_alerts", metadata={"data": alerts_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.alerts() failed: {e}", e)
-            
-            try:
-                battery_data = pw.battery()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_battery", metadata={"data": battery_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.battery() failed: {e}", e)
-            
-            try:
-                grid_data = pw.grid()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_grid", metadata={"data": grid_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.grid() failed: {e}", e)
-            
-            try:
-                home_data = pw.home()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_home", metadata={"data": home_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.home() failed: {e}", e)
-            
-            try:
-                solar_data = pw.solar()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_solar", metadata={"data": solar_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.solar() failed: {e}", e)
-            
-            try:
-                load_data = pw.load()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_load", metadata={"data": load_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.load() failed: {e}", e)
-            
-            try:
-                site_data_raw = pw.site()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_site", metadata={"data": site_data_raw})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.site() failed: {e}", e)
-            
-            try:
-                vitals_data = pw.vitals()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_vitals", metadata={"data": vitals_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.vitals() failed: {e}", e)
-            
-            try:
-                system_status_data = pw.system_status()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_system_status", metadata={"data": system_status_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.system_status() failed: {e}", e)
-            
-            try:
-                grid_status_data = pw.grid_status()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_grid_status", metadata={"data": grid_status_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.grid_status() failed: {e}", e)
-            
-            try:
-                temps_data = pw.temps()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_temps", metadata={"data": temps_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.temps() failed: {e}", e)
-            
-            try:
-                strings_data = pw.strings()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_strings", metadata={"data": strings_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.strings() failed: {e}", e)
-            
-            try:
-                battery_blocks_data = pw.battery_blocks()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_battery_blocks", metadata={"data": battery_blocks_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.battery_blocks() failed: {e}", e)
-            
-            try:
-                get_mode_data = pw.get_mode()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_get_mode", metadata={"data": get_mode_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.get_mode() failed: {e}", e)
-            
-            try:
-                get_time_remaining_data = pw.get_time_remaining()
-                logger.log_system_event(OperationType.INFO, "pypowerwall_get_time_remaining", metadata={"data": get_time_remaining_data})
-            except Exception as e:
-                logger.log_error(ComponentType.WEB, f"pw.get_time_remaining() failed: {e}", e)
-            
-            # Add site information from auth data
-            site_data['site_name'] = auth_data['site'].get('name', 'Unknown')
-            site_data['site_id'] = auth_data['site'].get('id', 'Unknown')
-            
-            # Add current timestamp
-            site_data['timestamp'] = format_datetime_for_display(datetime.now(timezone.utc))
-            
-            return jsonify({
-                'success': True,
-                'data': site_data,
-                'timestamp': format_datetime_for_display(datetime.now(timezone.utc))
-            })
-            
-        except Exception as data_error:
-            logger.log_error(ComponentType.WEB, "Failed to fetch specific site data", data_error)
+            with _shared_cloud_session() as pw:
+                return _site_details_response(pw, auth_data)
+        except Exception as connection_error:
+            logger.log_error(ComponentType.WEB, "Tesla cloud session unavailable for site details", connection_error)
             return jsonify({
                 'success': False,
-                'error': f'Failed to fetch site details: {str(data_error)}',
+                'error': _shared_connection_status().get('connection_error')
+                or 'Tesla cloud connection failed. Check Settings and the container logs.',
                 'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 500
+            }), 502
 
     except Exception as e:
         logger.log_error(ComponentType.WEB, "Failed to fetch site details", e)

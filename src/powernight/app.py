@@ -2,13 +2,19 @@ import logging
 import signal
 import time
 import threading
-from typing import Optional
+from types import FrameType
+from typing import TYPE_CHECKING, Optional
+
 
 from .core.database import db_migration
 from .core.powerwall import initialize_powerwall_connector, PowerwallError
 from .core.config import get_config_manager, get_config, load_config
 from .core.planner import get_planner
 from .web import create_app
+
+if TYPE_CHECKING:
+    from .core.powerwall import PowerwallConnector
+    from .web.app import PowerNightFlask
 
 
 class PowerNightApp:
@@ -19,23 +25,23 @@ class PowerNightApp:
     configuration, scheduling, and web interface.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the PowerNight application."""
         self.logger = logging.getLogger(__name__)
         self.planner = get_planner()
         self.config_manager = get_config_manager()
         self._shutdown_requested = False
-        self.flask_app = None
-        self.web_thread = None
+        self.flask_app: Optional["PowerNightFlask"] = None
+        self.web_thread: Optional[threading.Thread] = None
 
         # --- Shared components ---
-        self.powerwall_connector = None
+        self.powerwall_connector: Optional["PowerwallConnector"] = None
 
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
-    def _signal_handler(self, signum: int, frame) -> None:
+    def _signal_handler(self, signum: int, frame: Optional[FrameType]) -> None:
         """Handle shutdown signals."""
         signal_name = signal.Signals(signum).name
         self.logger.info(f"Received {signal_name} signal, initiating graceful shutdown")
@@ -91,12 +97,13 @@ class PowerNightApp:
             # Initialize Powerwall connector and store it
             self.logger.info("Initializing Powerwall connector")
             try:
-                self.powerwall_connector = initialize_powerwall_connector(config)
+                connector = initialize_powerwall_connector(config)
+                self.powerwall_connector = connector
                 self.logger.info("Powerwall connector initialized")
                 
                 # Attempt to connect the PowerwallConnector
                 self.logger.info("Connecting to Powerwall...")
-                if self.powerwall_connector.connect():
+                if connector.connect():
                     self.logger.info("Powerwall connected successfully")
                 else:
                     self.logger.warning("Failed to connect to Powerwall, but connector is available")
@@ -171,20 +178,21 @@ class PowerNightApp:
             # No need to start it again here
 
             # Create Flask app and pass the connector
-            self.flask_app = create_app(
+            flask_app = create_app(
                 config=config,
                 testing=False,
                 powerwall_connector=self.powerwall_connector
             )
+            self.flask_app = flask_app
 
             # Store references for cross-component access
-            self.flask_app.planner = self.planner
-            self.flask_app.config_manager = self.config_manager
+            flask_app.planner = self.planner
+            flask_app.config_manager = self.config_manager
 
             # Start Flask in a separate thread
-            def run_flask():
+            def run_flask() -> None:
                 try:
-                    self.flask_app.run(
+                    flask_app.run(
                         host=config.web_interface.host,
                         port=config.web_interface.port,
                         debug=config.web_interface.debug,
@@ -194,8 +202,9 @@ class PowerNightApp:
                 except Exception as e:
                     self.logger.error(f"Flask web server error: {e}")
 
-            self.web_thread = threading.Thread(target=run_flask, daemon=True)
-            self.web_thread.start()
+            web_thread = threading.Thread(target=run_flask, daemon=True)
+            self.web_thread = web_thread
+            web_thread.start()
 
             self.logger.info(f"Web interface started on {config.web_interface.host}:{config.web_interface.port}")
             return True

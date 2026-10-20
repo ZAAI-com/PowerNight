@@ -153,7 +153,7 @@ class TestAuthenticationBoundaries:
         assert client.get("/api/v1/auth/check", headers=headers).status_code == 200
 
     @pytest.mark.parametrize("client_fixture", ["open_client", "auth_client"])
-    def test_failed_tesla_refresh_does_not_reject_app_login(
+    def test_unavailable_tesla_session_does_not_reject_app_login(
         self, request, client_fixture, monkeypatch
     ):
         client = request.getfixturevalue(client_fixture)
@@ -161,18 +161,19 @@ class TestAuthenticationBoundaries:
 
         oauth = auth_api.oauth_manager
         monkeypatch.setattr(oauth.auth_storage, "load_auth_data", lambda: {
+            "email": "owner@example.com",
             "access_token": "expired-tesla-token",
+            "refresh_token": "refresh-token",
+            "site": {"id": 123},
         })
-        monkeypatch.setattr(oauth.auth_storage, "is_token_expired", lambda data: True)
-        refresh = Mock(return_value=False)
-        monkeypatch.setattr(oauth, "refresh_access_token", refresh)
+        session = Mock(side_effect=RuntimeError("Tesla cloud refused the connection"))
+        monkeypatch.setattr(auth_api, "_shared_cloud_session", session)
 
         headers = {"X-API-Key": API_KEY} if client_fixture == "auth_client" else {}
         resp = client.get("/api/auth/site-details", headers=headers)
-        refresh.assert_called_once_with()
-        assert resp.status_code == 503
-        assert resp.json["code"] == "TESLA_AUTH_REQUIRED"
-        assert resp.json["message"] == "Connect or reconnect your Tesla account in Settings."
+        session.assert_called_once_with()
+        assert resp.status_code == 502
+        assert resp.json["success"] is False
         assert client.get("/api/v1/auth/check", headers=headers).status_code == 200
 
     @pytest.mark.parametrize("path", [
@@ -188,7 +189,7 @@ class TestAuthenticationBoundaries:
 
         token_lookup = Mock()
         auth_lookup = Mock()
-        monkeypatch.setattr(auth_api.oauth_manager, "get_valid_access_token", token_lookup)
+        monkeypatch.setattr(auth_api.oauth_manager, "has_credentials", token_lookup)
         monkeypatch.setattr(auth_api.oauth_manager.auth_storage, "has_auth_data", auth_lookup)
         resp = auth_client.get(path, headers=headers)
         assert resp.status_code == 401

@@ -68,7 +68,8 @@ def test_connection_test_uses_shared_connector_and_returns_502(
     assert response.status_code == 502
     assert response.json['data']['connected'] is False
     assert response.json['error'].startswith('Tesla cloud is unreachable')
-    mock_powerwall_connector.disconnect.assert_called_once()
+    # Retrying must not drop a healthy session (a new one needs a fresh login)
+    mock_powerwall_connector.disconnect.assert_not_called()
     mock_powerwall_connector.ensure_connected.assert_called_once()
 
 
@@ -135,3 +136,93 @@ def test_oauth_completion_keeps_credentials_when_live_connection_fails(
     assert response.json['credentials_saved'] is True
     assert response.json['connected'] is False
     assert response.json['connection_error'].startswith('Tesla cloud is unreachable')
+
+
+@pytest.mark.unit
+def test_token_import_returns_setup_session(client, monkeypatch):
+    from powernight.web.api import auth_api
+
+    monkeypatch.setattr(auth_api.oauth_manager.auth_storage, 'has_auth_data', lambda: False)
+    import_tokens = Mock(return_value={
+        'success': True,
+        'session_id': 'session-1',
+        'sites': [{'id': 123, 'name': 'Home'}],
+        'expires_at': None,
+    })
+    monkeypatch.setattr(auth_api.oauth_manager, 'import_tokens', import_tokens)
+
+    response = client.post('/api/auth/setup/tokens', json={
+        'email': ' owner@example.com ',
+        'refresh_token': 'rt',
+        'access_token': 'at',
+    })
+
+    assert response.status_code == 200
+    assert response.json['session_id'] == 'session-1'
+    assert response.json['sites'] == [{'id': 123, 'name': 'Home'}]
+    import_tokens.assert_called_once_with('owner@example.com', 'rt', 'at')
+
+
+@pytest.mark.unit
+def test_token_import_requires_email(client, monkeypatch):
+    from powernight.web.api import auth_api
+
+    monkeypatch.setattr(auth_api.oauth_manager.auth_storage, 'has_auth_data', lambda: False)
+    response = client.post('/api/auth/setup/tokens', json={'refresh_token': 'rt', 'access_token': 'at'})
+
+    assert response.status_code == 400
+    assert response.json['error'] == 'Email is required'
+
+
+@pytest.mark.unit
+def test_sign_out_clears_tokens_and_disconnects(client, mock_powerwall_connector, monkeypatch):
+    from powernight.web.api import auth_api
+
+    monkeypatch.setattr(auth_api.oauth_manager, 'revoke_tokens', Mock(return_value=True))
+
+    response = client.post('/api/auth/tesla/logout')
+
+    assert response.status_code == 200
+    assert response.json['success'] is True
+    mock_powerwall_connector.disconnect.assert_called_once()
+
+
+@pytest.mark.unit
+def test_site_details_reads_inside_the_shared_session(client, monkeypatch):
+    from contextlib import contextmanager
+    from powernight.web.api import auth_api
+
+    monkeypatch.setattr(auth_api.oauth_manager.auth_storage, 'load_auth_data', lambda: {
+        'email': 'owner@example.com',
+        'refresh_token': 'rt',
+        'site': {'id': 123, 'name': 'Home'},
+    })
+    class FakeSession:
+        """pypowerwall stand-in: unknown calls return None like an empty reply."""
+        mode = 'cloud'
+        cloudmode = True
+
+        def __getattr__(self, name):
+            return lambda *args, **kwargs: None
+
+        def level(self):
+            return 81.5
+
+    pw = FakeSession()
+    events = []
+
+    @contextmanager
+    def session():
+        events.append('enter')
+        yield pw
+        events.append('exit')
+
+    monkeypatch.setattr(auth_api, '_shared_cloud_session', session)
+    pw.get_reserve = lambda: events.append('read') or 20
+
+    response = client.get('/api/auth/site-details')
+
+    assert response.status_code == 200
+    assert response.json['data']['battery_level'] == 81.5
+    assert response.json['data']['site_id'] == 123
+    assert events == ['enter', 'read', 'exit']

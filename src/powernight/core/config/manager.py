@@ -10,7 +10,10 @@ import yaml
 import logging
 import threading
 from copy import deepcopy
-from typing import Optional, Dict, Any, List, Union
+from typing import TYPE_CHECKING, Optional, Dict, Any, List, Union
+
+if TYPE_CHECKING:
+    from .backup import ConfigBackupManager, ConfigRecoveryManager
 from pathlib import Path
 
 from .schema import PowerNightConfig, create_default_config
@@ -47,20 +50,20 @@ class ConfigManager:
         self._persisted_data: Optional[Dict[str, Any]] = None
         self._runtime_data: Optional[Dict[str, Any]] = None
         self._file_lock = threading.RLock()
-        self._backup_manager = None
-        self._recovery_manager = None
+        self._backup_manager: Optional["ConfigBackupManager"] = None
+        self._recovery_manager: Optional["ConfigRecoveryManager"] = None
         self._auto_backup = True
         self._auto_recovery = True
         self._initialized = True
 
-    def _get_backup_manager(self):
+    def _get_backup_manager(self) -> "ConfigBackupManager":
         """Lazy initialization of backup manager to avoid circular imports."""
         if self._backup_manager is None:
             from .backup import ConfigBackupManager
             self._backup_manager = ConfigBackupManager()
         return self._backup_manager
 
-    def _get_recovery_manager(self):
+    def _get_recovery_manager(self) -> "ConfigRecoveryManager":
         """Lazy initialization of recovery manager to avoid circular imports."""
         if self._recovery_manager is None:
             from .backup import ConfigRecoveryManager
@@ -577,7 +580,7 @@ class ConfigManager:
         Returns:
             Dictionary with configuration status information
         """
-        status = {
+        status: Dict[str, Any] = {
             'config_loaded': self._config is not None,
             'config_path': str(self._config_path) if self._config_path else None,
             'auto_backup_enabled': self._auto_backup,

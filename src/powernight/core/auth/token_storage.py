@@ -23,7 +23,7 @@ class PyPowerwallAuthStorage:
     and site ID in .pypowerwall.site, exactly as pypowerwall expects.
     """
 
-    def __init__(self, storage_path: str = None):
+    def __init__(self, storage_path: Optional[str] = None) -> None:
         """
         Initialize pypowerwall auth storage.
 
@@ -91,7 +91,7 @@ class PyPowerwallAuthStorage:
             self.logger.error(f"Failed to store pypowerwall auth data: {e}")
             raise
 
-    def _convert_expires_at(self, expires_at_str: str) -> float:
+    def _convert_expires_at(self, expires_at_str: Any) -> float:
         """Convert ISO format expires_at to unix timestamp."""
         try:
             if isinstance(expires_at_str, (int, float)):
@@ -185,6 +185,7 @@ class PyPowerwallAuthStorage:
 
         except Exception as e:
             self.logger.error(f"Failed to clear pypowerwall auth data: {e}")
+            raise
     
     def has_auth_data(self) -> bool:
         """Check if pypowerwall auth data is stored."""

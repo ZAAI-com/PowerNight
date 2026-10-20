@@ -4,10 +4,13 @@ Circuit Breaker Implementation
 Provides circuit breaker functionality for Powerwall operations.
 """
 
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Dict, TypeVar
 from dataclasses import dataclass
 import time
 import threading
+
+
+R = TypeVar('R')
 
 
 @dataclass
@@ -39,11 +42,11 @@ class CircuitBreaker:
         self.health_check: Optional[Callable] = None
         self._lock = threading.Lock()
     
-    def set_health_check(self, health_check: Callable):
+    def set_health_check(self, health_check: Callable[[], bool]) -> None:
         """Set health check function."""
         self.health_check = health_check
     
-    def call(self, func: Callable, *args, **kwargs) -> Any:
+    def call(self, func: Callable[..., R], *args: Any, **kwargs: Any) -> R:
         """Execute function with circuit breaker protection."""
         with self._lock:
             if self.state == "OPEN":
@@ -61,7 +64,7 @@ class CircuitBreaker:
                 self._on_failure()
                 raise e
     
-    def _on_success(self):
+    def _on_success(self) -> None:
         """Handle successful operation."""
         if self.state == "HALF_OPEN":
             self.success_count += 1
@@ -71,7 +74,7 @@ class CircuitBreaker:
         else:
             self.failure_count = max(0, self.failure_count - 1)
     
-    def _on_failure(self):
+    def _on_failure(self) -> None:
         """Handle failed operation."""
         self.failure_count += 1
         self.last_failure_time = time.time()
@@ -81,7 +84,7 @@ class CircuitBreaker:
 
 
 # Global circuit breaker registry
-_circuit_breakers = {}
+_circuit_breakers: Dict[str, "CircuitBreaker"] = {}
 _breaker_lock = threading.Lock()
 
 

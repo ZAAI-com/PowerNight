@@ -64,6 +64,11 @@ const Settings: React.FC = () => {
   const [email, setEmail] = useState('');
   const [callbackUrl, setCallbackUrl] = useState('');
   const [sites, setSites] = useState<Site[]>([]);
+  const [showTokenImport, setShowTokenImport] = useState(false);
+  const [refreshToken, setRefreshToken] = useState('');
+  const [accessToken, setAccessToken] = useState('');
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   // Auth Info State
   const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
@@ -89,14 +94,9 @@ const Settings: React.FC = () => {
     return emailRegex.test(email);
   };
 
-  const validateCallbackUrl = (url: string): boolean => {
-    try {
-      const urlObj = new URL(url);
-      return urlObj.searchParams.has('code') && urlObj.searchParams.has('state');
-    } catch {
-      return false;
-    }
-  };
+  // Accepts the bare tesla://auth/callback URL or a pasted console line containing it
+  const validateCallbackUrl = (text: string): boolean =>
+    /[?&#]code=[^&#\s]+/.test(text) && /[?&#]state=[^&#\s]+/.test(text);
 
   const handleConnect = async () => {
     setError(null);
@@ -143,7 +143,7 @@ const Settings: React.FC = () => {
 
     // Validate callback URL
     if (!validateCallbackUrl(callbackUrl)) {
-      setError('Invalid callback URL. Please copy the complete URL from the Tesla authorization page that contains "code=" and "state=" parameters.');
+      setError('Paste the tesla://auth/callback URL that contains "code=" and "state=" (see the steps above).');
       return;
     }
 
@@ -170,7 +170,7 @@ const Settings: React.FC = () => {
         // Auto-select first site and complete setup
         if (data.sites && data.sites.length > 0) {
           const firstSite = data.sites[0];
-          await completeSetup(firstSite.id);
+          await completeSetup(firstSite.id, sessionId);
         }
       } else {
         setError(data.error || 'Failed to verify callback URL');
@@ -182,14 +182,86 @@ const Settings: React.FC = () => {
     }
   };
 
-  const completeSetup = async (siteId: string) => {
-    if (!sessionId) return;
+  const handleImportTokens = async () => {
+    setError(null);
+
+    if (!validateEmail(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    if (!refreshToken.trim() || !accessToken.trim()) {
+      setError('Paste both the refresh token and the access token');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await api.authenticatedFetch('/api/auth/setup/tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          refresh_token: refreshToken.trim(),
+          access_token: accessToken.trim(),
+        }),
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setSessionId(data.session_id);
+        setSites(data.sites);
+        setCurrentStep('selecting_site');
+        setRefreshToken('');
+        setAccessToken('');
+        if (data.sites && data.sites.length > 0) {
+          await completeSetup(data.sites[0].id, data.session_id);
+        }
+      } else {
+        setError(data.error || 'Failed to import tokens');
+      }
+    } catch {
+      setError('Failed to connect to server');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetSetupFlow = () => {
+    setCurrentStep('initial');
+    setSessionId(null);
+    setCallbackUrl('');
+    setSites([]);
+  };
+
+  const handleSignOut = async () => {
+    setError(null);
+    setSigningOut(true);
+    try {
+      const response = await api.authenticatedFetch('/api/auth/tesla/logout', { method: 'POST' });
+      const data = await response.json();
+      if (data.success) {
+        resetSetupFlow();
+        setConfirmSignOut(false);
+        showToast('Signed out of Tesla. Sign in again to reconnect.', 'success');
+        await fetchAuthInfo();
+      } else {
+        setError(data.error || 'Failed to sign out of Tesla');
+      }
+    } catch {
+      setError('Failed to sign out of Tesla');
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
+  const completeSetup = async (siteId: string, setupSessionId: string | null = sessionId) => {
+    if (!setupSessionId) return;
 
     try {
       const response = await api.authenticatedFetch('/api/auth/setup/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, site_id: siteId }),
+        body: JSON.stringify({ session_id: setupSessionId, site_id: siteId }),
       });
 
       const data = await response.json();
@@ -390,20 +462,85 @@ const Settings: React.FC = () => {
                     </button>
                   </div>
                 </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowTokenImport((value) => !value)}
+                    className="text-sm text-blue-700 hover:underline"
+                  >
+                    {showTokenImport ? 'Hide token import' : 'Or sign in with tokens from pypowerwall'}
+                  </button>
+                </div>
+
+                {showTokenImport && (
+                  <div className="space-y-3 p-4 bg-gray-50 border border-gray-200 rounded-md">
+                    <p className="text-sm text-gray-700">
+                      On a Mac or PC with a screen, run <code className="font-mono">pip install -U pypowerwall</code> and{' '}
+                      <code className="font-mono">python -m pypowerwall authtoken</code>, log in to Tesla, then paste
+                      both tokens here. The access token is only valid for about 8 hours, so paste it right away.
+                    </p>
+                    <div>
+                      <label htmlFor="refreshToken" className="block text-sm font-medium text-gray-700 mb-1">
+                        Refresh Token
+                      </label>
+                      <textarea
+                        id="refreshToken"
+                        value={refreshToken}
+                        onChange={(e) => setRefreshToken(e.target.value)}
+                        rows={2}
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="accessToken" className="block text-sm font-medium text-gray-700 mb-1">
+                        Access Token
+                      </label>
+                      <textarea
+                        id="accessToken"
+                        value={accessToken}
+                        onChange={(e) => setAccessToken(e.target.value)}
+                        rows={3}
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <button
+                      onClick={handleImportTokens}
+                      disabled={isLoading}
+                      className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isLoading ? 'Saving...' : 'Save Tokens'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
             {(currentStep === 'awaiting_login' || currentStep === 'awaiting_callback') && (
               <div className="space-y-4">
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-                  <p className="text-blue-800 text-sm">
-                    ✅ Tesla authorization page opened in new tab. Please log in and authorize PowerNight.
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-md space-y-2 text-sm text-blue-800">
+                  <p>Tesla sign-in opened in a new tab. Before you log in there:</p>
+                  <ol className="list-decimal ml-5 space-y-1">
+                    <li>Open the browser's developer tools in that tab (Chrome: View, Developer, JavaScript Console).</li>
+                    <li>Log in to Tesla. Afterwards the page stays blank or stuck: Tesla redirects to a tesla:// link that only the Tesla app can open.</li>
+                    <li>In the console (or the Network tab), copy the link starting with <code className="font-mono">tesla://auth/callback?code=</code> and paste it below. Pasting the whole console line works too.</li>
+                  </ol>
+                  <p>
+                    If you cannot find the link, use{' '}
+                    <button type="button" onClick={() => { resetSetupFlow(); setShowTokenImport(true); }} className="underline">
+                      sign in with tokens from pypowerwall
+                    </button>{' '}
+                    instead.
                   </p>
                 </div>
 
                 <div>
                   <label htmlFor="callbackUrl" className="block text-sm font-medium text-gray-700 mb-2">
-                    URL of the Tesla Not-Found Page
+                    Tesla Callback Link
                   </label>
                   <div className="flex flex-wrap gap-3">
                     <input
@@ -411,7 +548,7 @@ const Settings: React.FC = () => {
                       id="callbackUrl"
                       value={callbackUrl}
                       onChange={(e) => setCallbackUrl(e.target.value)}
-                      placeholder="https://auth.tesla.com/void/callback?code=abc123&state=xyz789"
+                      placeholder="tesla://auth/callback?code=abc123&state=xyz789"
                       className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
@@ -420,6 +557,14 @@ const Settings: React.FC = () => {
                       className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoading ? 'Verifying...' : 'Verify'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetSetupFlow}
+                      disabled={isLoading}
+                      className="w-full sm:w-auto bg-gray-100 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-200 transition-colors"
+                    >
+                      Cancel
                     </button>
                   </div>
                 </div>
@@ -665,7 +810,37 @@ const Settings: React.FC = () => {
                     >
                       Refresh Auth Info
                     </button>
+                    {confirmSignOut ? (
+                      <>
+                        <button
+                          onClick={handleSignOut}
+                          disabled={signingOut}
+                          className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm disabled:opacity-50"
+                        >
+                          {signingOut ? 'Signing Out...' : 'Confirm Sign Out'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmSignOut(false)}
+                          disabled={signingOut}
+                          className="bg-gray-100 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmSignOut(true)}
+                        className="bg-white text-red-700 border border-red-300 px-4 py-2 rounded-md hover:bg-red-50 transition-colors text-sm"
+                      >
+                        Sign Out of Tesla
+                      </button>
+                    )}
                   </div>
+                  {confirmSignOut && (
+                    <p className="text-sm text-red-700">
+                      Signing out deletes the stored Tesla login. Scheduled tasks cannot change your Powerwall until you sign in again.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">

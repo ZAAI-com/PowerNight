@@ -98,7 +98,7 @@ class ConfigurationChangeRequest:
 class SchemaValidator:
     """Enterprise-grade JSON schema validator with security features."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize validator with schema registry."""
         self.schemas = {
             'backup_reserve': BACKUP_RESERVE_SCHEMA
@@ -197,7 +197,7 @@ class SchemaValidator:
 
     def _sanitize_config_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Sanitize and normalize configuration data."""
-        sanitized = {}
+        sanitized: Dict[str, Any] = {}
 
         for section_name, section_data in data.items():
             if not isinstance(section_data, dict):
@@ -245,7 +245,7 @@ class SchemaValidator:
 
     def _sanitize_backup_reserve_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Sanitize backup reserve data."""
-        sanitized = {}
+        sanitized: Dict[str, Any] = {}
 
         for key, value in data.items():
             if key == 'percentage':

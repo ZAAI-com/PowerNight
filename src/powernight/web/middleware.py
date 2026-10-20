@@ -5,7 +5,10 @@ Flask middleware: CORS, security headers, and lightweight rate limiting.
 import threading
 import time
 
-from flask import Flask, request, jsonify
+from typing import Dict, List, Optional
+
+from flask import Flask, Response, request, jsonify
+from flask.typing import ResponseReturnValue
 from flask_cors import CORS
 
 
@@ -25,7 +28,7 @@ class _SlidingWindowRateLimiter:
     def __init__(self, max_requests: int, window_seconds: float):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self._hits = {}
+        self._hits: Dict[str, List[float]] = {}
         self._lock = threading.Lock()
 
     def allow(self, client_id: str) -> bool:
@@ -57,7 +60,7 @@ def configure_middleware(app: Flask) -> None:
     )
 
     @app.before_request
-    def before_request():
+    def before_request() -> Optional[ResponseReturnValue]:
         """Log each request and enforce rate limits on sensitive paths."""
         app.logger.debug(f"Request: {request.method} {request.url}")
 
@@ -69,9 +72,10 @@ def configure_middleware(app: Flask) -> None:
                     'error': 'Too Many Requests',
                     'message': 'Rate limit exceeded; try again later'
                 }), 429
+        return None
 
     @app.after_request
-    def after_request(response):
+    def after_request(response: Response) -> Response:
         """Log each response and attach security headers."""
         app.logger.debug(f"Response: {response.status_code}")
 
@@ -92,7 +96,7 @@ def configure_middleware(app: Flask) -> None:
         return response
 
     @app.teardown_appcontext
-    def teardown_appcontext(exception=None):
+    def teardown_appcontext(exception: Optional[BaseException] = None) -> None:
         """Clean up application context."""
         if exception:
             app.logger.error(f"App context teardown with exception: {exception}")

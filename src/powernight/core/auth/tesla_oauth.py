@@ -8,9 +8,12 @@ import secrets
 import urllib.parse
 import hashlib
 import base64
-from typing import Optional, Dict, Any, List
+import json
+import re
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone, timedelta
 import requests
+from pypowerwall import tesla_auth
 
 from .token_storage import PyPowerwallAuthStorage
 from ...utils.logging import get_logger
@@ -39,8 +42,15 @@ class TeslaOAuthManager:
     
     # Client ID matching pypowerwall
     CLIENT_ID = "ownerapi"
+
+    # Tesla only accepts the native-app redirect for the ownerapi client. A
+    # browser cannot open tesla://, so the user copies the URL it was sent to.
+    REDIRECT_URI = tesla_auth.REDIRECT_URI
+
+    # Code-exchange access tokens are valid for about 8 hours
+    DEFAULT_ACCESS_TOKEN_LIFETIME = 28800
     
-    def __init__(self, storage_path: str = None):
+    def __init__(self, storage_path: Optional[str] = None) -> None:
         """
         Initialize Tesla OAuth manager.
         
@@ -66,7 +76,7 @@ class TeslaOAuthManager:
             session_id = secrets.token_urlsafe(32)
             
             # Generate PKCE parameters
-            code_verifier = secrets.token_urlsafe(86)  # 86 chars as per pypowerwall
+            code_verifier = secrets.token_urlsafe(32)  # 43 chars, matching pypowerwall
             code_challenge = self._generate_code_challenge(code_verifier)
             state = secrets.token_urlsafe(32)
             
@@ -83,14 +93,12 @@ class TeslaOAuthManager:
             params = {
                 'response_type': 'code',
                 'client_id': self.CLIENT_ID,
-                'redirect_uri': 'https://auth.tesla.com/void/callback',
+                'redirect_uri': self.REDIRECT_URI,
                 'scope': ' '.join(self.SCOPES),
                 'state': state,
                 'code_challenge': code_challenge,
                 'code_challenge_method': 'S256',
                 'login_hint': email,
-                'skip_redirection': 'true',
-                'locale': 'en-US'
             }
             
             auth_url = f"{self.AUTHORIZATION_URL}?{urllib.parse.urlencode(params)}"
@@ -112,7 +120,8 @@ class TeslaOAuthManager:
         
         Args:
             session_id: Session ID for this auth flow
-            callback_url: Full callback URL from Tesla
+            callback_url: The tesla://auth/callback URL, or any pasted text
+                containing it (e.g. a browser console line)
             
         Returns:
             Dictionary with token exchange result and sites
@@ -123,13 +132,10 @@ class TeslaOAuthManager:
             if not session_data:
                 raise ValueError("Invalid or expired session")
             
-            # Parse callback URL
-            parsed_url = urllib.parse.urlparse(callback_url)
-            query_params = urllib.parse.parse_qs(parsed_url.query)
-            
-            code = query_params.get('code', [None])[0]
-            state = query_params.get('state', [None])[0]
-            error = query_params.get('error', [None])[0]
+            query_params = self._parse_callback_params(callback_url)
+            code = query_params.get('code')
+            state = query_params.get('state')
+            error = query_params.get('error')
             
             if error:
                 raise ValueError(f"OAuth error: {error}")
@@ -171,6 +177,78 @@ class TeslaOAuthManager:
                 'error': str(e)
             }
     
+    @staticmethod
+    def _parse_callback_params(text: str) -> Dict[str, str]:
+        """Extract code, state and error from a pasted callback URL or log line."""
+        params: Dict[str, str] = {}
+        for name, value in re.findall(r'[?&#](code|state|error)=([^&#\s\'"]+)', text or ''):
+            params.setdefault(name, urllib.parse.unquote(value))
+        return params
+
+    def import_tokens(self, email: str, refresh_token: str, access_token: str) -> Dict[str, Any]:
+        """
+        Start a setup session from tokens created by ``python -m pypowerwall authtoken``.
+
+        Tesla only accepts access tokens from a fresh native login, so this is
+        the fallback when the browser flow cannot capture the tesla:// redirect.
+
+        Returns:
+            Dictionary with session_id and sites on success
+        """
+        try:
+            refresh_token = (refresh_token or '').strip()
+            access_token = (access_token or '').strip()
+            if not refresh_token or not access_token:
+                raise ValueError("Both the refresh token and the access token are required")
+
+            expires_at = self._access_token_expiry(access_token)
+            if expires_at <= datetime.now(timezone.utc):
+                raise ValueError(
+                    "This access token has expired. Run 'python -m pypowerwall authtoken' again."
+                )
+
+            try:
+                sites = self.get_energy_sites(access_token)
+            except Exception as error:
+                raise ValueError(
+                    "Tesla rejected the access token. Create a fresh one with "
+                    "'python -m pypowerwall authtoken' and paste it right away."
+                ) from error
+
+            session_id = secrets.token_urlsafe(32)
+            self._active_sessions[session_id] = {
+                'email': email,
+                'created_at': datetime.now(timezone.utc),
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'expires_at': expires_at.isoformat(),
+                'sites': sites,
+                'step': 'selecting_site',
+            }
+            self.logger.info(f"Imported Tesla tokens for {email}")
+            return {
+                'success': True,
+                'session_id': session_id,
+                'sites': sites,
+                'expires_at': expires_at.isoformat(),
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to import Tesla tokens: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def _access_token_expiry(self, access_token: str) -> datetime:
+        """Read the exp claim of a Tesla JWT access token (no signature check)."""
+        try:
+            payload = access_token.split('.')[1]
+            claims = json.loads(base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4)))
+            return datetime.fromtimestamp(int(claims['exp']), timezone.utc)
+        except (IndexError, KeyError, TypeError, ValueError):
+            return datetime.now(timezone.utc) + timedelta(seconds=self.DEFAULT_ACCESS_TOKEN_LIFETIME)
+
     def _generate_code_challenge(self, code_verifier: str) -> str:
         """Generate PKCE code challenge from verifier."""
         digest = hashlib.sha256(code_verifier.encode()).digest()
@@ -225,34 +303,21 @@ class TeslaOAuthManager:
             raise
     
     def _exchange_code_for_tokens(self, code: str, code_verifier: str) -> Dict[str, Any]:
-        """Exchange authorization code for access and refresh tokens."""
-        data = {
-            'grant_type': 'authorization_code',
-            'client_id': self.CLIENT_ID,
-            'code': code,
-            'code_verifier': code_verifier,
-            'redirect_uri': 'https://auth.tesla.com/void/callback'
-        }
-        
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'PowerNight/1.0'
-        }
-        
-        response = requests.post(
-            self.TOKEN_URL,
-            data=data,
-            headers=headers,
-            timeout=30
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Token exchange failed: {response.status_code} - {response.text}")
-        
-        token_response = response.json()
+        """Exchange authorization code for access and refresh tokens.
+
+        Delegates to pypowerwall, which speaks HTTP/2 with the TLS settings
+        Tesla's token endpoint now requires and uses the tesla:// redirect.
+        """
+        token_response = tesla_auth._exchange_code(code, code_verifier)
+        # pypowerwall only checks for a refresh token; reject anything else
+        # unusable here with a clear message instead of a KeyError/TypeError
+        if not isinstance(token_response, dict) or not token_response.get('access_token'):
+            raise ValueError("Tesla token exchange failed: no access token in the response")
         
         # Calculate expiration time
-        expires_in = token_response.get('expires_in', 3600)
+        expires_in = token_response.get('expires_in', self.DEFAULT_ACCESS_TOKEN_LIFETIME)
+        if isinstance(expires_in, bool) or not isinstance(expires_in, (int, float)) or expires_in <= 0:
+            raise ValueError("Tesla token exchange failed: invalid token lifetime in the response")
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
         
         return {
@@ -328,123 +393,30 @@ class TeslaOAuthManager:
                 'error': str(e)
             }
     
-    def get_valid_access_token(self) -> Optional[str]:
-        """
-        Get a valid access token from stored auth data.
-        
-        Returns:
-            Valid access token or None if unavailable
+    def has_credentials(self) -> bool:
+        """Return True when a Tesla login is stored.
+
+        PowerNight never refreshes tokens itself: Tesla's owner API rejects
+        access tokens minted by a refresh on a new session (HTTP 403), so the
+        token lifecycle is left to pypowerwall's long-lived cloud session.
         """
         auth_data = self.auth_storage.load_auth_data()
-        if not auth_data:
-            return None
-        
-        # Check if token is expired
-        if self.auth_storage.is_token_expired(auth_data):
-            self.logger.info("Access token expired, attempting refresh")
-            if not self.refresh_access_token():
-                return None
-            
-            # Reload auth data after refresh
-            auth_data = self.auth_storage.load_auth_data()
-        
-        return auth_data.get('access_token') if auth_data else None
+        return bool(auth_data and (auth_data.get('refresh_token') or auth_data.get('access_token')))
 
-    def refresh_access_token(self) -> bool:
+    def describe_powerwall(self, pw: Any) -> Dict[str, Any]:
         """
-        Refresh access token using refresh token.
-        
-        Returns:
-            True if refresh successful, False otherwise
-        """
-        try:
-            auth_data = self.auth_storage.load_auth_data()
-            if not auth_data or 'refresh_token' not in auth_data:
-                self.logger.warning("No refresh token available")
-                return False
-            
-            data = {
-                'grant_type': 'refresh_token',
-                'client_id': self.CLIENT_ID,
-                'refresh_token': auth_data['refresh_token']
-            }
-            
-            headers = {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'PowerNight/1.0'
-            }
-            
-            response = requests.post(
-                self.TOKEN_URL,
-                data=data,
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code != 200:
-                self.logger.error(f"Token refresh failed: {response.status_code} - {response.text}")
-                return False
-            
-            token_response = response.json()
-            
-            # Update tokens
-            expires_in = token_response.get('expires_in', 3600)
-            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
-            
-            updated_tokens = {
-                'access_token': token_response['access_token'],
-                'refresh_token': token_response.get('refresh_token', auth_data['refresh_token']),
-                'expires_at': expires_at.isoformat(),
-                'token_type': 'Bearer'
-            }
-            
-            # Update stored auth data
-            existing_site = auth_data.get('site') or {}
-            self.auth_storage.store_auth_data(
-                email=auth_data['email'],
-                tokens=updated_tokens,
-                site={
-                    'id': existing_site.get('id'),
-                    'name': existing_site.get('name'),
-                    'type': existing_site.get('type')
-                }
-            )
-            
-            self.logger.info("Access token refreshed successfully")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Failed to refresh access token: {e}")
-            return False
-    
-    def test_pypowerwall_connection(self, email: str) -> Dict[str, Any]:
-        """
-        Test pypowerwall cloud mode connection and get basic Powerwall info.
+        Summarize the Powerwall reachable through an existing pypowerwall session.
         
         Args:
-            email: Tesla account email (for compatibility, but uses stored auth data)
+            pw: Connected pypowerwall cloud session (the shared connector's)
             
         Returns:
             Dictionary with connection test result and basic Powerwall info
         """
         try:
-            import pypowerwall
-            
-            # Get auth data
             auth_data = self.auth_storage.load_auth_data()
             if not auth_data:
                 raise Exception("No authentication data found. Please complete setup first.")
-            
-            # Test connection using pypowerwall cloud mode with stored auth
-            pw = pypowerwall.Powerwall(
-                email=auth_data['email'],
-                cloudmode=True,
-                authmode="token",
-                authpath=str(self.auth_storage.storage_path) + "/",
-                timeout=30,
-                siteid=(auth_data.get('site') or {}).get('id'),
-                failover=False,
-            )
             
             # Test basic connectivity by getting site info
             site_info = pw.site()
@@ -500,24 +472,24 @@ class TeslaOAuthManager:
             if not auth_data:
                 return True
             
-            # Revoke access token
-            if 'access_token' in auth_data:
-                data = {
-                    'token': auth_data['access_token'],
-                    'token_type_hint': 'access_token'
-                }
-                
-                headers = {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': 'PowerNight/1.0'
-                }
-                
-                requests.post(
-                    self.REVOKE_URL,
-                    data=data,
-                    headers=headers,
-                    timeout=30
-                )
+            # Best-effort revocation: signing out must still clear local
+            # credentials when Tesla is unreachable or rejects the request
+            if auth_data.get('access_token'):
+                try:
+                    requests.post(
+                        self.REVOKE_URL,
+                        data={
+                            'token': auth_data['access_token'],
+                            'token_type_hint': 'access_token'
+                        },
+                        headers={
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'User-Agent': 'PowerNight/1.0'
+                        },
+                        timeout=30
+                    )
+                except requests.RequestException as error:
+                    self.logger.warning(f"Tesla token revocation failed: {error}")
             
             # Clear stored auth data
             self.auth_storage.clear_auth_data()

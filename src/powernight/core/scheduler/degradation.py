@@ -4,9 +4,13 @@ Service Degradation Management
 Provides graceful degradation functionality for Powerwall operations.
 """
 
-from typing import Dict, Any, Optional
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 from dataclasses import dataclass
 from enum import Enum
+
+
+R = TypeVar('R')
+StateChangeCallback = Callable[['ServiceState', 'ServiceState'], None]
 
 
 class ServiceState(Enum):
@@ -43,13 +47,13 @@ class DegradationManager:
         self.state = ServiceState.HEALTHY
         self.failure_count = 0
         self.success_count = 0
-        self._state_change_callbacks = []
+        self._state_change_callbacks: List[StateChangeCallback] = []
     
-    def add_state_change_callback(self, callback):
+    def add_state_change_callback(self, callback: StateChangeCallback) -> None:
         """Add a callback for state change events."""
         self._state_change_callbacks.append(callback)
     
-    def _notify_state_change(self, old_state: ServiceState, new_state: ServiceState):
+    def _notify_state_change(self, old_state: ServiceState, new_state: ServiceState) -> None:
         """Notify callbacks of state changes."""
         for callback in self._state_change_callbacks:
             try:
@@ -57,7 +61,7 @@ class DegradationManager:
             except Exception:
                 pass  # Ignore callback errors
     
-    def record_success(self):
+    def record_success(self) -> None:
         """Record a successful operation."""
         old_state = self.state
         self.success_count += 1
@@ -67,7 +71,7 @@ class DegradationManager:
             self.success_count = 0
             self._notify_state_change(old_state, self.state)
     
-    def record_failure(self):
+    def record_failure(self) -> None:
         """Record a failed operation."""
         old_state = self.state
         self.failure_count += 1
@@ -86,7 +90,13 @@ class DegradationManager:
         """Get delay before retry."""
         return self.config.retry_delay
     
-    def execute_with_degradation(self, operation=None, fallback=None, cache_key=None, **kwargs):
+    def execute_with_degradation(
+        self,
+        operation: Optional[Callable[[], R]] = None,
+        fallback: Optional[Callable[[], R]] = None,
+        cache_key: Optional[str] = None,
+        **kwargs: Any,
+    ) -> R:
         """Execute a function with degradation management."""
         try:
             # Try primary operation first
@@ -112,7 +122,7 @@ class DegradationManager:
 
 
 # Global degradation manager registry
-_degradation_managers = {}
+_degradation_managers: Dict[str, "DegradationManager"] = {}
 
 
 def get_degradation_manager(name: str, config: Optional[DegradationConfig] = None) -> DegradationManager:

@@ -17,7 +17,7 @@ import statistics
 import psutil
 import os
 
-from flask import request, g, current_app
+from flask import Flask, Response, request, g, current_app
 
 
 @dataclass
@@ -98,11 +98,11 @@ class MetricsCollector:
         self.logger = logging.getLogger(__name__)
 
         # Threading for background collection
-        self.collection_thread = None
+        self.collection_thread: Optional[threading.Thread] = None
         self.stop_collection = threading.Event()
 
         # System monitoring baseline
-        self._network_baseline = None
+        self._network_baseline: Optional[Dict[str, float]] = None
         self._setup_network_baseline()
 
     def _setup_network_baseline(self) -> None:
@@ -122,15 +122,16 @@ class MetricsCollector:
         if self.collection_thread and self.collection_thread.is_alive():
             return
 
-        def collect_system_metrics():
+        def collect_system_metrics() -> None:
             while not self.stop_collection.wait(interval):
                 try:
                     self.collect_system_metrics()
                 except Exception as e:
                     self.logger.error(f"Error collecting system metrics: {e}")
 
-        self.collection_thread = threading.Thread(target=collect_system_metrics, daemon=True)
-        self.collection_thread.start()
+        collection_thread = threading.Thread(target=collect_system_metrics, daemon=True)
+        self.collection_thread = collection_thread
+        collection_thread.start()
         self.logger.info("Started background metrics collection")
 
     def stop_background_collection(self) -> None:
@@ -150,7 +151,7 @@ class MetricsCollector:
         self.metrics[name].append(point)
 
     def record_request(self, method: str, endpoint: str, status_code: int,
-                      duration_ms: float, **kwargs) -> None:
+                      duration_ms: float, **kwargs: Any) -> None:
         """Record HTTP request metrics."""
         metrics = RequestMetrics(
             method=method,
@@ -185,8 +186,8 @@ class MetricsCollector:
             disk_usage_percent = (disk.used / disk.total) * 100
 
             # Network (delta since baseline)
-            network_sent_mb = 0
-            network_recv_mb = 0
+            network_sent_mb = 0.0
+            network_recv_mb = 0.0
             if self._network_baseline:
                 try:
                     net_io = psutil.net_io_counters()
@@ -305,7 +306,7 @@ class MetricsCollector:
         if metric_name not in self.metrics:
             return {'error': f'Metric {metric_name} not found'}
 
-        metrics_data = self.metrics[metric_name]
+        metrics_data: List[Any] = list(self.metrics[metric_name])
 
         # Filter by time window if specified
         if time_window:
@@ -346,12 +347,12 @@ class MetricsCollector:
         total_requests = len(requests_data)
 
         # Status code distribution
-        status_codes = defaultdict(int)
+        status_codes: Dict[int, int] = defaultdict(int)
         for req in requests_data:
             status_codes[req.status_code] += 1
 
         # Endpoint popularity
-        endpoints = defaultdict(int)
+        endpoints: Dict[str, int] = defaultdict(int)
         for req in requests_data:
             endpoints[req.endpoint] += 1
 
@@ -395,7 +396,7 @@ class MetricsCollector:
         ]
 
         # Group by type and return only the most recent of each type
-        alert_types = {}
+        alert_types: Dict[str, Dict[str, Any]] = {}
         for alert in recent_alerts:
             alert_type = alert['type']
             if alert_type not in alert_types or alert['timestamp'] > alert_types[alert_type]['timestamp']:
@@ -416,10 +417,11 @@ class MetricsCollector:
         """Export metrics as JSON."""
         cutoff_time = datetime.now() - time_window if time_window else None
 
-        export_data = {
+        exported_metrics: Dict[str, List[Dict[str, Any]]] = {}
+        export_data: Dict[str, Any] = {
             'export_timestamp': datetime.now().isoformat(),
             'time_window_hours': time_window.total_seconds() / 3600 if time_window else None,
-            'metrics': {},
+            'metrics': exported_metrics,
             'request_metrics': [],
             'system_metrics': [],
             'alerts': self.get_current_alerts()
@@ -431,7 +433,7 @@ class MetricsCollector:
                 p for p in points
                 if not cutoff_time or p.timestamp > cutoff_time
             ]
-            export_data['metrics'][name] = [p.to_dict() for p in filtered_points]
+            exported_metrics[name] = [p.to_dict() for p in filtered_points]
 
         # Export request metrics
         filtered_requests = [
@@ -484,11 +486,11 @@ def get_metrics_collector() -> MetricsCollector:
     return _metrics_collector
 
 
-def performance_monitor(metric_name: Optional[str] = None):
+def performance_monitor(metric_name: Optional[str] = None) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator for monitoring function performance."""
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time.time()
             metric_key = metric_name or f"{func.__module__}.{func.__name__}"
 
@@ -517,16 +519,16 @@ def performance_monitor(metric_name: Optional[str] = None):
     return decorator
 
 
-def setup_request_monitoring(app):
+def setup_request_monitoring(app: Flask) -> Flask:
     """Setup Flask request monitoring middleware."""
 
     @app.before_request
-    def before_request():
+    def before_request() -> None:
         """Record request start time."""
         g.start_time = time.time()
 
     @app.after_request
-    def after_request(response):
+    def after_request(response: Response) -> Response:
         """Record request metrics after completion."""
         if hasattr(g, 'start_time'):
             duration_ms = (time.time() - g.start_time) * 1000

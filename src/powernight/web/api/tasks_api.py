@@ -5,6 +5,7 @@ REST API endpoints for task management in the Planner.
 """
 
 from flask import Blueprint, jsonify, request, current_app
+from flask.typing import ResponseReturnValue
 from datetime import datetime, timezone
 from typing import Dict, Any
 import re
@@ -29,7 +30,7 @@ def get_task_service() -> TaskService:
 
 @tasks_blueprint.route('', methods=['GET'])
 @require_auth
-def list_tasks():
+def list_tasks() -> ResponseReturnValue:
     """
     Get all tasks.
 
@@ -66,7 +67,7 @@ def list_tasks():
 
 @tasks_blueprint.route('/<task_id>', methods=['GET'])
 @require_auth
-def get_task(task_id: str):
+def get_task(task_id: str) -> ResponseReturnValue:
     """
     Get a specific task.
 
@@ -113,7 +114,7 @@ def get_task(task_id: str):
 
 @tasks_blueprint.route('', methods=['POST'])
 @require_auth
-def create_task():
+def create_task() -> ResponseReturnValue:
     """
     Create a new task.
 
@@ -212,7 +213,7 @@ def create_task():
 
 @tasks_blueprint.route('/<task_id>', methods=['PUT', 'PATCH'])
 @require_auth
-def update_task(task_id: str):
+def update_task(task_id: str) -> ResponseReturnValue:
     """
     Update a task.
 
@@ -311,7 +312,7 @@ def update_task(task_id: str):
 
 @tasks_blueprint.route('/<task_id>', methods=['DELETE'])
 @require_auth
-def delete_task(task_id: str):
+def delete_task(task_id: str) -> ResponseReturnValue:
     """
     Delete a task.
 
@@ -359,7 +360,7 @@ def delete_task(task_id: str):
 
 @tasks_blueprint.route('/<task_id>/toggle', methods=['POST'])
 @require_auth
-def toggle_task(task_id: str):
+def toggle_task(task_id: str) -> ResponseReturnValue:
     """
     Toggle a task's enabled status.
 
@@ -414,7 +415,7 @@ def toggle_task(task_id: str):
 
 @tasks_blueprint.route('/<task_id>/execute', methods=['POST'])
 @require_auth
-def execute_task(task_id: str):
+def execute_task(task_id: str) -> ResponseReturnValue:
     """
     Execute a task asynchronously.
 
@@ -466,7 +467,7 @@ def execute_task(task_id: str):
 
 @tasks_blueprint.route('/<task_id>/executions/<execution_id>', methods=['GET'])
 @require_auth
-def get_task_execution(task_id: str, execution_id: str):
+def get_task_execution(task_id: str, execution_id: str) -> ResponseReturnValue:
     """
     Get execution status by ID.
 
@@ -516,7 +517,7 @@ def get_task_execution(task_id: str, execution_id: str):
 
 @tasks_blueprint.route('/<task_id>/executions', methods=['GET'])
 @require_auth
-def list_task_executions(task_id: str):
+def list_task_executions(task_id: str) -> ResponseReturnValue:
     """
     List recent executions for a task.
 
@@ -557,7 +558,7 @@ def list_task_executions(task_id: str):
 
 @tasks_blueprint.route('/commands', methods=['GET'])
 @require_auth
-def list_available_commands():
+def list_available_commands() -> ResponseReturnValue:
     """
     Get list of available command types and their parameters.
 
@@ -639,7 +640,7 @@ def list_available_commands():
 
 @tasks_blueprint.route('/reload', methods=['POST'])
 @require_auth
-def reload_all_tasks():
+def reload_all_tasks() -> ResponseReturnValue:
     """
     Reload all tasks with current timezone configuration.
     
@@ -683,7 +684,7 @@ def reload_all_tasks():
 
 @tasks_blueprint.route('/presets', methods=['GET'])
 @require_auth
-def list_presets():
+def list_presets() -> ResponseReturnValue:
     """Get all task presets (built-in and user-defined)."""
     try:
         preset_service = TaskPresetService()
@@ -710,7 +711,7 @@ def list_presets():
 
 @tasks_blueprint.route('/presets', methods=['POST'])
 @require_auth
-def create_preset():
+def create_preset() -> ResponseReturnValue:
     """Create a new user-defined task preset."""
     try:
         if not request.is_json:
@@ -795,7 +796,7 @@ def create_preset():
 
 @tasks_blueprint.route('/presets/<preset_id>', methods=['DELETE'])
 @require_auth
-def delete_preset(preset_id: str):
+def delete_preset(preset_id: str) -> ResponseReturnValue:
     """Delete a user-defined preset. Built-in presets cannot be deleted."""
     try:
         preset_service = TaskPresetService()

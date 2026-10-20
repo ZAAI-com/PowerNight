@@ -6,10 +6,12 @@ Serves the React SPA for all non-API routes.
 """
 
 from flask import Blueprint, jsonify, current_app, send_from_directory
+from flask.typing import ResponseReturnValue
 from datetime import datetime, timezone
 import os
 import sys
 import json
+from typing import Any
 from pathlib import Path
 
 from ... import __version__
@@ -19,17 +21,25 @@ from ... import __version__
 main_blueprint = Blueprint('main', __name__)
 
 
+def _static_folder() -> str:
+    """Return the React build directory configured on the Flask app."""
+    folder = current_app.static_folder
+    if folder is None:
+        raise RuntimeError('Flask static folder is not configured')
+    return folder
+
+
 @main_blueprint.route('/', methods=['GET'])
-def index():
+def index() -> ResponseReturnValue:
     """
     Application root endpoint - serve React SPA.
     """
-    static_folder = current_app.static_folder
+    static_folder = _static_folder()
     return send_from_directory(static_folder, 'index.html')
 
 
 @main_blueprint.route('/health', methods=['GET'])
-def health_check():
+def health_check() -> ResponseReturnValue:
     """
     Health check endpoint for container orchestration.
 
@@ -54,14 +64,14 @@ def health_check():
 
 
 @main_blueprint.route('/version', methods=['GET'])
-def version_info():
+def version_info() -> ResponseReturnValue:
     """
     Version information endpoint.
 
     Returns detailed version and build information.
     """
-    metadata = {}
-    metadata_path = Path(current_app.static_folder) / 'version-info.json'
+    metadata: Any = {}
+    metadata_path = Path(_static_folder()) / 'version-info.json'
     try:
         metadata = json.loads(metadata_path.read_text())
     except (OSError, ValueError):
@@ -85,11 +95,11 @@ def version_info():
 
 
 @main_blueprint.route('/assets/<path:filename>')
-def serve_assets(filename):
+def serve_assets(filename: str) -> ResponseReturnValue:
     """
     Serve React build assets.
     """
-    static_folder = current_app.static_folder
+    static_folder = _static_folder()
     assets_dir = os.path.join(static_folder, 'assets')
     return send_from_directory(assets_dir, filename)
 
@@ -97,7 +107,7 @@ def serve_assets(filename):
 
 
 @main_blueprint.route('/favicon.ico', methods=['GET'])
-def favicon():
+def favicon() -> ResponseReturnValue:
     """
     Favicon endpoint to prevent 404 errors.
     """
@@ -107,7 +117,7 @@ def favicon():
 # Catch-all route for React SPA - serve index.html for all non-API routes
 # This allows React Router to handle client-side routing
 @main_blueprint.route('/<path:path>')
-def spa_catchall(path):
+def spa_catchall(path: str) -> ResponseReturnValue:
     """
     Catch-all route for React SPA.
     Serves index.html for all routes not matched by API endpoints.
@@ -122,5 +132,5 @@ def spa_catchall(path):
         return jsonify({'error': 'Not found'}), 404
 
     # Serve React SPA for all other routes
-    static_folder = current_app.static_folder
+    static_folder = _static_folder()
     return send_from_directory(static_folder, 'index.html')

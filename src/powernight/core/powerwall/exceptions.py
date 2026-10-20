@@ -4,7 +4,7 @@ PowerNight Powerwall Exception Classes
 Custom exception classes for different Powerwall error scenarios.
 """
 
-from typing import Optional
+from typing import Any, Optional
 
 
 class PowerwallError(Exception):
@@ -59,7 +59,7 @@ class PowerwallUnavailableError(PowerwallError):
 class PowerwallValidationError(PowerwallError):
     """Exception raised when input validation fails."""
 
-    def __init__(self, parameter: str, value: any, message: str = "") -> None:
+    def __init__(self, parameter: str, value: Any, message: str = "") -> None:
         full_message = f"Invalid value for {parameter}: {value}"
         if message:
             full_message += f" - {message}"

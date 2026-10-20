@@ -1,7 +1,8 @@
 from flask import Blueprint, jsonify, current_app, request
+from flask.typing import ResponseReturnValue
 from ...core.config import get_config, get_config_manager
 from ...core.config.schema import PowerNightConfig
-from typing import Any, Dict
+from typing import Any, Dict, List
 import copy
 import pytz
 
@@ -58,7 +59,7 @@ def get_app_config() -> Dict[str, Any]:
 
 @config_blueprint.route('', methods=['GET'])
 @require_auth
-def get_config_api():
+def get_config_api() -> ResponseReturnValue:
     """
     API endpoint to get the application configuration.
     """
@@ -70,7 +71,7 @@ def get_config_api():
 
 @config_blueprint.route('', methods=['POST'])
 @require_auth
-def update_config_api():
+def update_config_api() -> ResponseReturnValue:
     """
     API endpoint to update the application configuration.
 
@@ -104,7 +105,7 @@ def update_config_api():
 
 
 @config_blueprint.route('/timezone', methods=['GET'])
-def get_timezone_api():
+def get_timezone_api() -> ResponseReturnValue:
     """
     API endpoint to get the current timezone configuration.
     """
@@ -141,7 +142,7 @@ def get_timezone_api():
 
 @config_blueprint.route('/timezone', methods=['POST'])
 @require_auth
-def update_timezone_api():
+def update_timezone_api() -> ResponseReturnValue:
     """
     API endpoint to update the timezone configuration.
     """
@@ -179,7 +180,7 @@ def update_timezone_api():
 
 
 @config_blueprint.route('/timezones', methods=['GET'])
-def get_timezones_api():
+def get_timezones_api() -> ResponseReturnValue:
     """
     API endpoint to get list of available timezones.
     """
@@ -188,7 +189,7 @@ def get_timezones_api():
         all_timezones = pytz.common_timezones
 
         # Group by region
-        timezones_by_region = {}
+        timezones_by_region: Dict[str, List[str]] = {}
         for tz in all_timezones:
             if '/' in tz:
                 region = tz.split('/')[0]
@@ -203,8 +204,8 @@ def get_timezones_api():
         formatted_timezones = []
         for tz_name in all_timezones:
             try:
-                tz = pytz.timezone(tz_name)
-                now_local = now_utc.astimezone(tz)
+                tz_info = pytz.timezone(tz_name)
+                now_local = now_utc.astimezone(tz_info)
                 offset = now_local.strftime('%z')
                 abbr = now_local.strftime('%Z')
 

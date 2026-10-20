@@ -100,7 +100,7 @@ def make_connector(tmp_path, auth_data=None):
         'email': 'owner@example.com',
         'site': {'id': 123456},
     }
-    connector._oauth_manager.get_valid_access_token.return_value = 'valid-access-token'
+    connector._oauth_manager.has_credentials.return_value = True
     connector._circuit_breaker = MagicMock()
     connector._circuit_breaker.call.side_effect = lambda operation: operation()
     return connector
@@ -182,7 +182,7 @@ def test_concurrent_ensure_connected_builds_one_session(tmp_path):
     ('error', 'expected_code', 'expected_exception'),
     [
         (PyPowerwallCloudNoTeslaAuthFile('missing auth'), 'authentication', PowerwallAuthenticationError),
-        (PyPowerwallCloudTeslaNotConnected('Tesla session unavailable'), 'pypowerwall', PowerwallConnectionError),
+        (PyPowerwallCloudTeslaNotConnected('Tesla session unavailable'), 'tesla_rejected', PowerwallConnectionError),
         (RuntimeError('network down'), 'connection', PowerwallConnectionError),
     ],
 )
@@ -224,3 +224,57 @@ def test_generic_failure_is_wrapped_without_leaking_token(tmp_path):
     failure_log = log_operation.call_args.kwargs['error_details']
     assert 'secret-token-value' not in failure_log
     assert '***REDACTED***' in failure_log
+
+
+def test_connect_never_refreshes_tokens_itself(tmp_path):
+    connector = make_connector(tmp_path)
+    connector._oauth_manager.has_credentials.return_value = False
+
+    with pytest.raises(PowerwallAuthenticationError):
+        connector.connect()
+
+    assert not connector._oauth_manager.refresh_access_token.called
+    assert connector.get_connection_status()['connection_error_code'] == 'authentication'
+
+
+def test_cloud_session_reuses_live_session(tmp_path):
+    connector = make_connector(tmp_path)
+    live = MagicMock()
+    connector._powerwall = live
+    live.vitals.return_value = {'ok': True}
+
+    with patch.object(connector, 'connect') as connect:
+        with connector.cloud_session() as pw:
+            assert pw is live
+    connect.assert_not_called()
+
+
+def test_cloud_session_holds_connection_lock_for_whole_block(tmp_path):
+    connector = make_connector(tmp_path)
+    connector._powerwall = MagicMock()
+    connector._powerwall.vitals.return_value = {'ok': True}
+    acquired_elsewhere = []
+
+    def try_lock():
+        got = connector._connection_lock.acquire(timeout=0.2)
+        acquired_elsewhere.append(got)
+        if got:
+            connector._connection_lock.release()
+
+    with connector.cloud_session():
+        other = threading.Thread(target=try_lock)
+        other.start()
+        other.join()
+    assert acquired_elsewhere == [False]
+
+    # Released afterwards, so scheduled commands can proceed
+    try_lock()
+    assert acquired_elsewhere == [False, True]
+
+
+def test_cloud_session_fails_clearly_without_a_session(tmp_path):
+    connector = make_connector(tmp_path)
+    with patch.object(connector, 'ensure_connected', return_value=False):
+        with pytest.raises(PowerwallConnectionError):
+            with connector.cloud_session():
+                pass

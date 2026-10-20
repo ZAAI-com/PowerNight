@@ -5,7 +5,9 @@ REST API endpoints for configuration, control, and monitoring.
 """
 
 from flask import Blueprint, jsonify, request, current_app
+from flask.typing import ResponseReturnValue
 from datetime import datetime, timezone
+from typing import Any, Dict
 import logging
 import os
 
@@ -25,7 +27,7 @@ api_blueprint = Blueprint('api', __name__)
 
 
 @api_blueprint.route('/version-info.json', methods=['GET'])
-def serve_version_info():
+def serve_version_info() -> ResponseReturnValue:
     """
     Serve version information JSON file generated during build.
 
@@ -102,7 +104,7 @@ def serve_version_info():
 
 @api_blueprint.route('/test-connection', methods=['POST'])
 @require_auth
-def test_powerwall_connection():
+def test_powerwall_connection() -> ResponseReturnValue:
     """
     Test Powerwall connection with provided credentials.
     
@@ -184,7 +186,7 @@ def test_powerwall_connection():
 # Backup reserve control endpoints
 @api_blueprint.route('/backup-reserve', methods=['GET'])
 @require_auth
-def get_backup_reserve():
+def get_backup_reserve() -> ResponseReturnValue:
     """
     Get current Powerwall backup reserve percentage with enhanced monitoring.
 
@@ -292,7 +294,7 @@ def get_backup_reserve():
 
 @api_blueprint.route('/backup-reserve', methods=['POST'])
 @require_auth
-def set_backup_reserve():
+def set_backup_reserve() -> ResponseReturnValue:
     """
     Set Powerwall backup reserve percentage with enterprise-grade validation and audit.
 
@@ -373,7 +375,7 @@ def set_backup_reserve():
             }), 422
 
         # Extract validated data
-        sanitized_data = validation_result.sanitized_data
+        sanitized_data = validation_result.sanitized_data or {}
         target_percentage = sanitized_data['percentage']
         reason = sanitized_data.get('reason', 'Manual API change')
         force_change = sanitized_data.get('force', False)
@@ -499,7 +501,7 @@ def set_backup_reserve():
 # Status and monitoring endpoints
 @api_blueprint.route('/status', methods=['GET'])
 @require_auth
-def get_system_status():
+def get_system_status() -> ResponseReturnValue:
     """
     Get comprehensive system status.
 
@@ -522,7 +524,7 @@ def get_system_status():
         elif is_gruber_eg:
             backup_reserve = 35.0
         
-        status_data = {
+        status_data: Dict[str, Any] = {
             'timestamp': format_datetime_for_display(datetime.now(timezone.utc)),
             'system': {
                 'healthy': True,
@@ -613,7 +615,7 @@ def get_system_status():
 @api_blueprint.route('/metrics', methods=['GET'])
 @require_auth
 @performance_monitor('api.metrics.get')
-def get_metrics():
+def get_metrics() -> ResponseReturnValue:
     """
     Get application performance metrics and analytics.
 
@@ -702,7 +704,7 @@ def get_metrics():
 
 @api_blueprint.route('/auth/check', methods=['GET'])
 @require_auth
-def check_authentication():
+def check_authentication() -> ResponseReturnValue:
     """Validate web API authentication without depending on system health."""
     return jsonify({'success': True}), 200
 
@@ -710,7 +712,7 @@ def check_authentication():
 @api_blueprint.route('/health', methods=['GET'])
 @require_auth
 @performance_monitor('api.health.check')
-def health_check():
+def health_check() -> ResponseReturnValue:
     """
     Lightweight health check endpoint for monitoring systems.
 
@@ -789,7 +791,7 @@ def health_check():
 
 # Error handlers for this blueprint
 @api_blueprint.errorhandler(ValidationError)
-def handle_validation_error(error):
+def handle_validation_error(error: ValidationError) -> ResponseReturnValue:
     """Handle validation errors."""
     response_data = {
         'success': False,
@@ -805,7 +807,7 @@ def handle_validation_error(error):
 
 
 @api_blueprint.errorhandler(PowerwallError)
-def handle_powerwall_error(error):
+def handle_powerwall_error(error: PowerwallError) -> ResponseReturnValue:
     """Handle Powerwall-related errors."""
     return jsonify({
         'success': False,
@@ -816,7 +818,7 @@ def handle_powerwall_error(error):
 
 
 @api_blueprint.errorhandler(APIError)
-def handle_api_error(error):
+def handle_api_error(error: APIError) -> ResponseReturnValue:
     """Handle general API errors."""
     return jsonify({
         'success': False,
