@@ -1,0 +1,175 @@
+src/powernight/web/middleware.py
+  s_bec34978ebadf1::t_0f42d8acdee71a 8-9,16-29,31-39,76-80,87-91,93,97
+src/powernight/web/test/e2e/tesla-setup.spec.ts
+  s_bec34978ebadf1::t_7f43bdb8abee37 51,66
+  s_bec34978ebadf1::t_8fd49b9e429375 58,62
+tests/unit/test_tesla_oauth.py
+  s_bec34978ebadf1::t_06d21667df41b9 21-28,36-41,186-188,196-197,200,209-210,212-213,252-253,301,303-308,320,362-365,389-391,394,396,444-455,458
+helpers/macos/PowerNightLogin/README.md
+  s_bec34978ebadf1::t_cc0314533f7d7b 1-65
+tests/unit/test_tesla_setup_attempts.py
+  s_bec34978ebadf1::t_8d5c73d1e89783 1-39,43-200,206,212-476,483,485-486,488-490,492-592,594-620
+  s_bec34978ebadf1::t_7d404d2d64ecdb 40-42,201-205,207-211,477-482,484,487,491
+  s_bec34978ebadf1::t_79727b48214dbf 593
+src/powernight/core/auth/setup_attempts.py
+  s_bec34978ebadf1::t_110839520ffc2c 1-104,119-125,127,130-172,174,176-235
+  s_bec34978ebadf1::t_373ab8dd7e8353 173,175
+  s_bec34978ebadf1::t_61bd638e41d015 105-118,126,128-129
+helpers/macos/PowerNightLogin/Sources/PowerNightLoginCore/CallbackCapture.swift
+  s_bec34978ebadf1::t_048014f271be25 1-40
+src/powernight/web/src/components/tesla/TeslaSignInHelp.tsx
+  s_bec34978ebadf1::t_20bbd200ca4001 1-83
+tests/unit/test_middleware_rate_limit.py
+  s_bec34978ebadf1::t_03895d313f7d50 1-61
+src/powernight/web/src/assets/tesla-help/README.md
+  s_bec34978ebadf1::t_14d7b707219160 1-6
+src/powernight/core/powerwall/connector.py
+  s_bec34978ebadf1::t_6d27e090f7fd5e 9,28,49-88,231-234,455,459-465,470-471,508,511,520,533-575,608,648-660,662-663
+  s_bec34978ebadf1::t_102cdca48700a8 489-490
+  s_bec34978ebadf1::t_ee3fc3ea3d6fa7 512-514,519,521-526
+AGENTS.md
+  s_bec34978ebadf1::t_32ef788b21e29b 207-212
+src/powernight/web/test/pages/Settings.test.tsx
+  s_bec34978ebadf1::t_778a3c6e212373 92
+tests/unit/test_auth_enforcement.py
+  s_bec34978ebadf1::t_d7a7b5c69cc1ad 311-365
+src/powernight/web/src/components/tesla/help/helpVisual.ts
+  s_bec34978ebadf1::t_dc6fcf7ced17dc 1-36
+src/powernight/web/api/auth_api.py
+  s_bec34978ebadf1::t_0a216e3ba49118 215,243,247,253-283,293,298-302,304-307,309-311,313-316,318,320,335-336,341-363,365,386,389,396-397,400,402-408,411-416,419-447,454-456,470-481,483-495,497,499-501,503-504,509,512-514,516-530,533-557,563,569-570,572-573,575-576,578-598,600-627,629-660
+  s_bec34978ebadf1::t_403e15c437b80b 7,11,15-16,20,47-48,50-53,55-58,64-81,145,720,747,775,780,787-788,802,1025,1048,1051,1053
+src/powernight/web/test/pages/SettingsTeslaWizard.test.tsx
+  s_bec34978ebadf1::t_435d7216185cda 1-231,234,236-533
+  s_bec34978ebadf1::t_f89d407755c5c5 232-233,235
+src/powernight/web/src/components/tesla/MacHelperLauncher.tsx
+  s_bec34978ebadf1::t_7828428cfc79ba 1-3,5-98
+  s_bec34978ebadf1::t_b8e7db392a565a 4
+src/powernight/web/src/pages/Settings.tsx
+  s_bec34978ebadf1::t_d6bf165bc028b7 1,5,8-10,36,39-40,43,60-61,63,67,69-70,72,74,76-79,81-84,86-87,89-90,100-102,115-118,121-123,236-237,247-250,265-280,283-292,298,321-345
+tests/unit/test_route_smoke.py
+  s_bec34978ebadf1::t_17da2a10726276 155-177
+src/powernight/web/test/e2e/tesla-setup-wizard.spec.ts
+  s_bec34978ebadf1::t_da9cc1528fff10 1-123,134-149,151-155,157,160-164,166-169,171-181,183-184,186-190,192-202,204-213,215-216,218-224,226-227,229-234,236-244
+  s_bec34978ebadf1::t_8fd49b9e429375 165,228
+  s_bec34978ebadf1::t_c432da3da6e4a2 158-159
+  s_bec34978ebadf1::t_7b574538883299 124-133,150,156,182,185,214,217,225,235
+  s_bec34978ebadf1::t_b960bfa4e47c19 170,191,203
+.dockerignore
+  s_bec34978ebadf1::t_cc0314533f7d7b 87-89
+docs/tesla-help-screenshots.md
+  s_bec34978ebadf1::t_14d7b707219160 1-42
+CLAUDE.md
+  s_bec34978ebadf1::t_32ef788b21e29b 155,697
+helpers/macos/PowerNightLogin/Sources/PowerNightLogin/main.swift
+  s_bec34978ebadf1::t_94168ff9728c41 1-7
+tests/unit/test_connection_state.py
+  s_bec34978ebadf1::t_e552c8cbf17986 1-51
+helpers/macos/PowerNightLogin/Resources/Info.plist
+  s_bec34978ebadf1::t_5c3da78999f632 1-46
+helpers/macos/PowerNightLogin/Sources/PowerNightLoginCore/OriginPolicy.swift
+  s_bec34978ebadf1::t_9976080aae2a0e 1-53
+src/powernight/web/src/utils/teslaSetupApi.ts
+  s_bec34978ebadf1::t_db2e52c4079483 1-29,31-64
+  s_bec34978ebadf1::t_f454f97d83e355 30
+helpers/macos/PowerNightLogin/Sources/PowerNightLoginCore/AuthorizationURLValidator.swift
+  s_bec34978ebadf1::t_d6fbae8a77958b 1-45
+helpers/macos/PowerNightLogin/Sources/PowerNightLogin/LoginCoordinator.swift
+  s_bec34978ebadf1::t_ec82c3e582ca54 1-30,35-39,41-129
+  s_bec34978ebadf1::t_e644adffc0d66c 31-34,40
+src/powernight/web/test/fixtures/tesla-callback-samples.json
+  s_bec34978ebadf1::t_6c17ce74e76512 1-88
+src/powernight/web/src/utils/teslaSetup.ts
+  s_bec34978ebadf1::t_eddd03dae8da2e 1-176
+  s_bec34978ebadf1::t_aa0456a83a8935 177-181
+docs/releases/2.1.0.md
+  s_bec34978ebadf1::t_57a32b0a4d74f3 1-52
+src/powernight/web/src/components/tesla/help/BrowserDiagram.tsx
+  s_bec34978ebadf1::t_e6089318a15333 1-107
+.github/workflows/macos-helper.yml
+  s_bec34978ebadf1::t_cc0314533f7d7b 1-32
+.gitignore
+  s_bec34978ebadf1::t_cc0314533f7d7b 431-437
+helpers/macos/PowerNightLogin/Package.swift
+  s_bec34978ebadf1::t_5cdeaed625969a 1-18
+src/powernight/utils/redaction.py
+  s_bec34978ebadf1::t_b56d2fe35b8fc6 1-24
+src/powernight/core/scheduler/circuit_breaker.py
+  s_bec34978ebadf1::t_1e7e15921bad8a 67-74
+src/powernight/web/src/hooks/useTeslaSetup.ts
+  s_bec34978ebadf1::t_aa0456a83a8935 15,474
+  s_bec34978ebadf1::t_f454f97d83e355 149
+  s_bec34978ebadf1::t_b2f2d45002be78 1-14,16-148,150-473,475-565
+helpers/macos/PowerNightLogin/Sources/PowerNightLogin/AppDelegate.swift
+  s_bec34978ebadf1::t_f386e748558f6d 1-63
+src/powernight/web/src/components/tesla/TeslaSetupWizard.tsx
+  s_bec34978ebadf1::t_f2f40838b285d1 1-51,53-377
+  s_bec34978ebadf1::t_fb1816732d3f54 52
+helpers/macos/PowerNightLogin/Sources/PowerNightLoginCore/HelperAPIClient.swift
+  s_bec34978ebadf1::t_181b86a610f97c 1-123
+src/powernight/core/auth/connection_state.py
+  s_bec34978ebadf1::t_aa272dd76bc4b3 1-72
+docs/README.md
+  s_bec34978ebadf1::t_57a32b0a4d74f3 86-87,129-132
+tests/unit/test_powerwall_connection_recovery.py
+  s_bec34978ebadf1::t_ee3fc3ea3d6fa7 441-452
+  s_bec34978ebadf1::t_ce642151dd1716 281-440
+helpers/macos/PowerNightLogin/scripts/build-app.sh
+  s_bec34978ebadf1::t_5c3da78999f632 1-33
+scripts/tesla_help_fixture.py
+  s_bec34978ebadf1::t_14d7b707219160 1-47
+.github/workflows/README.md
+  s_bec34978ebadf1::t_cf0f30553c9b0f 173-183
+src/powernight/web/test/utils/teslaSetup.test.ts
+  s_bec34978ebadf1::t_b2608be83c4ab6 1-120
+src/powernight/web/src/pages/Dashboard.tsx
+  s_bec34978ebadf1::t_f19321e601eb96 30,50,56-57,87-91
+src/powernight/web/test/utils/teslaSetupApi.test.ts
+  s_bec34978ebadf1::t_f367a8a486056b 1-54
+tests/unit/test_tesla_setup_api.py
+  s_bec34978ebadf1::t_673a01d7fd21f0 1-437
+  s_bec34978ebadf1::t_f62929d6c355dd 438
+src/powernight/web/src/components/tesla/help/helpContent.ts
+  s_bec34978ebadf1::t_b46712cbe69d22 1-58
+helpers/macos/PowerNightLogin/Tests/PowerNightLoginCoreTests/PowerNightLoginCoreTests.swift
+  s_bec34978ebadf1::t_f6c0b1a2eeb2b8 1-173
+src/powernight/web/test/pages/Dashboard.test.tsx
+  s_bec34978ebadf1::t_33a08ecb603cde 54,56-69
+src/powernight/web/src/components/tesla/TeslaConnectionStatus.tsx
+  s_bec34978ebadf1::t_55f0a0c7a09b6a 1-156
+helpers/macos/PowerNightLogin/Sources/PowerNightLogin/LoginWindowController.swift
+  s_bec34978ebadf1::t_c103404a06a9bb 1-96
+src/powernight/core/auth/tesla_oauth.py
+  s_bec34978ebadf1::t_b2d1d7164eaa21 4-7,11-12,15-20,24-45,48-119,125,129,135,139,142,152-163,166,169-170,174-362,366,369,373-432,434-525,529,534,539-550,554-558,568-569,571-575,577-582,584-615,618-622,624-636,645,649-651,655,658,661-664,666-679,682-702,713-714,718,720,730-746,749-752,756-758,760-761,764-798,800-836,839,843-981,995,998,1006,1011,1014,1033,1040,1048,1052,1060,1079,1082,1085,1089,1093,1098,1105,1114,1124
+helpers/macos/PowerNightLogin/Sources/PowerNightLoginCore/LaunchRequest.swift
+  s_bec34978ebadf1::t_9f3419bc896783 1-66
+docs/FAQ.md
+  s_bec34978ebadf1::t_57a32b0a4d74f3 55-57,101,103,105,107-109,111,113
+src/powernight/web/src/components/tesla/TeslaSiteChooser.tsx
+  s_bec34978ebadf1::t_36185096fc7a2c 1-127
+docs/SECURITY.md
+  s_bec34978ebadf1::t_57a32b0a4d74f3 8,13-20
+  s_bec34978ebadf1::t_b96baee92889cb 21
+src/powernight/core/auth/token_storage.py
+  s_bec34978ebadf1::t_6fd256ef6d88a7 56-69,81,93-94,97-98,105-107,110-125
+  s_bec34978ebadf1::t_52dc18a488214b 126
+helpers/macos/PowerNightLogin/Sources/PowerNightLoginCore/TrustStore.swift
+  s_bec34978ebadf1::t_0679690b420d26 1-40
+src/powernight/web/src/types/index.ts
+  s_bec34978ebadf1::t_c179cc0893b64d 250-379
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6d0a20c59ecbce2dcfb858cc3e1a8564b68a869f",
+  "prompts": {},
+  "sessions": {
+    "s_bec34978ebadf1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "445d6264-531e-4410-a6da-0fe6a0002a85",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
