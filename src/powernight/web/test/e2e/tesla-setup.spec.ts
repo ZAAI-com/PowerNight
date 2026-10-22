@@ -48,21 +48,21 @@ for (const authEnabled of [false, true]) {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
     await expect(page.getByText('Connect or reconnect your Tesla account in Settings.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign In' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Update Data' }).click();
     await expect.poll(() => siteRequests).toBeGreaterThanOrEqual(2);
     await expect(page.getByRole('button', { name: 'Update Data' })).toBeEnabled();
     expect(await page.evaluate(() => localStorage.getItem('powernight_api_key'))).toBe(authEnabled ? apiKey : null);
 
-    const settingsLink = page.getByRole('link', { name: 'Settings' });
+    const settingsLink = page.getByRole('link', { name: 'Settings', exact: true });
     if (!await settingsLink.isVisible()) {
       await page.getByRole('button', { name: 'Toggle navigation menu' }).click();
     }
-    await page.getByRole('link', { name: 'Settings' }).filter({ visible: true }).click();
+    await page.getByRole('link', { name: 'Settings', exact: true }).filter({ visible: true }).click();
     await expect(page).toHaveURL(/\/settings$/);
     await expect(page.getByLabel('Tesla Account Email', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Connect', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign In' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toHaveCount(0);
   });
 }

@@ -170,6 +170,17 @@ trivy image zaaicom/powernight:1.0.0
 
 ---
 
+### 5. `macos-helper.yml` - Experimental macOS Helper
+
+**Trigger:** Pull requests and pushes to `main` that change `helpers/macos/**` or this workflow
+
+**Purpose:** Builds the experimental PowerNight Login Mac helper and runs its
+policy unit tests (`swift build`, `swift test`) on `macos-latest`. The helper
+is not part of the Docker image and is not signed or published by any
+workflow; see `helpers/macos/PowerNightLogin/README.md`.
+
+---
+
 ## Release Process
 
 Releases are staged: Docker Publish writes version-only tags, and Docker Promote

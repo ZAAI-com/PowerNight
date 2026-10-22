@@ -64,6 +64,14 @@ class CircuitBreaker:
                 self._on_failure()
                 raise e
     
+    def reset(self) -> None:
+        """Close the breaker and forget past failures (e.g. after new credentials)."""
+        with self._lock:
+            self.state = "CLOSED"
+            self.failure_count = 0
+            self.success_count = 0
+            self.last_failure_time = 0.0
+
     def _on_success(self) -> None:
         """Handle successful operation."""
         if self.state == "HALF_OPEN":

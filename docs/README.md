@@ -83,8 +83,8 @@ Access the web interface at http://ip-address:8020 or [http://localhost:8020](ht
 
 ![Settings](screenshots/PowerNight-Settings.png)
 
-- **Tesla Cloud Configuration**: Authorize and manage Tesla Access
-- **Site Selection**: Switch between multiple Powerwall installations
+- **Tesla Account**: Guided sign-in (Start, Sign in to Tesla, Finish connection, Choose site), a connection status that tells "Connected", "Sign-in required" and "Connection temporarily unavailable" apart, and **Reconnect Tesla** without signing out first
+- **Site Selection**: Accounts with several energy sites choose one explicitly; a single site is used automatically
 - **Timezone Configuration**: Set scheduling timezone
 - **System Information**: Version, build date, runtime environment
 
@@ -126,8 +126,10 @@ powernight status
 3. **Set your Timezone under Settings**
    Navigate to Settings → Configure your local timezone
 
-4. **Authenticate with your Tesla account on the Settings page**
-   Click "Authorize with Tesla" and complete OAuth flow
+4. **Connect your Tesla account on the Settings page**
+   Enter your Tesla email and click **Connect**. Tesla sign-in opens in a new tab (if your browser blocks it, use the **Open Tesla sign-in** button). Browsers cannot open the `tesla://` link Tesla returns after signing in, so open the developer tools in that tab before signing in, copy the `tesla://auth/callback?code=...` line (the whole Console message is fine) and paste it into Settings. Settings shows browser-specific steps. Alternatives: sign in with tokens from `python -m pypowerwall authtoken`, or the experimental [Mac helper](../helpers/macos/PowerNightLogin/README.md), which captures the link for you.
+
+   PowerNight keeps its Tesla session alive while it runs. If it restarts more than about 8 hours after you signed in, Tesla may require you to reconnect; Settings then shows **Sign-in required** and a **Reconnect Tesla** button.
 
 5. **Check Powerwall data on the Dashboard and compare with the Tesla Mobile App**
    Verify battery level, power flow, and operating mode match

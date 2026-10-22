@@ -53,6 +53,20 @@ class PyPowerwallAuthStorage:
             tokens: Dictionary containing access_token, refresh_token, expires_at, etc.
             site: Dictionary containing id, name, type
         """
+        self.replace_auth_data(email, tokens, site)
+
+    def replace_auth_data(self, email: str, tokens: Dict[str, Any], site: Dict[str, Any]) -> None:
+        """
+        Replace the auth and site files as one unit.
+
+        Both files are snapshotted in memory first. If either write fails, both
+        are restored, so a failed reconnect never leaves new tokens next to an
+        old site (or the reverse). No backup files are written.
+        """
+        auth_file = self.storage_path / ".pypowerwall.auth"
+        site_file = self.storage_path / ".pypowerwall.site"
+        snapshots = {path: self._snapshot(path) for path in (auth_file, site_file)}
+
         try:
             # Create teslapy-compatible cache structure
             # Format: {email: {"url": sso_url, "sso": token_dict}}
@@ -64,7 +78,7 @@ class PyPowerwallAuthStorage:
                         "refresh_token": tokens.get("refresh_token"),
                         "token_type": tokens.get("token_type", "Bearer"),
                         "expires_at": self._convert_expires_at(tokens.get("expires_at")),
-                        "scope": tokens.get("scope", "openid email offline_access")
+                        "scope": tokens.get("scope") or "openid email offline_access"
                     }
                 }
             }
@@ -74,22 +88,41 @@ class PyPowerwallAuthStorage:
             # (connector passes authpath=... in cloud mode), so encrypting it
             # at rest would break the Tesla cloud connection. Protection is
             # owner-only file and directory permissions instead.
-            auth_file = self.storage_path / ".pypowerwall.auth"
             write_private_file(auth_file, json.dumps(cache_data, indent=2))
 
-            # Store site ID in separate file
-            site_file = self.storage_path / ".pypowerwall.site"
+            # Store site ID in separate file; a missing ID must not leave the
+            # previous account's site behind
             site_id = site.get("id")
             if site_id is None:
-                self.logger.warning("Site ID is None, not storing site file")
+                self.logger.warning("Site ID is None, removing any stored site file")
+                site_file.unlink(missing_ok=True)
             else:
                 write_private_file(site_file, str(site_id))
 
             self.logger.info(f"pypowerwall auth data stored for {email} (teslapy format)")
 
         except Exception as e:
-            self.logger.error(f"Failed to store pypowerwall auth data: {e}")
+            self.logger.error(f"Failed to store pypowerwall auth data ({type(e).__name__}); restoring previous files")
+            for path, content in snapshots.items():
+                self._restore(path, content)
             raise
+
+    @staticmethod
+    def _snapshot(path: Path) -> Optional[bytes]:
+        try:
+            return path.read_bytes()
+        except FileNotFoundError:
+            return None
+
+    def _restore(self, path: Path, content: Optional[bytes]) -> None:
+        """Put a file back exactly as it was before a failed replace."""
+        try:
+            if content is None:
+                path.unlink(missing_ok=True)
+            else:
+                write_private_file(path, content.decode('utf-8'))
+        except Exception as error:
+            self.logger.error(f"Could not restore {path.name} ({type(error).__name__})")
 
     def _convert_expires_at(self, expires_at_str: Any) -> float:
         """Convert ISO format expires_at to unix timestamp."""

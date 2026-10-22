@@ -27,6 +27,7 @@ const Dashboard: React.FC = () => {
   });
   const [siteDetailsLoading, setSiteDetailsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsSignIn, setNeedsSignIn] = useState(false);
   const inFlight = useRef(false);
 
   // Prevent state updates from in-flight requests after unmount
@@ -46,11 +47,14 @@ const Dashboard: React.FC = () => {
 
       if (data.success) {
         setError(null);
+        setNeedsSignIn(false);
         setSiteDetails(data.data);
         // Persist to localStorage
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data.data));
       } else {
         setError(data.message || data.error || 'Failed to fetch site details');
+        // Only backend evidence asks for a new sign-in; other failures are temporary
+        setNeedsSignIn(data.connection_state === 'sign_in_required' || data.code === 'TESLA_AUTH_REQUIRED');
       }
     } catch (err) {
       console.error('Failed to fetch site details:', err);
@@ -80,6 +84,11 @@ const Dashboard: React.FC = () => {
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
               <p className="text-red-800 text-sm">{error}</p>
+              {needsSignIn && (
+                <a href="/settings" className="inline-block mt-2 text-sm font-medium text-red-900 underline">
+                  Go to Settings to reconnect Tesla
+                </a>
+              )}
             </div>
           )}
 

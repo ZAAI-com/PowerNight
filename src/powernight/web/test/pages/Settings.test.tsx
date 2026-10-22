@@ -89,7 +89,7 @@ describe('Settings', () => {
     {
       name: 'connected cloud',
       data: { authenticated: true, email: 'owner@example.com', token_expired: false, connected: true, connection_status: 'connected' },
-      expected: ['Valid', 'Connected', '✅ Tesla cloud connected'],
+      expected: ['Valid', 'Connected', 'PowerNight is connected to your Tesla account.'],
     },
   ])('renders $name separately from token state', async ({ data, expected }) => {
     authenticatedFetch.mockImplementation(async (input) => {

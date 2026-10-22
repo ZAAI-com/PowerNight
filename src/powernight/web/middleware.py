@@ -5,21 +5,39 @@ Flask middleware: CORS, security headers, and lightweight rate limiting.
 import threading
 import time
 
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+from typing import Dict, FrozenSet, List, Optional, Tuple
 
 from flask import Flask, Response, request, jsonify
 from flask.typing import ResponseReturnValue
 from flask_cors import CORS
 
 
+@dataclass(frozen=True)
+class _RateLimitRule:
+    """Requests matching ``prefix`` (and ``methods``, if set) share one bucket per client."""
+
+    name: str
+    prefix: str
+    methods: Optional[FrozenSet[str]]
+    max_requests: int
+    window_seconds: float
+
+    def matches(self, path: str, method: str) -> bool:
+        return path.startswith(self.prefix) and (self.methods is None or method in self.methods)
+
+
 # Paths that accept credentials or drive the OAuth flow get rate limited to
-# slow down brute-force attempts. Prefix match.
-_RATE_LIMITED_PREFIXES = (
-    '/api/auth/setup/',
-    '/api/auth/tesla/test-connection',
+# slow down brute-force attempts. The first matching rule wins. Status reads
+# get their own, looser bucket so polling a sign-in in progress cannot use
+# up the budget for the steps that matter. Buckets are per client address,
+# so behind a reverse proxy every client shares them.
+_RATE_LIMIT_RULES: Tuple[_RateLimitRule, ...] = (
+    _RateLimitRule('setup-status', '/api/auth/setup/status/', frozenset({'GET'}), 120, 60.0),
+    _RateLimitRule('setup-helper', '/api/auth/setup/helper/', None, 30, 60.0),
+    _RateLimitRule('setup', '/api/auth/setup/', None, 20, 60.0),
+    _RateLimitRule('setup', '/api/auth/tesla/test-connection', None, 20, 60.0),
 )
-_RATE_LIMIT_MAX_REQUESTS = 20
-_RATE_LIMIT_WINDOW_SECONDS = 60.0
 
 
 class _SlidingWindowRateLimiter:
@@ -55,21 +73,28 @@ def configure_middleware(app: Flask) -> None:
     if app.config.get('DEBUG'):
         CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000"]}})
 
-    rate_limiter = _SlidingWindowRateLimiter(
-        _RATE_LIMIT_MAX_REQUESTS, _RATE_LIMIT_WINDOW_SECONDS
-    )
+    rate_limiters: Dict[str, _SlidingWindowRateLimiter] = {}
+    for rule in _RATE_LIMIT_RULES:
+        rate_limiters.setdefault(
+            rule.name, _SlidingWindowRateLimiter(rule.max_requests, rule.window_seconds)
+        )
 
     @app.before_request
     def before_request() -> Optional[ResponseReturnValue]:
         """Log each request and enforce rate limits on sensitive paths."""
         app.logger.debug(f"Request: {request.method} {request.url}")
 
-        if request.path.startswith(_RATE_LIMITED_PREFIXES):
+        rule = next(
+            (rule for rule in _RATE_LIMIT_RULES if rule.matches(request.path, request.method)),
+            None,
+        )
+        if rule is not None:
             client_id = request.remote_addr or 'unknown'
-            if not rate_limiter.allow(client_id):
+            if not rate_limiters[rule.name].allow(client_id):
                 return jsonify({
                     'success': False,
                     'error': 'Too Many Requests',
+                    'error_code': 'RATE_LIMITED',
                     'message': 'Rate limit exceeded; try again later'
                 }), 429
         return None

@@ -1,36 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { formatDateTimeWithTimezone } from '../utils/dateTimeFormatter';
 import { useTimezone } from '../contexts/TimezoneContext';
 import { useToast } from '../contexts/ToastContext';
+import { useTeslaSetup } from '../hooks/useTeslaSetup';
 import api from '../utils/api';
 import { getAllCommonTimezones } from '../utils/timezones';
-
-interface Site {
-  id: string;
-  name: string;
-  type: string;
-  state: string;
-}
-
-interface AuthInfo {
-  authenticated: boolean;
-  email?: string;
-  site_id?: string;
-  token_type?: string;
-  expires_at?: string;
-  expires_in_seconds?: number;
-  token_expired?: boolean;
-  storage_path?: string;
-  file_size?: number;
-  modified_at?: string;
-  access_token_masked?: string;
-  refresh_token_masked?: string;
-  message?: string;
-  connected?: boolean;
-  connection_status?: 'connected' | 'disconnected' | 'unknown';
-  last_connection_attempt?: string | null;
-  connection_error?: string | null;
-}
+import { TeslaConnectionStatus } from '../components/tesla/TeslaConnectionStatus';
+import { TeslaSetupWizard } from '../components/tesla/TeslaSetupWizard';
+import type { TeslaAuthInfo, TeslaEnergySite, TeslaSetupResponse } from '../types';
 
 interface VersionInfo {
   application: string;
@@ -51,27 +28,19 @@ interface TimezoneOption {
   offset?: string; // Optional to match Timezone interface
 }
 
-type FlowStep = 'initial' | 'awaiting_login' | 'awaiting_callback' | 'selecting_site' | 'complete';
-
 const Settings: React.FC = () => {
   // Get timezone context
   const { timezoneInfo, currentTime, isLoading: timezoneLoading, refreshTimezone } = useTimezone();
   const { showToast } = useToast();
 
-  // OAuth Flow State
-  const [currentStep, setCurrentStep] = useState<FlowStep>('initial');
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [email, setEmail] = useState('');
-  const [callbackUrl, setCallbackUrl] = useState('');
-  const [sites, setSites] = useState<Site[]>([]);
-  const [showTokenImport, setShowTokenImport] = useState(false);
-  const [refreshToken, setRefreshToken] = useState('');
-  const [accessToken, setAccessToken] = useState('');
+  // Tesla account state
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [reconnectOpen, setReconnectOpen] = useState(false);
+  const [savedSites, setSavedSites] = useState<TeslaEnergySite[]>([]);
 
   // Auth Info State
-  const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
+  const [authInfo, setAuthInfo] = useState<TeslaAuthInfo | null>(null);
   const [authInfoLoading, setAuthInfoLoading] = useState(false);
   const [connectionTesting, setConnectionTesting] = useState(false);
 
@@ -86,152 +55,39 @@ const Settings: React.FC = () => {
   const [isEditingTimezone, setIsEditingTimezone] = useState(false);
 
   // UI State
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
-  // Accepts the bare tesla://auth/callback URL or a pasted console line containing it
-  const validateCallbackUrl = (text: string): boolean =>
-    /[?&#]code=[^&#\s]+/.test(text) && /[?&#]state=[^&#\s]+/.test(text);
-
-  const handleConnect = async () => {
-    setError(null);
-
-    // Validate email
-    if (!validateEmail(email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
-    setIsLoading(true);
-
+  const fetchAuthInfo = useCallback(async () => {
+    setAuthInfoLoading(true);
     try {
-      const response = await api.authenticatedFetch('/api/auth/setup/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
+      const response = await api.authenticatedFetch('/api/auth/tesla/info');
       const data = await response.json();
 
       if (data.success) {
-        setSessionId(data.session_id);
-        setCurrentStep('awaiting_login');
-
-        // Open Tesla auth in NEW browser tab
-        const authWindow = window.open(data.auth_url, '_blank');
-        if (!authWindow) {
-          setCurrentStep('initial');
-          setError('The Tesla authorization popup was blocked by your browser. Please allow popups for this site and try again.');
-        }
-      } else {
-        setError(data.error || 'Failed to start authentication');
+        setAuthInfo(data.data);
       }
-    } catch {
-      setError('Failed to connect to server');
+    } catch (err) {
+      console.error('Failed to fetch auth info:', err);
     } finally {
-      setIsLoading(false);
+      setAuthInfoLoading(false);
     }
-  };
+  }, []);
 
-  const handleVerify = async () => {
+  const handleSetupCompleted = useCallback(async (result: TeslaSetupResponse) => {
+    const sites = result.setup?.sites;
+    if (sites) setSavedSites(sites);
+    setReconnectOpen(false);
     setError(null);
-
-    // Validate callback URL
-    if (!validateCallbackUrl(callbackUrl)) {
-      setError('Paste the tesla://auth/callback URL that contains "code=" and "state=" (see the steps above).');
-      return;
+    if (result.success) {
+      showToast('Tesla account connected', 'success');
+    } else {
+      setError(result.connection_error || result.message || 'Tesla credentials were saved, but the live connection failed.');
     }
+    await fetchAuthInfo();
+  }, [fetchAuthInfo, showToast]);
 
-    if (!sessionId) {
-      setError('Session expired. Please start over');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const response = await api.authenticatedFetch('/api/auth/setup/callback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, callback_url: callbackUrl }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setSites(data.sites);
-        setCurrentStep('selecting_site');
-
-        // Auto-select first site and complete setup
-        if (data.sites && data.sites.length > 0) {
-          const firstSite = data.sites[0];
-          await completeSetup(firstSite.id, sessionId);
-        }
-      } else {
-        setError(data.error || 'Failed to verify callback URL');
-      }
-    } catch {
-      setError('Failed to connect to server');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleImportTokens = async () => {
-    setError(null);
-
-    if (!validateEmail(email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    if (!refreshToken.trim() || !accessToken.trim()) {
-      setError('Paste both the refresh token and the access token');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await api.authenticatedFetch('/api/auth/setup/tokens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          refresh_token: refreshToken.trim(),
-          access_token: accessToken.trim(),
-        }),
-      });
-      const data = await response.json();
-
-      if (data.success) {
-        setSessionId(data.session_id);
-        setSites(data.sites);
-        setCurrentStep('selecting_site');
-        setRefreshToken('');
-        setAccessToken('');
-        if (data.sites && data.sites.length > 0) {
-          await completeSetup(data.sites[0].id, data.session_id);
-        }
-      } else {
-        setError(data.error || 'Failed to import tokens');
-      }
-    } catch {
-      setError('Failed to connect to server');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const resetSetupFlow = () => {
-    setCurrentStep('initial');
-    setSessionId(null);
-    setCallbackUrl('');
-    setSites([]);
-  };
+  const teslaSetup = useTeslaSetup({ onCompleted: handleSetupCompleted });
+  const setupInProgress = teslaSetup.state.phase === 'attempt';
 
   const handleSignOut = async () => {
     setError(null);
@@ -240,8 +96,10 @@ const Settings: React.FC = () => {
       const response = await api.authenticatedFetch('/api/auth/tesla/logout', { method: 'POST' });
       const data = await response.json();
       if (data.success) {
-        resetSetupFlow();
         setConfirmSignOut(false);
+        setReconnectOpen(false);
+        setSavedSites([]);
+        teslaSetup.dismiss();
         showToast('Signed out of Tesla. Sign in again to reconnect.', 'success');
         await fetchAuthInfo();
       } else {
@@ -254,52 +112,15 @@ const Settings: React.FC = () => {
     }
   };
 
-  const completeSetup = async (siteId: string, setupSessionId: string | null = sessionId) => {
-    if (!setupSessionId) return;
-
-    try {
-      const response = await api.authenticatedFetch('/api/auth/setup/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: setupSessionId, site_id: siteId }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setCurrentStep('complete');
-        await fetchAuthInfo();
-      } else if (data.credentials_saved) {
-        setCurrentStep('complete');
-        await fetchAuthInfo();
-        setError(data.connection_error || data.message || 'Tesla credentials were saved, but the live connection failed.');
-      } else {
-        setError(data.error || 'Failed to complete setup');
-      }
-    } catch {
-      setError('Failed to complete setup');
-    }
+  const handleReconnect = () => {
+    setConfirmSignOut(false);
+    teslaSetup.dismiss();
+    setReconnectOpen(true);
   };
 
-  const fetchAuthInfo = async () => {
-    setAuthInfoLoading(true);
-    try {
-      const response = await api.authenticatedFetch('/api/auth/tesla/info');
-      const data = await response.json();
-
-      if (data.success) {
-        setAuthInfo(data.data);
-        // If we have auth info, update the email and step
-        if (data.data.authenticated && data.data.email) {
-          setEmail(data.data.email);
-          setCurrentStep('complete');
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch auth info:', err);
-    } finally {
-      setAuthInfoLoading(false);
-    }
+  const closeReconnect = () => {
+    setReconnectOpen(false);
+    teslaSetup.dismiss();
   };
 
   const fetchVersionInfo = async () => {
@@ -412,6 +233,8 @@ const Settings: React.FC = () => {
     fetchVersionInfo();
     fetchCurrentTimezone();
     fetchAvailableTimezones();
+    // Mount-only loads
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update selected timezone when timezone info changes
@@ -420,6 +243,10 @@ const Settings: React.FC = () => {
       setSelectedTimezone(timezoneInfo.timezone);
     }
   }, [timezoneInfo]);
+
+  const signedIn = Boolean(authInfo?.authenticated);
+  const showWizard = !signedIn || reconnectOpen || setupInProgress;
+  const savedSiteId = authInfo?.site_id ?? null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -435,162 +262,40 @@ const Settings: React.FC = () => {
           )}
 
           {/* Tesla Account Section */}
-          <div className="bg-white shadow rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Tesla Account</h2>
+          <div className="bg-white shadow rounded-lg p-6 mb-6 space-y-6">
+            <h2 className="text-xl font-semibold text-gray-900">Tesla Account</h2>
 
-            {currentStep === 'initial' && (
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                    Tesla Account Email
-                  </label>
-                  <div className="flex flex-wrap gap-3">
-                    <input
-                      type="email"
-                      id="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="your-email@example.com"
-                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      onClick={handleConnect}
-                      disabled={isLoading}
-                      className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isLoading ? 'Connecting...' : 'Connect'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowTokenImport((value) => !value)}
-                    className="text-sm text-blue-700 hover:underline"
-                  >
-                    {showTokenImport ? 'Hide token import' : 'Or sign in with tokens from pypowerwall'}
-                  </button>
-                </div>
-
-                {showTokenImport && (
-                  <div className="space-y-3 p-4 bg-gray-50 border border-gray-200 rounded-md">
-                    <p className="text-sm text-gray-700">
-                      On a Mac or PC with a screen, run <code className="font-mono">pip install -U pypowerwall</code> and{' '}
-                      <code className="font-mono">python -m pypowerwall authtoken</code>, log in to Tesla, then paste
-                      both tokens here. The access token is only valid for about 8 hours, so paste it right away.
-                    </p>
-                    <div>
-                      <label htmlFor="refreshToken" className="block text-sm font-medium text-gray-700 mb-1">
-                        Refresh Token
-                      </label>
-                      <textarea
-                        id="refreshToken"
-                        value={refreshToken}
-                        onChange={(e) => setRefreshToken(e.target.value)}
-                        rows={2}
-                        autoComplete="off"
-                        spellCheck={false}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="accessToken" className="block text-sm font-medium text-gray-700 mb-1">
-                        Access Token
-                      </label>
-                      <textarea
-                        id="accessToken"
-                        value={accessToken}
-                        onChange={(e) => setAccessToken(e.target.value)}
-                        rows={3}
-                        autoComplete="off"
-                        spellCheck={false}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <button
-                      onClick={handleImportTokens}
-                      disabled={isLoading}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isLoading ? 'Saving...' : 'Save Tokens'}
-                    </button>
-                  </div>
-                )}
-              </div>
+            {signedIn && authInfo && (
+              <TeslaConnectionStatus
+                authInfo={authInfo}
+                testing={connectionTesting}
+                reconnecting={showWizard}
+                confirmSignOut={confirmSignOut}
+                signingOut={signingOut}
+                onTest={testTeslaConnection}
+                onReconnect={handleReconnect}
+                onRequestSignOut={() => setConfirmSignOut(true)}
+                onConfirmSignOut={handleSignOut}
+                onCancelSignOut={() => setConfirmSignOut(false)}
+              />
             )}
 
-            {(currentStep === 'awaiting_login' || currentStep === 'awaiting_callback') && (
-              <div className="space-y-4">
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-md space-y-2 text-sm text-blue-800">
-                  <p>Tesla sign-in opened in a new tab. Before you log in there:</p>
-                  <ol className="list-decimal ml-5 space-y-1">
-                    <li>Open the browser's developer tools in that tab (Chrome: View, Developer, JavaScript Console).</li>
-                    <li>Log in to Tesla. Afterwards the page stays blank or stuck: Tesla redirects to a tesla:// link that only the Tesla app can open.</li>
-                    <li>In the console (or the Network tab), copy the link starting with <code className="font-mono">tesla://auth/callback?code=</code> and paste it below. Pasting the whole console line works too.</li>
-                  </ol>
-                  <p>
-                    If you cannot find the link, use{' '}
-                    <button type="button" onClick={() => { resetSetupFlow(); setShowTokenImport(true); }} className="underline">
-                      sign in with tokens from pypowerwall
-                    </button>{' '}
-                    instead.
-                  </p>
-                </div>
-
-                <div>
-                  <label htmlFor="callbackUrl" className="block text-sm font-medium text-gray-700 mb-2">
-                    Tesla Callback Link
-                  </label>
-                  <div className="flex flex-wrap gap-3">
-                    <input
-                      type="text"
-                      id="callbackUrl"
-                      value={callbackUrl}
-                      onChange={(e) => setCallbackUrl(e.target.value)}
-                      placeholder="tesla://auth/callback?code=abc123&state=xyz789"
-                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      onClick={handleVerify}
-                      disabled={isLoading}
-                      className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isLoading ? 'Verifying...' : 'Verify'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetSetupFlow}
-                      disabled={isLoading}
-                      className="w-full sm:w-auto bg-gray-100 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-200 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {(currentStep === 'selecting_site' || currentStep === 'complete') && (
-              <div className="space-y-4">
-                <div className={`p-4 border rounded-md ${
-                  authInfo?.connected
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-yellow-50 border-yellow-200'
-                }`}>
-                  <p className={`font-medium ${authInfo?.connected ? 'text-green-800' : 'text-yellow-800'}`}>
-                    {authInfo?.connected ? '✅ Tesla cloud connected' : '⚠️ Tesla credentials stored; live connection unavailable'}
-                  </p>
-                  <p className={`text-sm mt-1 ${authInfo?.connected ? 'text-green-700' : 'text-yellow-700'}`}>
-                    Email: {email}
-                  </p>
-                </div>
+            {showWizard && (
+              <div className={signedIn ? 'pt-6 border-t border-gray-200' : ''}>
+                {signedIn && <h3 className="text-lg font-medium text-gray-900 mb-4">Reconnect Tesla</h3>}
+                <TeslaSetupWizard
+                  controller={teslaSetup}
+                  mode={signedIn ? 'reconnect' : 'connect'}
+                  initialEmail={authInfo?.email ?? ''}
+                  currentSiteId={savedSiteId}
+                  onClose={signedIn ? closeReconnect : undefined}
+                />
               </div>
             )}
           </div>
 
           {/* Energy Sites Section */}
-          {sites.length > 0 && (
+          {savedSites.length > 0 && (
             <div className="bg-white shadow rounded-lg p-6 mb-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Energy Sites</h2>
 
@@ -613,28 +318,31 @@ const Settings: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {sites.map((site, index) => (
-                      <tr key={site.id} className={index === 0 ? 'bg-green-50' : ''}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {site.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {site.type}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {site.state}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {index === 0 ? (
-                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Selected
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {savedSites.map((site) => {
+                      const selected = savedSiteId !== null && String(site.id) === String(savedSiteId);
+                      return (
+                        <tr key={String(site.id)} className={selected ? 'bg-green-50' : ''}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {site.name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {site.type}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {site.state}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            {selected ? (
+                              <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Selected
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -795,52 +503,13 @@ const Settings: React.FC = () => {
 
                   <div className="pt-4 border-t border-gray-200 flex flex-wrap gap-3">
                     <button
-                      onClick={testTeslaConnection}
-                      disabled={connectionTesting}
-                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {connectionTesting
-                        ? 'Testing Connection...'
-                        : authInfo.connected ? 'Test Connection' : 'Retry Connection'}
-                    </button>
-                    <button
                       onClick={fetchAuthInfo}
                       disabled={authInfoLoading}
                       className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
                     >
                       Refresh Auth Info
                     </button>
-                    {confirmSignOut ? (
-                      <>
-                        <button
-                          onClick={handleSignOut}
-                          disabled={signingOut}
-                          className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm disabled:opacity-50"
-                        >
-                          {signingOut ? 'Signing Out...' : 'Confirm Sign Out'}
-                        </button>
-                        <button
-                          onClick={() => setConfirmSignOut(false)}
-                          disabled={signingOut}
-                          className="bg-gray-100 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors text-sm"
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => setConfirmSignOut(true)}
-                        className="bg-white text-red-700 border border-red-300 px-4 py-2 rounded-md hover:bg-red-50 transition-colors text-sm"
-                      >
-                        Sign Out of Tesla
-                      </button>
-                    )}
                   </div>
-                  {confirmSignOut && (
-                    <p className="text-sm text-red-700">
-                      Signing out deletes the stored Tesla login. Scheduled tasks cannot change your Powerwall until you sign in again.
-                    </p>
-                  )}
                 </div>
               ) : (
                 <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">

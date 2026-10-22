@@ -308,3 +308,58 @@ def test_config_storage_failure_is_not_misclassified_as_bad_input(open_client, m
     assert response.status_code == 500
     assert response.json['error'] == 'Failed to update configuration'
     assert 'private storage detail' not in response.get_data(as_text=True)
+
+
+SESSION = 's' * 32
+SETUP_ROUTES = [
+    ('post', '/api/auth/setup/start', {'email': 'owner@example.com'}),
+    ('post', '/api/auth/setup/callback', {'session_id': SESSION, 'callback_url': 'tesla://auth/callback?code=a&state=b'}),
+    ('post', '/api/auth/setup/tokens', {'email': 'owner@example.com', 'refresh_token': 'r', 'access_token': 'a'}),
+    ('post', '/api/auth/setup/sites', {'session_id': SESSION}),
+    ('post', '/api/auth/setup/complete', {'session_id': SESSION, 'site_id': '1'}),
+    ('post', '/api/auth/setup/cancel', {'session_id': SESSION}),
+    ('post', '/api/auth/setup/handoff', {'session_id': SESSION}),
+    ('get', f'/api/auth/setup/status/{SESSION}', None),
+]
+LAN = {'REMOTE_ADDR': '192.168.1.50'}
+
+
+@pytest.mark.unit
+class TestSetupPolicy:
+    """Every setup route, status included, follows the same bootstrap policy."""
+
+    @pytest.fixture(autouse=True)
+    def offline_tesla(self, monkeypatch):
+        rejected = Mock(status_code=401)
+        monkeypatch.setattr('powernight.core.auth.tesla_oauth.requests.get', Mock(return_value=rejected))
+
+    @staticmethod
+    def call(client, method, path, body, headers=None, environ=None):
+        return getattr(client, method)(path, json=body, headers=headers or {}, environ_base=environ or {})
+
+    @pytest.mark.parametrize('method, path, body', SETUP_ROUTES)
+    def test_lan_client_without_key_is_refused(self, auth_client, method, path, body):
+        response = self.call(auth_client, method, path, body, environ=LAN)
+        assert response.status_code == 401
+        assert response.json['error_code'] == 'APP_AUTH_REQUIRED'
+
+    @pytest.mark.parametrize('method, path, body', SETUP_ROUTES)
+    def test_loopback_bootstrap_is_allowed_without_tokens(self, auth_client, method, path, body):
+        assert self.call(auth_client, method, path, body).status_code != 401
+
+    @pytest.mark.parametrize('method, path, body', SETUP_ROUTES)
+    def test_loopback_bootstrap_ends_once_tokens_exist(self, auth_client, tmp_path, method, path, body):
+        from powernight.core.auth.token_storage import PyPowerwallAuthStorage
+        PyPowerwallAuthStorage(str(tmp_path)).store_auth_data(
+            'owner@example.com', {'access_token': 'at'}, {'id': 1}
+        )
+        assert self.call(auth_client, method, path, body).status_code == 401
+
+    @pytest.mark.parametrize('method, path, body', SETUP_ROUTES)
+    def test_api_key_is_allowed(self, auth_client, method, path, body):
+        response = self.call(auth_client, method, path, body, headers={'X-API-Key': API_KEY}, environ=LAN)
+        assert response.status_code != 401
+
+    @pytest.mark.parametrize('method, path, body', SETUP_ROUTES)
+    def test_open_installation_is_allowed(self, open_client, method, path, body):
+        assert self.call(open_client, method, path, body, environ=LAN).status_code != 401

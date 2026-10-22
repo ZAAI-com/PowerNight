@@ -152,6 +152,29 @@ def test_frontend_api_paths_match_backend_routes(app):
     )
 
 
+SETUP_API_TS_PATH = API_TS_PATH.parent / "teslaSetupApi.ts"
+# Matches entries like  start: ['POST', '/api/auth/setup/start'],
+SETUP_ROUTE_RE = re.compile(r"\w+:\s*\[\s*'(GET|POST)'\s*,\s*'([^']+)'\s*\]")
+
+
+def test_tesla_setup_routes_match_backend_routes(app):
+    """The wizard's SETUP_ROUTES must all exist in Flask (a trailing slash marks a parameter)."""
+    routes = SETUP_ROUTE_RE.findall(SETUP_API_TS_PATH.read_text())
+    assert len(routes) >= 8, f"No setup routes extracted from {SETUP_API_TS_PATH}"
+
+    adapter = app.url_map.bind("localhost")
+    missing = []
+    for method, path in routes:
+        if path.endswith("/"):
+            path += "example-session-id"
+        try:
+            adapter.match(path, method=method)
+        except (MethodNotAllowed, NotFound):
+            missing.append(f"{method} {path}")
+
+    assert not missing, "teslaSetupApi.ts references routes the backend does not serve:\n" + "\n".join(missing)
+
+
 @pytest.mark.parametrize('metadata', ['[]', 'null', '123', '"version"'])
 def test_version_tolerates_nonobject_build_metadata(app, client, metadata):
     (Path(app.static_folder) / 'version-info.json').write_text(metadata)

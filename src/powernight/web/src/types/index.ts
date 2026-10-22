@@ -247,3 +247,133 @@ export interface ApiErrorEvent extends PowerNightEvent {
     context: string;
   };
 }
+
+// Tesla sign-in (Settings wizard). Pending tokens and the PKCE verifier stay
+// on the server; these types describe only what the browser may see.
+
+export type TeslaSetupStep =
+  | 'awaiting_callback'
+  | 'exchanging'
+  | 'discovering_sites'
+  | 'selecting_site'
+  | 'completing'
+  | 'complete'
+  | 'failed'
+  | 'cancelled'
+  | 'expired';
+
+export type TeslaSetupErrorCode =
+  | 'INVALID_INPUT'
+  | 'STATE_MISMATCH'
+  | 'SETUP_NOT_FOUND'
+  | 'SETUP_EXPIRED'
+  | 'SETUP_CANCELLED'
+  | 'WRONG_STEP'
+  | 'TESLA_DENIED'
+  | 'EXCHANGE_FAILED'
+  | 'SITE_DISCOVERY_UNAVAILABLE'
+  | 'NO_ENERGY_SITES'
+  | 'INVALID_SITE'
+  | 'CREDENTIAL_WRITE_FAILED'
+  | 'HANDOFF_INVALID'
+  | 'INTERNAL_ERROR'
+  | 'APP_AUTH_REQUIRED'
+  | 'RATE_LIMITED';
+
+export interface TeslaEnergySite {
+  id: string | number;
+  name: string;
+  type: string;
+  resource_type?: string;
+  state: string;
+}
+
+export type TeslaHelperState = 'none' | 'pending' | 'opened' | 'submitted';
+
+/** Resumable progress of one sign-in attempt, as the server reports it. */
+export interface TeslaSetupProgress {
+  session_id: string;
+  step: TeslaSetupStep;
+  source: 'browser' | 'token_import';
+  email: string;
+  created_at: string;
+  setup_expires_at: string;
+  setup_expires_in_seconds: number;
+  auth_url: string | null;
+  token_expires_at: string | null;
+  sites: TeslaEnergySite[] | null;
+  selected_site_id: string | null;
+  error_code: TeslaSetupErrorCode | null;
+  error: string | null;
+  credentials_saved: boolean;
+  helper_state: TeslaHelperState;
+}
+
+export interface TeslaSetupStatusData extends Partial<TeslaSetupProgress> {
+  exists: boolean;
+}
+
+/** Only these fields are kept in sessionStorage to resume after a reload. */
+export interface StoredTeslaSetup {
+  session_id: string;
+  email: string;
+  setup_expires_at: string;
+}
+
+export type TeslaConnectionState = 'connected' | 'sign_in_required' | 'temporarily_unavailable' | 'checking';
+
+export interface TeslaConnectionInfo {
+  connected?: boolean;
+  connection_status?: 'connected' | 'disconnected' | 'unknown';
+  last_connection_attempt?: string | null;
+  connection_error?: string | null;
+  connection_error_code?: string | null;
+  connection_state?: TeslaConnectionState;
+  connection_state_reason?: string;
+}
+
+export interface TeslaAuthInfo extends TeslaConnectionInfo {
+  authenticated: boolean;
+  email?: string;
+  site_id?: string | number | null;
+  token_type?: string;
+  expires_at?: string;
+  expires_in_seconds?: number;
+  token_expired?: boolean;
+  storage_path?: string;
+  file_size?: number;
+  modified_at?: string;
+  access_token_masked?: string;
+  refresh_token_masked?: string;
+  message?: string;
+}
+
+/** Body shared by every setup endpoint response. */
+export interface TeslaSetupResponse extends TeslaConnectionInfo {
+  success: boolean;
+  error?: string;
+  error_code?: TeslaSetupErrorCode | null;
+  message?: string;
+  setup?: TeslaSetupProgress;
+  in_progress?: boolean;
+  duplicate?: boolean;
+  already_ended?: boolean;
+  session_id?: string;
+  auth_url?: string;
+  setup_expires_at?: string;
+  sites?: TeslaEnergySite[];
+  expires_at?: string;
+  credentials_saved?: boolean;
+  email?: string;
+  site?: TeslaEnergySite;
+  handoff?: string;
+  handoff_expires_at?: string;
+  timestamp?: string;
+}
+
+export interface TeslaSetupStatusResponse {
+  success: boolean;
+  data?: TeslaSetupStatusData;
+  error?: string;
+  error_code?: TeslaSetupErrorCode;
+}

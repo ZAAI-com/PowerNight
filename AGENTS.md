@@ -204,12 +204,12 @@ PowerNight uses **Tesla authentication** via pypowerwall framework in cloud mode
 
 Separately, the `useAuth` hook manages optional app-level authentication for the PowerNight web API. With no credentials configured, authentication is off for trusted-LAN use. A nonempty API key or complete username/password pair automatically enables it. Sensitive endpoints then require an API key sent as `X-API-Key` or `Authorization: Bearer <key>`; only `/health` and `/version` are public. Explicitly enabling authentication without a usable credential fails closed at startup.
 
-**Authentication Flow:**
-1. User initiates Tesla login via Settings page
-2. Redirects to tesla.com for login
-3. After successful login, pypowerwall framework handles token storage
-4. Tokens stored in `.pypowerwall.auth` file for future use
-5. Authentication state checked on app startup
+**Authentication Flow** (Settings wizard, `hooks/useTeslaSetup.ts` + `components/tesla/`):
+1. `POST /api/auth/setup/start` creates an in-memory sign-in attempt (10 minutes) and returns Tesla's authorize URL; the tab is opened synchronously on click
+2. The user signs in to Tesla; the browser cannot open the `tesla://auth/callback` redirect, so the user pastes it (or the Console message) back, or the experimental Mac helper (`helpers/macos/PowerNightLogin`) submits it
+3. `POST /api/auth/setup/callback` exchanges the code once (`core/auth/tesla_oauth.py`, `setup_attempts.py`) and lists energy sites; pending tokens stay server-side
+4. `POST /api/auth/setup/complete` saves `.pypowerwall.auth`/`.pypowerwall.site` together and swaps the connector's live session under its lock (Reconnect needs no sign-out)
+5. PowerNight never refreshes Tesla tokens; `core/auth/connection_state.py` classifies Connected / Sign-in required / Temporarily unavailable from backend evidence only
 
 ### API Client
 

@@ -51,7 +51,22 @@ describe('Dashboard', () => {
     expect(screen.getByText('Cached Home')).toBeVisible();
     expect(JSON.parse(localStorage.getItem('powernight_site_details')!)).toEqual({ site_name: 'Cached Home' });
     expect(screen.getByRole('button', { name: 'Update Data' })).toBeEnabled();
+    expect(screen.getByRole('link', { name: 'Go to Settings to reconnect Tesla' })).toHaveAttribute('href', '/settings');
   });
+
+  it('does not ask for a new sign-in when Tesla is only temporarily unavailable', async () => {
+    vi.mocked(api.authenticatedFetch).mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      error: 'Tesla cloud did not return Powerwall data. Check authentication and network access.',
+      connection_state: 'temporarily_unavailable',
+    }), { status: 502 }));
+
+    render(<Dashboard />);
+
+    expect(await screen.findByText(/Tesla cloud did not return Powerwall data/)).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Go to Settings to reconnect Tesla' })).not.toBeInTheDocument();
+  });
+
   it('finishes the initial request under StrictMode', async () => {
     let finish!: (response: Response) => void;
     vi.mocked(api.authenticatedFetch).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));

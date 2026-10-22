@@ -84,3 +84,6 @@ yarn-error.log*
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Experimental macOS helper is not part of the container
+helpers/

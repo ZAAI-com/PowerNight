@@ -278,3 +278,175 @@ def test_cloud_session_fails_clearly_without_a_session(tmp_path):
         with pytest.raises(PowerwallConnectionError):
             with connector.cloud_session():
                 pass
+
+
+# --- Reconnect without signing out -------------------------------------------
+
+def test_replace_credentials_waits_for_inflight_session_use(tmp_path):
+    connector = make_connector(tmp_path)
+    old_session = MagicMock()
+    connector._powerwall = old_session
+    entered, release = threading.Event(), threading.Event()
+    written = []
+
+    def hold_session():
+        with connector.cloud_session():
+            entered.set()
+            assert release.wait(3)
+
+    connector.is_connected = MagicMock(return_value=True)
+    holder = threading.Thread(target=hold_session)
+    holder.start()
+    assert entered.wait(3)
+    swapper = threading.Thread(target=lambda: connector.replace_credentials(lambda: written.append(1)))
+    swapper.start()
+    swapper.join(0.3)
+    assert written == []  # still waiting for the in-flight request
+    release.set()
+    holder.join(3)
+    swapper.join(3)
+
+    assert written == [1]
+    assert connector._powerwall is None
+
+
+def test_failed_credential_write_keeps_the_live_session(tmp_path):
+    connector = make_connector(tmp_path)
+    session = MagicMock()
+    connector._powerwall = session
+    connector._connected = True
+    connector._last_connection_attempt = '2026-10-21T12:00:00+00:00'
+
+    def failing_write():
+        raise OSError('disk full')
+
+    with pytest.raises(OSError):
+        connector.replace_credentials(failing_write)
+
+    assert connector._powerwall is session
+    assert connector.get_connection_status()['connected'] is True
+    connector._circuit_breaker.reset.assert_not_called()
+
+
+def test_replacing_credentials_retires_the_old_session_and_resets_state(tmp_path):
+    connector = make_connector(tmp_path)
+    old_session = MagicMock()
+    connector._powerwall = old_session
+    connector._record_connection_failure(PowerwallAuthenticationError('Tesla rejected the saved sign-in'))
+    assert connector.get_connection_status()['auth_rejected'] is True
+
+    connector.replace_credentials(lambda: None)
+
+    status = connector.get_connection_status()
+    assert connector._powerwall is None
+    assert status['connection_status'] == 'unknown'
+    assert status['connection_error_code'] is None
+    assert status['auth_rejected'] is False
+    connector._circuit_breaker.reset.assert_called_once()
+    old_session.client.tesla.close.assert_called_once()
+    # The retired session is never used again (it would rewrite the auth file)
+    new_session = MagicMock()
+    new_session.vitals.return_value = {'site': 'online'}
+    with patch('powernight.core.powerwall.connector.pypowerwall.Powerwall', return_value=new_session):
+        with connector.cloud_session() as session:
+            assert session is new_session
+    old_session.vitals.assert_not_called()
+
+
+def test_email_digits_are_not_mistaken_for_an_http_status(tmp_path):
+    connector = make_connector(tmp_path)
+    connector.config.email = 'jo403@example.com'
+    connector._circuit_breaker.call.side_effect = PowerwallConnectionError(
+        'jo403@example.com', 'No response from Powerwall via cloud'
+    )
+
+    with pytest.raises(PowerwallConnectionError):
+        connector.connect()
+
+    status = connector.get_connection_status()
+    assert status['connection_error_code'] == 'no_response'
+    assert status['auth_rejected'] is False
+
+
+def test_auth_rejection_survives_circuit_breaker_opening(tmp_path):
+    connector = make_connector(tmp_path)
+    connector._circuit_breaker.call.side_effect = PowerwallAuthenticationError('Tesla rejected the saved sign-in')
+    with pytest.raises(PowerwallAuthenticationError):
+        connector.connect()
+
+    connector._circuit_breaker.call.side_effect = CircuitBreakerOpenException('open')
+    with pytest.raises(CircuitBreakerOpenException):
+        connector.connect()
+
+    status = connector.get_connection_status()
+    assert status['connection_error_code'] == 'circuit_breaker'
+    assert status['auth_rejected'] is True
+
+
+def test_pypowerwall_rejection_log_line_is_evidence_of_sign_in_problem(tmp_path):
+    import logging
+    from powernight.core.powerwall.connector import PYPOWERWALL_CLOUD_LOGGER
+
+    connector = make_connector(tmp_path)
+    session = MagicMock()
+    session.vitals.return_value = None
+
+    def build_session(**kwargs):
+        logging.getLogger(PYPOWERWALL_CLOUD_LOGGER).error('Access token rejected (403 Forbidden).')
+        return session
+
+    with patch('powernight.core.powerwall.connector.pypowerwall.Powerwall', side_effect=build_session):
+        with pytest.raises(PowerwallAuthenticationError):
+            connector.connect()
+
+    status = connector.get_connection_status()
+    assert status['connection_error_code'] == 'authentication'
+    assert status['auth_rejected'] is True
+
+
+def test_empty_vitals_without_rejection_stay_a_connection_problem(tmp_path):
+    connector = make_connector(tmp_path)
+    session = MagicMock()
+    session.vitals.return_value = None
+    with patch('powernight.core.powerwall.connector.pypowerwall.Powerwall', return_value=session):
+        with pytest.raises(PowerwallConnectionError):
+            connector.connect()
+    assert connector.get_connection_status()['auth_rejected'] is False
+
+
+def test_pypowerwall_still_logs_the_rejection_markers():
+    """Canary: if pypowerwall rewords these, sign-in evidence silently disappears."""
+    import inspect
+    import pypowerwall.cloud.pypowerwall_cloud as cloud
+    from powernight.core.powerwall.connector import PYPOWERWALL_AUTH_MARKERS, PYPOWERWALL_CLOUD_LOGGER
+
+    source = inspect.getsource(cloud)
+    assert cloud.__name__ == PYPOWERWALL_CLOUD_LOGGER
+    for marker in PYPOWERWALL_AUTH_MARKERS:
+        assert marker in source, marker
+
+
+def test_circuit_breaker_reset_closes_it():
+    from powernight.core.scheduler.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+
+    breaker = CircuitBreaker('reset-test', CircuitBreakerConfig(failure_threshold=1))
+    with pytest.raises(RuntimeError):
+        breaker.call(lambda: (_ for _ in ()).throw(RuntimeError('down')))
+    assert breaker.state == 'OPEN'
+
+    breaker.reset()
+
+    assert breaker.state == 'CLOSED'
+    assert breaker.call(lambda: 'ok') == 'ok'
+
+
+def test_missing_credentials_are_not_a_tesla_rejection(tmp_path):
+    connector = make_connector(tmp_path)
+    connector._oauth_manager.has_credentials.return_value = False
+
+    with pytest.raises(PowerwallAuthenticationError):
+        connector.connect()
+
+    status = connector.get_connection_status()
+    assert status['connection_error_code'] == 'authentication'
+    assert status['auth_rejected'] is False

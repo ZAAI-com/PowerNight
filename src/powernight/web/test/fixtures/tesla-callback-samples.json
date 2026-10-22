@@ -1,0 +1,88 @@
+[
+  {
+    "name": "bare callback link",
+    "text": "tesla://auth/callback?code=abc123&state=st-1",
+    "kind": "callback",
+    "code": "abc123",
+    "state": "st-1"
+  },
+  {
+    "name": "Chrome console message",
+    "text": "Failed to launch 'tesla://auth/callback?code=abc%2F123&state=st-1&issuer=https%3A%2F%2Fauth.tesla.com%2Foauth2%2Fv3' because the scheme does not have a registered handler.",
+    "kind": "callback",
+    "code": "abc/123",
+    "state": "st-1"
+  },
+  {
+    "name": "Firefox console message with curly quotes",
+    "text": "Prevented navigation to “tesla://auth/callback?code=ff1&state=st-2” due to an unknown protocol.",
+    "kind": "callback",
+    "code": "ff1",
+    "state": "st-2"
+  },
+  {
+    "name": "Network panel location header",
+    "text": "location: tesla://auth/callback?code=net1&state=st-3&issuer=https%3A%2F%2Fauth.tesla.com%2Foauth2%2Fv3",
+    "kind": "callback",
+    "code": "net1",
+    "state": "st-3"
+  },
+  {
+    "name": "last callback wins",
+    "text": "tesla://auth/callback?code=old&state=s-old\ntesla://auth/callback?code=new&state=s-new",
+    "kind": "callback",
+    "code": "new",
+    "state": "s-new"
+  },
+  {
+    "name": "surrounding whitespace",
+    "text": "   tesla://auth/callback?code=ws1&state=st-4   \n",
+    "kind": "callback",
+    "code": "ws1",
+    "state": "st-4"
+  },
+  {
+    "name": "Tesla sign-in page URL",
+    "text": "https://auth.tesla.com/oauth2/v3/authorize?response_type=code&client_id=ownerapi&redirect_uri=tesla%3A%2F%2Fauth%2Fcallback&scope=openid+email+offline_access&state=abc&code_challenge=xyz&code_challenge_method=S256&login_hint=owner%40example.com",
+    "kind": "authorization_url"
+  },
+  {
+    "name": "Tesla China sign-in page URL",
+    "text": "https://auth.tesla.cn/oauth2/v3/authorize?client_id=ownerapi&state=abc",
+    "kind": "authorization_url"
+  },
+  {
+    "name": "sign-in page parameters without the host",
+    "text": "response_type=code&state=abc&code_challenge=xyz&code_challenge_method=S256",
+    "kind": "authorization_url"
+  },
+  {
+    "name": "Tesla error result",
+    "text": "tesla://auth/callback?error=login_cancelled&state=st-1",
+    "kind": "tesla_error",
+    "state": "st-1",
+    "error": "login_cancelled"
+  },
+  {
+    "name": "Tesla error with an unsafe value",
+    "text": "tesla://auth/callback?error=%3Cscript%3E&state=st-1",
+    "kind": "tesla_error",
+    "state": "st-1",
+    "error": "unknown_error"
+  },
+  {
+    "name": "callback without state",
+    "text": "tesla://auth/callback?code=abc",
+    "kind": "unknown"
+  },
+  {
+    "name": "unrelated text",
+    "text": "hello",
+    "kind": "unknown"
+  },
+  {
+    "name": "empty text",
+    "text": "",
+    "kind": "unknown"
+  }
+]

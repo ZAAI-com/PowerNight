@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.zaai.powernight.login</string>
+	<key>CFBundleName</key>
+	<string>PowerNight Login</string>
+	<key>CFBundleDisplayName</key>
+	<string>PowerNight Login</string>
+	<key>CFBundleExecutable</key>
+	<string>PowerNightLogin</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.zaai.powernight.login</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>powernight-login</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Plain HTTP only to local addresses, .local and single-label names;
+		     the helper additionally requires a per-server opt-in -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>PowerNight Login connects to your PowerNight server on the local network to finish signing in to Tesla.</string>
+</dict>
+</plist>

@@ -52,8 +52,9 @@ docker exec PowerNight ls -la /data/.pypowerwall.*
 # 3. Test connection
 curl http://localhost:8020/health
 
-# 4. Re-authorize Tesla OAuth
-# Navigate to Settings � Tesla Configuration � Authorize
+# 4. Check the connection state in Settings > Tesla Account
+#    "Connection temporarily unavailable": keep the sign-in, use Retry Connection
+#    "Sign-in required": use Reconnect Tesla
 ```
 
 ### Web Interface Not Accessible
@@ -97,22 +98,19 @@ docker logs PowerNight | grep "Task execution"
 curl -H "X-API-Key: $POWERNIGHT_API_KEY" http://localhost:8020/api/v1/tasks
 ```
 
-### OAuth Token Expired
+### Tesla Sign-In Required
 
-**Symptoms**: "Authentication failed" errors after working previously
+**Symptoms**: Settings shows "Sign-in required" after working previously
 
-**Solutions:**
+Settings separates three states, based only on what PowerNight observed:
 
-```bash
-# 1. Check token file modification time
-docker exec PowerNight ls -l /data/.pypowerwall.auth
+- **Connected**: everything works.
+- **Connection temporarily unavailable**: Tesla or the network did not answer. The stored sign-in is kept and PowerNight keeps retrying; use **Retry Connection**. Reconnect only if this keeps happening.
+- **Sign-in required**: no sign-in is stored, Tesla rejected it, or it expired and a new session could not be opened.
 
-# 2. Re-authorize via web interface
-# Settings � Tesla Configuration � Authorize
+PowerNight does not refresh Tesla tokens itself (Tesla rejects refreshed tokens on a new session). A new session therefore needs a fresh sign-in, which matters when the container restarts more than about 8 hours after signing in.
 
-# 3. Restart container to trigger token refresh
-docker-compose restart PowerNight
-```
+**Solution:** Settings > Tesla Account > **Reconnect Tesla**. Your current sign-in and connection stay in place until the new one is saved, so there is no need to sign out first. Restarting the container does not refresh the sign-in.
 
 ### High Memory Usage
 

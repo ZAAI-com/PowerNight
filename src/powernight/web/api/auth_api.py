@@ -4,16 +4,20 @@ Tesla OAuth authentication API endpoints.
 Handles web-based OAuth flow, token management, and Powerwall discovery.
 """
 
+import time
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator, Optional
 
-from flask import Blueprint, Flask, current_app, request, jsonify, session
+from flask import Blueprint, Flask, Response, current_app, request, jsonify, session
 from flask.typing import ResponseReturnValue
 from datetime import datetime, timezone
 
+from ...core.auth.connection_state import classify_connection_state
+from ...core.auth.setup_attempts import SetupError
 from ...core.auth.tesla_oauth import TeslaOAuthManager
 from ...core.config import get_config
 from ...utils.logging import get_logger, ComponentType, OperationType
+from ...utils.redaction import safe_error_detail
 from ...utils.timezone_utils import safe_format_datetime, format_datetime_for_display
 from .decorators import require_auth, get_current_user
 
@@ -40,30 +44,41 @@ def _shared_connector() -> Any:
     return getattr(current_app, 'powerwall_connector', None)
 
 
+def _raw_connection_status() -> Dict[str, Any]:
+    """The connector's cached connection state, without any network call."""
+    connector = _shared_connector()
+    status = None
+    if connector is not None and hasattr(connector, 'get_connection_status'):
+        status = connector.get_connection_status()
+    return status if isinstance(status, dict) else {}
+
+
 def _shared_connection_status() -> Dict[str, Any]:
     """Return a JSON-safe snapshot of live Tesla connection state."""
-    connector = _shared_connector()
-    if connector is None or not hasattr(connector, 'get_connection_status'):
-        return {
-            'connected': False,
-            'connection_status': 'unknown',
-            'last_connection_attempt': None,
-            'connection_error': None,
-        }
-
-    status = connector.get_connection_status()
-    if not isinstance(status, dict):
-        return {
-            'connected': False,
-            'connection_status': 'unknown',
-            'last_connection_attempt': None,
-            'connection_error': None,
-        }
+    status = _raw_connection_status()
     return {
         'connected': bool(status.get('connected')),
         'connection_status': status.get('connection_status', 'unknown'),
         'last_connection_attempt': status.get('last_connection_attempt'),
         'connection_error': status.get('connection_error'),
+        'connection_error_code': status.get('connection_error_code'),
+    }
+
+
+def _connection_state_payload() -> Dict[str, Any]:
+    """Connection snapshot plus the evidence-based state the UI shows."""
+    status = _raw_connection_status()
+    storage = oauth_manager.auth_storage
+    assessment = classify_connection_state(
+        has_auth_file=storage.has_auth_data(),
+        auth_data=storage.load_auth_data(),
+        connection=status,
+        now=time.time(),
+    )
+    return {
+        **_shared_connection_status(),
+        'connection_state': assessment.state,
+        'connection_state_reason': assessment.reason,
     }
 
 
@@ -127,7 +142,7 @@ def get_auth_info() -> ResponseReturnValue:
     try:
         # Get basic auth status
         status = oauth_manager.get_auth_status()
-        connection_status = _shared_connection_status()
+        connection_status = _connection_state_payload()
         
         if not status.get('authenticated'):
             return jsonify({
@@ -197,7 +212,7 @@ def _mask_token(token: Optional[str]) -> str:
     return f"{token_str[:4]}...{token_str[-4:]}"
 
 
-# New Auth Setup Endpoints
+# Setup endpoints: browser sign-in, token import, the Mac helper handoff
 
 def _setup_allowed() -> bool:
     """
@@ -225,13 +240,45 @@ def _setup_allowed() -> bool:
 
 
 def _setup_denied_response() -> ResponseReturnValue:
-    """Standard 401 response for blocked setup requests."""
+    """Standard 401 response for blocked setup requests (app auth, not Tesla)."""
     return jsonify({
         'success': False,
         'error': 'Authentication required',
+        'error_code': 'APP_AUTH_REQUIRED',
         'message': 'Tesla setup requires authentication once the app is configured',
         'timestamp': datetime.now(timezone.utc).isoformat()
     }), 401
+
+
+def _setup_json(body: Dict[str, Any], status: int = 200) -> Response:
+    """JSON for setup endpoints: never cached, never 401 for Tesla-side failures."""
+    response = jsonify({**body, 'timestamp': datetime.now(timezone.utc).isoformat()})
+    # A 401 makes the web UI drop its PowerNight API key; Tesla problems must not
+    response.status_code = 400 if status == 401 else status
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+def _setup_error_response(error: SetupError) -> Response:
+    body: Dict[str, Any] = {'success': False, 'error_code': str(error.code), 'error': error.message}
+    if error.progress is not None:
+        body['setup'] = error.progress
+    return _setup_json(body, error.http_status)
+
+
+def _invalid_setup_input(message: str) -> Response:
+    return _setup_json({'success': False, 'error_code': 'INVALID_INPUT', 'error': message}, 400)
+
+
+def _setup_internal_error(message: str, error: Exception) -> Response:
+    """Log without exception text from pypowerwall or Tesla (it can hold tokens)."""
+    logger.error(f"{message} ({safe_error_detail(error)})")
+    return _setup_json({'success': False, 'error_code': 'INTERNAL_ERROR', 'error': 'Internal server error'}, 500)
+
+
+def _request_json() -> Dict[str, Any]:
+    data = request.get_json(silent=True)
+    return data if isinstance(data, dict) else {}
 
 
 @auth_blueprint.route('/setup/start', methods=['POST'])
@@ -243,47 +290,34 @@ def start_auth_setup() -> ResponseReturnValue:
         {"email": "user@tesla.com"}
         
     Returns:
-        JSON response with auth URL and session ID
+        JSON response with auth URL, session ID and the attempt's progress
     """
     if not _setup_allowed():
         return _setup_denied_response()
     try:
-        data = request.get_json()
-        if not data or 'email' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'Email is required',
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 400
-        
-        email = data['email'].strip()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or 'email' not in data:
+            return _invalid_setup_input('Email is required')
+
+        email = str(data.get('email') or '').strip()
         if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email cannot be empty',
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 400
-        
-        # Clean up expired sessions
+            return _invalid_setup_input('Email cannot be empty')
+        if len(email) > 254:
+            return _invalid_setup_input('Email is too long')
+
         oauth_manager.cleanup_expired_sessions()
-        
-        # Generate auth URL
-        result = oauth_manager.generate_auth_url(email)
-        
-        return jsonify({
+        setup = oauth_manager.start_setup(email)
+
+        return _setup_json({
             'success': True,
-            'auth_url': result['auth_url'],
-            'session_id': result['session_id'],
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            'auth_url': setup['auth_url'],
+            'session_id': setup['session_id'],
+            'setup_expires_at': setup['setup_expires_at'],
+            'setup': setup,
         })
-        
+
     except Exception as e:
-        logger.log_error(ComponentType.WEB, "Failed to start auth setup", e)
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }), 500
+        return _setup_internal_error("Failed to start auth setup", e)
 
 
 @auth_blueprint.route('/setup/callback', methods=['POST'])
@@ -298,46 +332,37 @@ def process_callback() -> ResponseReturnValue:
         }
         
     Returns:
-        JSON response with sites list
+        JSON response with sites list; 202 while another request for the
+        same attempt is still talking to Tesla
     """
     if not _setup_allowed():
         return _setup_denied_response()
     try:
-        data = request.get_json()
-        if not data or 'session_id' not in data or 'callback_url' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'Session ID and callback URL are required',
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 400
-        
-        session_id = data['session_id']
-        callback_url = data['callback_url']
-        
-        # Process callback URL
-        result = oauth_manager.exchange_code_from_callback_url(session_id, callback_url)
-        
-        if result['success']:
-            return jsonify({
-                'success': True,
-                'sites': result['sites'],
-                'expires_at': safe_format_datetime(result.get('expires_at')),
-                'timestamp': format_datetime_for_display(datetime.now(timezone.utc))
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': result.get('error', 'Failed to process callback'),
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 400
-        
+        data = _request_json()
+        session_id = data.get('session_id')
+        callback_url = data.get('callback_url')
+        if not session_id or not isinstance(callback_url, str) or not callback_url.strip():
+            return _invalid_setup_input('Session ID and callback URL are required')
+
+        try:
+            outcome = oauth_manager.submit_callback(str(session_id), callback_url)
+        except SetupError as error:
+            return _setup_error_response(error)
+
+        progress = outcome.progress
+        if outcome.http_status == 202:
+            return _setup_json({'success': True, 'in_progress': True, 'setup': progress}, 202)
+        return _setup_json({
+            'success': True,
+            'sites': progress['sites'] or [],
+            'expires_at': safe_format_datetime(progress['token_expires_at']),
+            'setup_expires_at': progress['setup_expires_at'],
+            'duplicate': outcome.duplicate,
+            'setup': progress,
+        })
+
     except Exception as e:
-        logger.log_error(ComponentType.WEB, "Failed to process callback", e)
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }), 500
+        return _setup_internal_error("Failed to process callback", e)
 
 
 @auth_blueprint.route('/setup/tokens', methods=['POST'])
@@ -358,47 +383,77 @@ def import_tokens() -> ResponseReturnValue:
     if not _setup_allowed():
         return _setup_denied_response()
     try:
-        data = request.get_json(silent=True) or {}
+        data = _request_json()
         email = str(data.get('email') or '').strip()
         if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email is required',
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 400
+            return _invalid_setup_input('Email is required')
 
         oauth_manager.cleanup_expired_sessions()
         result = oauth_manager.import_tokens(
             email, str(data.get('refresh_token') or ''), str(data.get('access_token') or '')
         )
 
-        if result['success']:
-            return jsonify({
+        if result.get('success'):
+            body: Dict[str, Any] = {
                 'success': True,
                 'session_id': result['session_id'],
-                'sites': result['sites'],
+                'sites': result.get('sites') or [],
                 'expires_at': safe_format_datetime(result.get('expires_at')),
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            })
-        return jsonify({
+                'setup_expires_at': result.get('setup_expires_at'),
+            }
+            if result.get('setup') is not None:
+                body['setup'] = result['setup']
+            return _setup_json(body, int(result.get('http_status', 200)))
+
+        body = {
             'success': False,
             'error': result.get('error', 'Failed to import tokens'),
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }), 400
+            'error_code': result.get('error_code', 'INVALID_INPUT'),
+        }
+        for key in ('session_id', 'setup'):
+            if result.get(key) is not None:
+                body[key] = result[key]
+        return _setup_json(body, int(result.get('http_status', 400)))
 
     except Exception as e:
-        logger.log_error(ComponentType.WEB, "Failed to import Tesla tokens", e)
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }), 500
+        return _setup_internal_error("Failed to import Tesla tokens", e)
+
+
+@auth_blueprint.route('/setup/sites', methods=['POST'])
+def retry_site_discovery() -> ResponseReturnValue:
+    """
+    List energy sites again for a signed-in attempt, without a new code exchange.
+
+    Body:
+        {"session_id": "session-id"}
+    """
+    if not _setup_allowed():
+        return _setup_denied_response()
+    try:
+        session_id = _request_json().get('session_id')
+        if not session_id:
+            return _invalid_setup_input('Session ID is required')
+        try:
+            outcome = oauth_manager.retry_site_discovery(str(session_id))
+        except SetupError as error:
+            return _setup_error_response(error)
+
+        progress = outcome.progress
+        if outcome.http_status == 202:
+            return _setup_json({'success': True, 'in_progress': True, 'setup': progress}, 202)
+        return _setup_json({'success': True, 'sites': progress['sites'] or [], 'setup': progress})
+
+    except Exception as e:
+        return _setup_internal_error("Failed to retry Tesla site discovery", e)
 
 
 @auth_blueprint.route('/setup/complete', methods=['POST'])
 def complete_auth_setup() -> ResponseReturnValue:
     """
     Complete Tesla OAuth setup with site selection.
+
+    Existing credentials and the live connection stay untouched until the
+    new ones are validated and saved; the connector then swaps its session.
     
     Body:
         {
@@ -412,99 +467,197 @@ def complete_auth_setup() -> ResponseReturnValue:
     if not _setup_allowed():
         return _setup_denied_response()
     try:
-        data = request.get_json()
-        if not data or 'session_id' not in data or 'site_id' not in data:
-            return jsonify({
+        data = _request_json()
+        if not data.get('session_id') or data.get('site_id') in (None, ''):
+            return _invalid_setup_input('Session ID and site ID are required')
+
+        connector = _shared_connector()
+        commit = getattr(connector, 'replace_credentials', None) if connector is not None else None
+        result = oauth_manager.complete_setup(
+            str(data['session_id']), data['site_id'], commit=commit if callable(commit) else None
+        )
+
+        if not result.get('success'):
+            body: Dict[str, Any] = {
                 'success': False,
-                'error': 'Session ID and site ID are required',
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 400
-        
-        session_id = data['session_id']
-        site_id = data['site_id']
-        
-        # Complete setup
-        result = oauth_manager.complete_setup(session_id, site_id)
-        
-        if result['success']:
+                'error': result.get('error', 'Failed to complete setup'),
+                'error_code': result.get('error_code'),
+                'credentials_saved': False,
+            }
+            if result.get('setup') is not None:
+                body['setup'] = result['setup']
+            return _setup_json(body, int(result.get('http_status', 400)))
+
+        if result.get('in_progress'):
+            return _setup_json({'success': True, 'in_progress': True, 'setup': result.get('setup')}, 202)
+
+        duplicate = bool(result.get('duplicate'))
+        if not duplicate:
             try:
-                connection_status = _connect_shared_connector(force=True)
+                _connect_shared_connector()
             except Exception as connection_error:
-                logger.log_error(
-                    ComponentType.WEB,
-                    f"Tesla credentials saved but shared connector failed ({type(connection_error).__name__})",
-                    connection_error,
+                logger.error(
+                    "Tesla credentials saved but shared connector failed "
+                    f"({safe_error_detail(connection_error)})"
                 )
-                connection_status = _shared_connection_status()
-                return jsonify({
+                connection = _connection_state_payload()
+                return _setup_json({
                     'success': False,
                     'credentials_saved': True,
                     'connected': False,
                     'connection_status': 'disconnected',
-                    'connection_error': connection_status.get('connection_error') or (
+                    'connection_error': connection.get('connection_error') or (
                         'Tesla cloud connection failed. Check Settings and the container logs.'
                     ),
+                    'connection_error_code': connection.get('connection_error_code'),
+                    'connection_state': connection.get('connection_state'),
+                    'connection_state_reason': connection.get('connection_state_reason'),
                     'message': 'Tesla credentials were saved, but the live connection failed.',
-                    'email': result['email'],
-                    'site': result['site'],
-                    'timestamp': datetime.now(timezone.utc).isoformat()
-                }), 502
+                    'email': result.get('email'),
+                    'site': result.get('site'),
+                    'setup': result.get('setup'),
+                }, 502)
 
-            return jsonify({
-                'success': True,
-                'message': result['message'],
-                'email': result['email'],
-                'site': result['site'],
-                'credentials_saved': True,
-                **connection_status,
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': result.get('error', 'Failed to complete setup'),
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 400
-        
+        return _setup_json({
+            'success': True,
+            'message': result.get('message'),
+            'email': result.get('email'),
+            'site': result.get('site'),
+            'credentials_saved': True,
+            'duplicate': duplicate,
+            **_connection_state_payload(),
+            'setup': result.get('setup'),
+        })
+
     except Exception as e:
-        logger.log_error(ComponentType.WEB, "Failed to complete auth setup", e)
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }), 500
+        return _setup_internal_error("Failed to complete auth setup", e)
+
+
+@auth_blueprint.route('/setup/cancel', methods=['POST'])
+def cancel_auth_setup() -> ResponseReturnValue:
+    """
+    Cancel one pending sign-in attempt. Stored credentials are not touched.
+
+    Body:
+        {"session_id": "session-id"}
+    """
+    if not _setup_allowed():
+        return _setup_denied_response()
+    try:
+        session_id = _request_json().get('session_id')
+        if not session_id:
+            return _invalid_setup_input('Session ID is required')
+        try:
+            outcome = oauth_manager.cancel_setup(str(session_id))
+        except SetupError as error:
+            return _setup_error_response(error)
+        return _setup_json({'success': True, 'already_ended': outcome.duplicate, 'setup': outcome.progress})
+
+    except Exception as e:
+        return _setup_internal_error("Failed to cancel auth setup", e)
 
 
 @auth_blueprint.route('/setup/status/<session_id>', methods=['GET'])
-@require_auth
 def get_setup_status(session_id: str) -> ResponseReturnValue:
     """
-    Get status of an auth setup session.
+    Get resumable progress of an auth setup attempt.
     
     Args:
         session_id: Session ID to check
         
     Returns:
-        JSON response with session status
+        JSON response with the attempt's progress. Unknown attempts (for
+        example after a restart) report exists=false with SETUP_NOT_FOUND.
+    """
+    if not _setup_allowed():
+        return _setup_denied_response()
+    try:
+        return _setup_json({'success': True, 'data': oauth_manager.get_session_status(session_id)})
+
+    except Exception as e:
+        return _setup_internal_error("Failed to get setup status", e)
+
+
+# Experimental Mac helper. The helper authenticates with a short-lived
+# handoff bound to one attempt, never with the app API key, and never
+# learns the session ID or any Tesla token.
+
+HANDOFF_HEADER = 'X-PowerNight-Handoff'
+
+
+def _helper_error_response(error: SetupError) -> Response:
+    body: Dict[str, Any] = {'success': False, 'error_code': str(error.code), 'error': error.message}
+    if error.progress is not None:
+        body['step'] = error.progress.get('step')
+    return _setup_json(body, error.http_status)
+
+
+@auth_blueprint.route('/setup/handoff', methods=['POST'])
+def create_helper_handoff() -> ResponseReturnValue:
+    """
+    Create a Mac helper handoff for an attempt that is waiting for sign-in.
+
+    Body:
+        {"session_id": "session-id"}
+    """
+    if not _setup_allowed():
+        return _setup_denied_response()
+    try:
+        session_id = _request_json().get('session_id')
+        if not session_id:
+            return _invalid_setup_input('Session ID is required')
+        try:
+            handoff = oauth_manager.create_handoff(str(session_id))
+        except SetupError as error:
+            return _setup_error_response(error)
+        return _setup_json({'success': True, **handoff})
+
+    except Exception as e:
+        return _setup_internal_error("Failed to create Mac helper handoff", e)
+
+
+@auth_blueprint.route('/setup/helper/authorization', methods=['GET'])
+def helper_authorization() -> ResponseReturnValue:
+    """Give the Mac helper the Tesla sign-in URL for its attempt."""
+    try:
+        try:
+            data = oauth_manager.helper_authorization(request.headers.get(HANDOFF_HEADER))
+        except SetupError as error:
+            return _helper_error_response(error)
+        return _setup_json({'success': True, **data})
+
+    except Exception as e:
+        return _setup_internal_error("Failed to serve Mac helper authorization", e)
+
+
+@auth_blueprint.route('/setup/helper/callback', methods=['POST'])
+def helper_callback() -> ResponseReturnValue:
+    """
+    Accept the tesla://auth/callback the Mac helper captured.
+
+    Body:
+        {"callback_url": "tesla://auth/callback?code=...&state=..."}
     """
     try:
-        status = oauth_manager.get_session_status(session_id)
-        
-        return jsonify({
+        callback_url = _request_json().get('callback_url')
+        if not isinstance(callback_url, str) or not callback_url.strip():
+            return _invalid_setup_input('Callback URL is required')
+        try:
+            outcome = oauth_manager.helper_submit_callback(
+                request.headers.get(HANDOFF_HEADER), callback_url
+            )
+        except SetupError as error:
+            return _helper_error_response(error)
+        progress = outcome.progress
+        return _setup_json({
             'success': True,
-            'data': status,
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        })
-        
+            'step': progress['step'],
+            'error_code': progress['error_code'],
+            'error': progress['error'],
+        }, outcome.http_status)
+
     except Exception as e:
-        logger.log_error(ComponentType.WEB, "Failed to get setup status", e)
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }), 500
-
-
+        return _setup_internal_error("Failed to process Mac helper callback", e)
 
 
 @auth_blueprint.route('/tesla/logout', methods=['POST'])
@@ -564,6 +717,7 @@ def get_powerwalls() -> ResponseReturnValue:
                 'success': False,
                 'error': 'No Tesla authentication configured',
                 'code': 'TESLA_AUTH_REQUIRED',
+                'connection_state': 'sign_in_required',
                 'message': 'Connect or reconnect your Tesla account in Settings.',
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 503
@@ -590,6 +744,7 @@ def get_powerwalls() -> ResponseReturnValue:
             return jsonify({
                 'success': False,
                 'error': result.get('error', 'Failed to connect to Powerwall'),
+                'connection_state': _connection_state_payload().get('connection_state'),
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 502
         
@@ -617,18 +772,20 @@ def test_connection() -> ResponseReturnValue:
                 'success': False,
                 'error': 'No Tesla authentication configured',
                 'code': 'TESLA_AUTH_REQUIRED',
+                'connection_state': 'sign_in_required',
                 'message': 'Connect or reconnect your Tesla account in Settings.',
                 'data': {
                     'api_accessible': False,
                     'connection_type': 'pypowerwall_cloud',
-                    **_shared_connection_status(),
+                    **_connection_state_payload(),
                 },
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 503
 
         # Do not force a reconnect: dropping a healthy session would need a
         # fresh Tesla login token to start a new one
-        connection_status = _connect_shared_connector()
+        _connect_shared_connector()
+        connection_status = _connection_state_payload()
         return jsonify({
             'success': True,
             'message': 'Tesla cloud connection successful',
@@ -642,7 +799,7 @@ def test_connection() -> ResponseReturnValue:
         
     except Exception as e:
         logger.log_error(ComponentType.WEB, "Connection test failed", e)
-        connection_status = _shared_connection_status()
+        connection_status = _connection_state_payload()
         return jsonify({
             'success': False,
             'error': connection_status.get('connection_error') or (
@@ -865,6 +1022,7 @@ def get_site_details() -> ResponseReturnValue:
                 'success': False,
                 'error': 'No valid authentication token available',
                 'code': 'TESLA_AUTH_REQUIRED',
+                'connection_state': 'sign_in_required',
                 'message': 'Connect or reconnect your Tesla account in Settings.',
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 503
@@ -887,10 +1045,12 @@ def get_site_details() -> ResponseReturnValue:
                 return _site_details_response(pw, auth_data)
         except Exception as connection_error:
             logger.log_error(ComponentType.WEB, "Tesla cloud session unavailable for site details", connection_error)
+            connection = _connection_state_payload()
             return jsonify({
                 'success': False,
-                'error': _shared_connection_status().get('connection_error')
+                'error': connection.get('connection_error')
                 or 'Tesla cloud connection failed. Check Settings and the container logs.',
+                'connection_state': connection.get('connection_state'),
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 502
 

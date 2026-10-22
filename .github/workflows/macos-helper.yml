@@ -1,0 +1,32 @@
+name: macOS Helper
+
+on:
+  pull_request:
+    paths:
+      - 'helpers/macos/**'
+      - '.github/workflows/macos-helper.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'helpers/macos/**'
+      - '.github/workflows/macos-helper.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test (experimental helper)
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: helpers/macos/PowerNightLogin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test

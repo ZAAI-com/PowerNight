@@ -6,6 +6,7 @@ Tesla Powerwall connection and communication management.
 
 import time
 import json
+import logging
 import threading
 import re
 from functools import wraps
@@ -24,6 +25,7 @@ from pypowerwall.cloud.exceptions import (
     PyPowerwallCloudTeslaNotConnected,
 )
 from ...utils.logging import get_logger
+from ...utils.redaction import safe_error_detail
 
 from .exceptions import (
     PowerwallConnectionError,
@@ -43,6 +45,46 @@ from .reserve import (
 P = ParamSpec('P')
 R = TypeVar('R')
 _C = TypeVar('_C', bound='PowerwallConnector')
+
+# pypowerwall swallows Tesla's sign-in rejections during connect() and only
+# logs them, so these log lines are the only direct evidence that the stored
+# sign-in (not the network) is the problem. A test pins them to the installed
+# pypowerwall so an upgrade that rewords them fails loudly.
+PYPOWERWALL_CLOUD_LOGGER = 'pypowerwall.cloud.pypowerwall_cloud'
+PYPOWERWALL_AUTH_MARKERS = (
+    'Access token rejected (403',
+    'No refresh token available',
+    'Login failure',
+)
+_HTTP_AUTH_STATUS = re.compile(r'\b(401|403)\b')
+
+
+class _AuthEvidenceHandler(logging.Handler):
+    """Notice pypowerwall's own sign-in rejection messages."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.WARNING)
+        self.rejected = False
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            message = record.getMessage()
+        except Exception:
+            return
+        if any(marker in message for marker in PYPOWERWALL_AUTH_MARKERS):
+            self.rejected = True
+
+
+@contextmanager
+def _pypowerwall_auth_evidence() -> Iterator[_AuthEvidenceHandler]:
+    """Listen to pypowerwall's cloud logger for the duration of a connect."""
+    handler = _AuthEvidenceHandler()
+    target = logging.getLogger(PYPOWERWALL_CLOUD_LOGGER)
+    target.addHandler(handler)
+    try:
+        yield handler
+    finally:
+        target.removeHandler(handler)
 
 
 def _connection_operation(method: Callable[Concatenate[_C, P], R]) -> Callable[Concatenate[_C, P], R]:
@@ -186,6 +228,10 @@ class PowerwallConnector(PowerwallConnectorInterface):
         self._last_connection_attempt: Optional[str] = None
         self._last_connection_error: Optional[str] = None
         self._last_connection_error_code: Optional[str] = None
+        # Sticky evidence that Tesla rejected the stored sign-in. Later
+        # circuit-breaker or network failures must not hide it; only a
+        # successful connection or new credentials clear it.
+        self._auth_rejected = False
         self._last_status: Optional[PowerwallStatus] = None
         self._last_rate_limit = 0.0
 
@@ -406,17 +452,23 @@ class PowerwallConnector(PowerwallConnectorInterface):
         self._last_rate_limit = time.time()
 
     @staticmethod
-    def _safe_connection_failure(error: Exception) -> tuple[str, str]:
+    def _safe_connection_failure(error: Exception, email: Optional[str] = None) -> tuple[str, str]:
         """Return a stable error category and token-free user-facing message."""
         from ..scheduler.circuit_breaker import CircuitBreakerOpenException
 
-        message = str(error).lower()
+        # The account email is formatted into some messages; it must not be
+        # mistaken for an HTTP status (e.g. jo403@example.com)
+        message = str(error)
+        for address in {email, getattr(error, 'email', None)}:
+            if address:
+                message = message.replace(address, '')
+        message = message.lower()
         if isinstance(
             error,
             (PowerwallAuthenticationError, PyPowerwallCloudNoTeslaAuthFile),
         ) or any(
-            marker in message for marker in ('authentication', 'access token', '401', '403')
-        ):
+            marker in message for marker in ('authentication', 'access token')
+        ) or _HTTP_AUTH_STATUS.search(message):
             return (
                 'authentication',
                 'Tesla authentication failed. Reconnect your Tesla account in Settings.'
@@ -434,8 +486,8 @@ class PowerwallConnector(PowerwallConnectorInterface):
         if isinstance(error, PyPowerwallCloudTeslaNotConnected):
             return (
                 'tesla_rejected',
-                'Tesla cloud refused the connection. If this keeps happening, sign out of '
-                'Tesla in Settings and sign in again.'
+                'Tesla cloud refused the connection. If this keeps happening, use '
+                'Reconnect Tesla in Settings.'
             )
         if isinstance(error, (
             PyPowerwallCloudNotImplemented,
@@ -453,33 +505,74 @@ class PowerwallConnector(PowerwallConnectorInterface):
     @staticmethod
     def _safe_log_detail(error: Exception) -> str:
         """Keep diagnostics useful while removing bearer and OAuth token values."""
-        detail = f'{type(error).__name__}: {error}'
-        detail = re.sub(
-            r'(?i)(authorization\s*[:=]\s*)(?:bearer\s+)?[A-Za-z0-9._~+/=-]+',
-            r'\1***REDACTED***',
-            detail,
-        )
-        detail = re.sub(
-            r'(?i)(access_token|refresh_token|id_token)(["\'\s:=]+)([^,\s"\'&}]+)',
-            r'\1\2***REDACTED***',
-            detail,
-        )
-        detail = re.sub(r'(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+', r'\1***REDACTED***', detail)
-        detail = re.sub(r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', '***REDACTED***', detail)
-        return detail
+        return safe_error_detail(error)
 
     def _record_connection_failure(self, error: Exception) -> None:
-        code, message = self._safe_connection_failure(error)
+        code, message = self._safe_connection_failure(error, self.config.email)
+        # Missing credentials are not a rejection by Tesla; only a failure
+        # while credentials exist is evidence against the stored sign-in
+        rejected = code == 'authentication' and self._has_stored_credentials()
         with self._status_lock:
             self._connected = False
             self._last_connection_error_code = code
             self._last_connection_error = message
+            if rejected:
+                self._auth_rejected = True
+
+    def _has_stored_credentials(self) -> bool:
+        try:
+            return bool(self._oauth_manager.has_credentials())
+        except Exception:
+            return False
 
     def _record_connection_success(self) -> None:
         with self._status_lock:
             self._connected = True
             self._last_connection_error_code = None
             self._last_connection_error = None
+            self._auth_rejected = False
+
+    def replace_credentials(self, write: Callable[[], None]) -> None:
+        """
+        Save new Tesla credentials and retire the old cloud session atomically.
+
+        Runs ``write`` under the session lock, so no scheduled command or web
+        request uses the old session meanwhile, and drops that session right
+        after: teslapy would otherwise rewrite .pypowerwall.auth with its own
+        token on its next refresh. If ``write`` raises, nothing changes and
+        the old session keeps running. The caller reconnects afterwards.
+        """
+        with self._connection_lock:
+            write()
+            old_session = self._powerwall
+            self._powerwall = None
+            self._close_session(old_session)
+            with self._status_lock:
+                self._connected = False
+                self._last_connection_attempt = None
+                self._last_connection_error = None
+                self._last_connection_error_code = None
+                self._auth_rejected = False
+            self._circuit_breaker.reset()
+            self._data_cache.clear()
+            try:
+                self.reload_credentials()
+            except Exception as error:
+                self.logger.warning(
+                    f"Could not reload Tesla credentials after replacing them ({type(error).__name__})"
+                )
+        self.logger.info("Tesla credentials replaced; the previous cloud session was closed")
+
+    @staticmethod
+    def _close_session(session: Any) -> None:
+        """Best-effort close of a retired pypowerwall session's HTTP client."""
+        tesla = getattr(getattr(session, 'client', None), 'tesla', None)
+        close = getattr(tesla, 'close', None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
 
     def reload_credentials(self) -> Dict[str, Any]:
         """Reload the current Tesla identity and selected site from /data."""
@@ -512,6 +605,7 @@ class PowerwallConnector(PowerwallConnectorInterface):
                 'last_connection_attempt': self._last_connection_attempt,
                 'connection_error': self._last_connection_error,
                 'connection_error_code': self._last_connection_error_code,
+                'auth_rejected': self._auth_rejected,
             }
 
     def connect(self) -> bool:
@@ -551,20 +645,22 @@ class PowerwallConnector(PowerwallConnectorInterface):
             if not self._oauth_manager.has_credentials():
                 raise PowerwallAuthenticationError("No Tesla credentials stored")
 
-            # Initialize pypowerwall cloud connection
-            self._powerwall = pypowerwall.Powerwall(
-                email=self.config.email,
-                cloudmode=True,
-                authmode="token",
-                authpath=str(self._oauth_manager.auth_storage.storage_path) + "/",
-                timeout=self.config.timeout,
-                siteid=selected_site,
-                failover=False,
-            )
-
-            # Test connection by getting basic info
-            vitals = self._powerwall.vitals()
+            # Initialize pypowerwall cloud connection and test it by getting
+            # basic info, listening for pypowerwall's sign-in rejections
+            with _pypowerwall_auth_evidence() as evidence:
+                self._powerwall = pypowerwall.Powerwall(
+                    email=self.config.email,
+                    cloudmode=True,
+                    authmode="token",
+                    authpath=str(self._oauth_manager.auth_storage.storage_path) + "/",
+                    timeout=self.config.timeout,
+                    siteid=selected_site,
+                    failover=False,
+                )
+                vitals = self._powerwall.vitals()
             if not vitals:
+                if evidence.rejected:
+                    raise PowerwallAuthenticationError("Tesla rejected the saved sign-in")
                 raise PowerwallConnectionError(
                     self.config.email,
                     "No response from Powerwall via cloud"

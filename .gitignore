@@ -428,3 +428,10 @@ version-info.json
 # Workspace artifacts and credential-bearing configuration backups
 .context/
 .backups/
+
+# Swift / Xcode (experimental macOS helper)
+.build/
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+DerivedData/

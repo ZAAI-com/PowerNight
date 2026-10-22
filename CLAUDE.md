@@ -152,7 +152,7 @@ powernight-cli --config config.yaml --verbose
 - **Pattern:** Connector guarded by a circuit breaker
 - **Flow:** `PowerwallConnector` → Tesla OAuth → `pypowerwall` lib → Tesla Cloud API
 - **Resilience:** Circuit breaker (per site), 30s data cache TTL (serves stale cache on failure)
-- **Auth:** OAuth 2.0 with PKCE, automatic token refresh
+- **Auth:** OAuth 2.0 with PKCE via an in-memory setup-attempt state machine (`core/auth/setup_attempts.py`); PowerNight never refreshes tokens itself (Tesla 403s refreshed tokens on a new session)
 
 **3. Task Scheduling** (`src/powernight/core/planner/`)
 - **Pattern:** Background thread with `schedule` library (lightweight, no external deps)
@@ -694,7 +694,7 @@ class LogEntry:
 **Tesla OAuth 2.0:**
 - PKCE (Proof Key for Code Exchange) for enhanced security
 - Tokens stored as plain JSON in `.pypowerwall.auth` (teslapy cache format). They are NOT encrypted at rest: `pypowerwall`/`teslapy` read and rewrite this file directly, so encrypting it would break the Tesla cloud connection. It is protected with owner-only permissions instead (auth/site files `0o600`, data directory `0o700`)
-- Automatic token refresh before expiration
+- No token refresh by PowerNight: a new Tesla session needs a fresh sign-in (Settings > Reconnect Tesla), so a restart more than ~8 hours after sign-in may require reconnecting
 
 **Web/API Authentication (optional for trusted LANs):**
 - `web_interface.auth_enabled` defaults to `False`; a nonempty API key or complete username/password pair automatically enables authentication
